@@ -1,0 +1,249 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ParamWithValueList xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <version>20080502</version>
+  <parameterTypes>
+    <ParamType>
+      <typeName>Inventor</typeName>
+      <typeCode>0</typeCode>
+    </ParamType>
+    <ParamType>
+      <typeName>String</typeName>
+      <typeCode>1</typeCode>
+    </ParamType>
+    <ParamType>
+      <typeName>Boolean</typeName>
+      <typeCode>2</typeCode>
+    </ParamType>
+  </parameterTypes>
+  <parameters>
+    <ParamWithValue>
+      <name>Width</name>
+      <typeCode>mm</typeCode>
+      <value>386 mm</value>
+      <comment>InventorSizer input</comment>
+      <isKey>false</isKey>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>Length</name>
+      <typeCode>mm</typeCode>
+      <value>656 mm</value>
+      <comment>InventorSizer input</comment>
+      <isKey>false</isKey>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>Height</name>
+      <typeCode>mm</typeCode>
+      <value>47 mm</value>
+      <comment>InventorSizer input</comment>
+      <isKey>false</isKey>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>HoleEdge</name>
+      <typeCode>mm</typeCode>
+      <value>50 mm</value>
+      <comment>InventorSizer input</comment>
+      <isKey>false</isKey>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>HoleZ</name>
+      <typeCode>mm</typeCode>
+      <value>22 mm</value>
+      <comment>InventorSizer input</comment>
+      <isKey>false</isKey>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>HoleDia</name>
+      <typeCode>mm</typeCode>
+      <value>4.1 mm</value>
+      <comment>Fixed hole diameter</comment>
+      <isKey>false</isKey>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>Clearance</name>
+      <typeCode>mm</typeCode>
+      <value>0.5 mm</value>
+      <comment>InventorSizer input</comment>
+      <isKey>false</isKey>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>HolesL</name>
+      <typeCode>ul</typeCode>
+      <value>3 ul</value>
+      <comment>InventorSizer input: holes per length wall (0, 1, 2, ...)</comment>
+      <isKey>false</isKey>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>HolesW</name>
+      <typeCode>ul</typeCode>
+      <value>2 ul</value>
+      <comment>InventorSizer input: holes per width wall (0, 1, 2, 4, 6, ...)</comment>
+      <isKey>false</isKey>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>HoleStartL</name>
+      <typeCode>mm</typeCode>
+      <value>50 mm</value>
+      <comment>Set by InventorSizer (hole rules) - do not edit: first hole on length wall, from the -Au edge</comment>
+      <isKey>false</isKey>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>HolePitchL</name>
+      <typeCode>mm</typeCode>
+      <value>278 mm</value>
+      <comment>Set by InventorSizer (hole rules) - do not edit: pattern spacing on length wall</comment>
+      <isKey>false</isKey>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>HoleCountL</name>
+      <typeCode>ul</typeCode>
+      <value>3 ul</value>
+      <comment>Set by InventorSizer (hole rules) - do not edit: pattern count on length wall (min 1)</comment>
+      <isKey>false</isKey>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>HoleOnL</name>
+      <typeCode>ul</typeCode>
+      <value>1 ul</value>
+      <comment>Set by InventorSizer (hole rules) - do not edit: 0 = no holes on length wall (suppress)</comment>
+      <isKey>false</isKey>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>HoleStartW</name>
+      <typeCode>mm</typeCode>
+      <value>50 mm</value>
+      <comment>Set by InventorSizer (hole rules) - do not edit: first hole on width wall, from the -Au edge</comment>
+      <isKey>false</isKey>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>HolePitchW</name>
+      <typeCode>mm</typeCode>
+      <value>286 mm</value>
+      <comment>Set by InventorSizer (hole rules) - do not edit: pattern spacing on width wall</comment>
+      <isKey>false</isKey>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>HoleCountW</name>
+      <typeCode>ul</typeCode>
+      <value>2 ul</value>
+      <comment>Set by InventorSizer (hole rules) - do not edit: pattern count on width wall (min 1)</comment>
+      <isKey>false</isKey>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>HoleOnW</name>
+      <typeCode>ul</typeCode>
+      <value>1 ul</value>
+      <comment>Set by InventorSizer (hole rules) - do not edit: 0 = no holes on width wall (suppress)</comment>
+      <isKey>false</isKey>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>HoleMidOnW</name>
+      <typeCode>ul</typeCode>
+      <value>0 ul</value>
+      <comment>Set by InventorSizer (hole rules) - do not edit: 1 only when HolesW = 4 (centre pair)</comment>
+      <isKey>false</isKey>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>HoleMidOffsetW</name>
+      <typeCode>mm</typeCode>
+      <value>HoleEdge - Stärke - Clearance</value>
+      <comment>Centre pair: distance from Width/2 (48.5 mm)</comment>
+      <isKey>false</isKey>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d0</name>
+      <typeCode>mm</typeCode>
+      <value>Width</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d1</name>
+      <typeCode>mm</typeCode>
+      <value>Length</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d7</name>
+      <typeCode>mm</typeCode>
+      <value>Height</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>HoleEdge_Au</name>
+      <typeCode>mm</typeCode>
+      <value>HoleEdge</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d63</name>
+      <typeCode>mm</typeCode>
+      <value>HoleEdge</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d64</name>
+      <typeCode>mm</typeCode>
+      <value>HoleEdge</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d94</name>
+      <typeCode>mm</typeCode>
+      <value>HoleEdge</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>HoleZ_Au</name>
+      <typeCode>mm</typeCode>
+      <value>HoleZ</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d65</name>
+      <typeCode>mm</typeCode>
+      <value>HoleZ</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d66</name>
+      <typeCode>mm</typeCode>
+      <value>HoleZ</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d47</name>
+      <typeCode>mm</typeCode>
+      <value>HoleDia</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d67</name>
+      <typeCode>mm</typeCode>
+      <value>HoleDia</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+  </parameters>
+</ParamWithValueList>
