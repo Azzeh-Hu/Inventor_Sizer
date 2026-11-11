@@ -116,7 +116,7 @@ function Get-RelationRows($AsmDoc, $Rows, $Patterns) {
         for ($i = 1; $i -le $cons.Count; $i++) {
             $c = $cons.Item($i)
             $Rows.Add([pscustomobject][ordered]@{
-                Assembly = $asmName; Kind = 'constraint'; Name = $c.Name; Type = (Get-ComTypeName $c) -replace 'Constraint$', ''
+                Assembly = $asmName; Kind = 'constraint'; Name = $c.Name; Type = ((Get-ComTypeName $c) -replace 'Constraint$', '')
                 Suppressed = [bool](Get-Safe { $c.Suppressed } $false)
                 OccurrenceOne = Get-Safe { $c.OccurrenceOne.Name }; OccurrenceTwo = Get-Safe { $c.OccurrenceTwo.Name }
                 EntityOne = Get-EntityText (Get-Safe { $c.EntityOne } $null); EntityTwo = Get-EntityText (Get-Safe { $c.EntityTwo } $null)

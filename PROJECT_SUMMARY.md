@@ -140,3 +140,14 @@ saves the new size as new files.
 - Equations, setup per master, open questions, hinge/handle and box plans: `docs\PANEL_RULES.md`.
 - Tested on Linux only: rules, naming, drawings, and the split script against a mocked Inventor.
   Not yet run against Inventor.
+
+## Update: hardware holes, tree export, automatic hole counts
+
+- Automatic hole counts (setting `maxHolePitch`, default 400): `n = ceil((span - 2*HoleEdge)/400) + 1`,
+  width walls even above 2. Matches every consistent master; the 521 FP and 571 RP masters differ by hand slips.
+- `-In-2T` enforced for all types: the inner file is renamed on Apply when it does not match the split state.
+- TP master = 724 (centre pair `d91`/`d92`); RP master = 571 (centre pair `d96`, handle holes Ø9 117 apart at W/2 ± 58.5).
+- `lib\Hardware.ps1`: "Learn hardware holes" reads full circle edges of -Au/-In in Inventor, stores
+  them per type in `standards\hardware\<id>.json` anchored to start/end/mid; the drawing shows them in orange.
+- `lib\TreeExport.ps1`: "Export assembly tree..." writes tree / parts / constraints CSV + JSON (for the box builder).
+- Waiting on the user: hardware JSON files and the GR-box tree export (docs/PANEL_RULES.md sections 6, 9, 10).

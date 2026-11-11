@@ -27,6 +27,8 @@
     lib\Standards.ps1  product types (standards\*.json) and the bill of materials
     lib\Inventor.ps1   COM: open, push parameters, inner-panel split, rebuild, save as new size
     lib\Twin.ps1       drawings: views, bill of materials, axis, window painting, SVG sheet
+    lib\Hardware.ps1   hinge / handle holes: learned from a master, re-placed for every size
+    lib\TreeExport.ps1 component tree, constraints and patterns of any assembly to CSV + JSON
 
     Needs only what ships with Windows plus Inventor (Windows PowerShell 5.1 + COM).
     Start it with Launch.bat.
@@ -44,6 +46,8 @@ $Lib = Join-Path $Root 'lib'
 . (Join-Path $Lib 'Standards.ps1')
 . (Join-Path $Lib 'Inventor.ps1')
 . (Join-Path $Lib 'Twin.ps1')
+. (Join-Path $Lib 'Hardware.ps1')
+. (Join-Path $Lib 'TreeExport.ps1')
 
 $ParamPath    = Join-Path $Root 'Parameters.xml'
 $SettingsPath = Join-Path $Root 'settings.json'
@@ -53,7 +57,10 @@ $State = @{
     Settings = (Read-Settings $SettingsPath); Standards = @(); Standard = $null
     Values = @{}; Layout = $null; Shapes = $null
     DefaultsFor = ''   # id of the type whose defaults (HoleZ, ...) were applied last
+    Hardware = $null   # hole template of the selected type (standards\hardware\<id>.json)
+    HardwareHoles = @()
 }
+$AutoParams = @('HolesL', 'HolesW')   # read-only while automatic hole counts are on
 $script:Syncing = $false
 
 # ------------------------------------------------------------------ grid data
@@ -132,6 +139,7 @@ function Update-GridFromName {
 
 function Select-Standard($Standard) {
     $State.Standard = $Standard
+    $State.Hardware = Read-HardwareTemplate $StandardsDir $Standard
     $script:Syncing = $true
     try { $typeBox.SelectedIndex = [array]::IndexOf($State.Standards, $Standard) } finally { $script:Syncing = $false }
     $btnMaster.Enabled = [bool]($Standard.Master -and (Test-Path $Standard.Master))
@@ -184,9 +192,43 @@ function Set-StandardFromList {
 
 # ------------------------------------------------------------------ rules + drawing
 
+# Automatic hole counts: fills HolesL / HolesW from the size (maximum pitch in Settings).
+function Update-AutoHoles {
+    $pitch = [double]$State.Settings.maxHolePitch
+    if ($pitch -le 0) { return }
+    $v = Get-GridValues
+    if (-not ($v.ContainsKey('Width') -and $v.ContainsKey('Length') -and $v.ContainsKey('HoleEdge'))) { return }
+    $want = @{
+        HolesL = Get-AutoHoleCount $v['Length'] $v['HoleEdge'] $pitch $false
+        HolesW = Get-AutoHoleCount $v['Width']  $v['HoleEdge'] $pitch $true
+    }
+    $wasSyncing = $script:Syncing
+    $script:Syncing = $true
+    try {
+        foreach ($k in $want.Keys) {
+            $r = Find-Row $k
+            if ($r -and ($r['Value'] -is [DBNull] -or [double]$r['Value'] -ne $want[$k])) { $r['Value'] = [double]$want[$k] }
+        }
+    } finally { $script:Syncing = $wasSyncing }
+}
+
+function Update-GridLocks {
+    foreach ($gr in $grid.Rows) {
+        $name = [string]$gr.Cells['Name'].Value
+        $locked = ($FixedParams -contains $name) -or ($State.Settings.maxHolePitch -gt 0 -and $AutoParams -contains $name)
+        $gr.ReadOnly = $locked
+        $gr.DefaultCellStyle.ForeColor = $(if ($locked) { [System.Drawing.Color]::Gray } else { [System.Drawing.Color]::Black })
+    }
+}
+
 # Re-runs the rules, shows any broken rule (red, locks Apply) or the notes (grey), and redraws.
 function Update-Preview {
+    Update-AutoHoles
     $State.Values = Get-GridValues
+    $State.HardwareHoles = @()
+    if ($State.Hardware -and $State.Values['Width'] -gt 0 -and $State.Values['Length'] -gt 0 -and $State.Values['Height'] -gt 0) {
+        $State.HardwareHoles = Get-HardwareHoles $State.Hardware $State.Values['Width'] $State.Values['Length'] $State.Values['Height']
+    }
     $errors = @()
     try {
         $State.Layout = Get-HoleLayout $State.Values $State.Settings $State.Standard
@@ -197,7 +239,7 @@ function Update-Preview {
     }
     if (-not $SizeRegex.IsMatch($nameBox.Text)) { $errors += 'The name must contain a size like 386x656x47.' }
     $lines = $errors
-    if ($errors.Count -eq 0 -and $State.Layout) { $lines = @($State.Layout.Notes) }
+    if ($errors.Count -eq 0 -and $State.Layout) { $lines = @($State.Layout.Notes) + @(Get-HardwareNotes $State.HardwareHoles) }
     $errLabel.ForeColor = $(if ($errors.Count) { [System.Drawing.Color]::DarkRed } else { [System.Drawing.Color]::DimGray })
     $errLabel.Text = ($lines -join [Environment]::NewLine)
     $errLabel.Visible = $lines.Count -gt 0
@@ -213,7 +255,7 @@ function Get-CurrentBom {
 function Update-Drawing {
     $size = $twinBox.ClientSize
     $State.Shapes = Get-WindowShapes $State.Values $State.Layout ([string]$viewBox.SelectedItem) $size.Width $size.Height `
-                        $chkHidden.Checked (Get-CurrentBom) $State.Settings.thickness
+                        $chkHidden.Checked (Get-CurrentBom) $State.Settings.thickness $State.HardwareHoles
     $twinBox.Invalidate()
 }
 
@@ -232,6 +274,7 @@ function Update-SettingsFromForm {
     $State.Settings.minHoleGap = [double]$gapBox.Value
     $State.Settings.thickness  = [double]$thickBox.Value
     $State.Settings.splitWidth = [double]$splitBox.Value
+    $State.Settings.maxHolePitch = [double]$pitchBox.Value
 }
 
 function Save-FormSettings {
@@ -306,12 +349,32 @@ function Invoke-ApplyToInventor {
     try { $nameBox.Text = $newName } finally { $script:Syncing = $false }
 }
 
+# Reads the hinge / handle holes of the active master and keeps them for the selected type.
+function Invoke-LearnHardwareStep {
+    $v = Get-GridValues
+    [void](Invoke-LearnHardware $State.Standards $State.Standard $StandardsDir ([double]$v['HoleDia']) ([double]$v['HoleZ']))
+    $State.Hardware = Read-HardwareTemplate $StandardsDir $State.Standard
+    Update-Preview
+}
+
+function Export-TreeStep {
+    $asm = Get-ActiveAssembly
+    $dlg = New-Object System.Windows.Forms.SaveFileDialog
+    $dlg.Filter = 'Assembly tree (*.json + CSV files)|*.json'
+    $dlg.Title = 'Export assembly tree'
+    $dlg.FileName = [IO.Path]::GetFileNameWithoutExtension($asm.FullFileName) + '-tree-export.json'
+    $dlg.InitialDirectory = Split-Path $asm.FullFileName
+    if ($dlg.ShowDialog($form) -ne [System.Windows.Forms.DialogResult]::OK) { return }
+    $base = Join-Path (Split-Path $dlg.FileName) ([IO.Path]::GetFileNameWithoutExtension($dlg.FileName))
+    Export-AssemblyTree $asm $base
+}
+
 function Save-Drawing {
     $dlg = New-Object System.Windows.Forms.SaveFileDialog
     $dlg.Filter = 'SVG drawing (*.svg)|*.svg'
     $dlg.FileName = "$($nameBox.Text.Trim()).svg"
     if ($dlg.ShowDialog($form) -ne [System.Windows.Forms.DialogResult]::OK) { return }
-    $shapes = Get-SheetShapes $State.Values $State.Layout (Get-CurrentBom) $State.Settings.thickness $chkHidden.Checked
+    $shapes = Get-SheetShapes $State.Values $State.Layout (Get-CurrentBom) $State.Settings.thickness $chkHidden.Checked $State.HardwareHoles
     Export-TwinSvg $dlg.FileName $shapes 1400 990 $nameBox.Text.Trim()
     Write-Log "Saved drawing $($dlg.FileName)"
 }
@@ -340,8 +403,8 @@ $errLabel = New-Control 'Label' @{ Dock = 'Bottom'; AutoSize = $false; Height = 
                                    ForeColor = [System.Drawing.Color]::DarkRed; Padding = (New-Object System.Windows.Forms.Padding(4)) }
 
 # Settings: a table layout keeps every control inside the box at any width.
-$settingsBox = New-Control 'GroupBox' @{ Dock = 'Bottom'; Height = 200; Text = 'Settings' }
-$settingsGrid = New-Control 'TableLayoutPanel' @{ Dock = 'Fill'; ColumnCount = 3; RowCount = 6 }
+$settingsBox = New-Control 'GroupBox' @{ Dock = 'Bottom'; Height = 228; Text = 'Settings' }
+$settingsGrid = New-Control 'TableLayoutPanel' @{ Dock = 'Fill'; ColumnCount = 3; RowCount = 7 }
 [void]$settingsGrid.ColumnStyles.Add((New-Object System.Windows.Forms.ColumnStyle([System.Windows.Forms.SizeType]::AutoSize)))
 [void]$settingsGrid.ColumnStyles.Add((New-Object System.Windows.Forms.ColumnStyle([System.Windows.Forms.SizeType]::Percent, 100)))
 [void]$settingsGrid.ColumnStyles.Add((New-Object System.Windows.Forms.ColumnStyle([System.Windows.Forms.SizeType]::AutoSize)))
@@ -351,6 +414,7 @@ $btnBrowse  = New-Control 'Button' @{ Text = 'Browse...'; AutoSize = $true; Anch
 $gapBox     = New-Control 'NumericUpDown' @{ Width = 80; DecimalPlaces = 1; Maximum = 1000; Increment = 0.5; Anchor = 'Left' }
 $thickBox   = New-Control 'NumericUpDown' @{ Width = 80; DecimalPlaces = 2; Maximum = 50; Increment = 0.1; Anchor = 'Left' }
 $thickBox.Minimum = 0.1
+$pitchBox   = New-Control 'NumericUpDown' @{ Width = 80; DecimalPlaces = 0; Maximum = 100000; Increment = 10; Anchor = 'Left' }
 $splitBox   = New-Control 'NumericUpDown' @{ Width = 80; DecimalPlaces = 0; Maximum = 100000; Increment = 10; Anchor = 'Left' }
 $folderInfo = New-Control 'Label' @{ AutoSize = $true; Anchor = 'Left'; ForeColor = [System.Drawing.Color]::DimGray }
 $settingsGrid.Controls.Add($chkFolder, 0, 0); $settingsGrid.SetColumnSpan($chkFolder, 3)
@@ -364,6 +428,8 @@ $settingsGrid.Controls.Add((New-Control 'Label' @{ Text = 'Sheet thickness (mm):
 $settingsGrid.Controls.Add($thickBox, 1, 4)
 $settingsGrid.Controls.Add((New-Control 'Label' @{ Text = 'Split inner panel above width (mm, 0 = never):'; AutoSize = $true; Anchor = 'Left' }), 0, 5)
 $settingsGrid.Controls.Add($splitBox, 1, 5)
+$settingsGrid.Controls.Add((New-Control 'Label' @{ Text = 'Automatic hole counts, max. pitch (mm, 0 = by hand):'; AutoSize = $true; Anchor = 'Left' }), 0, 6)
+$settingsGrid.Controls.Add($pitchBox, 1, 6)
 $settingsBox.Controls.Add($settingsGrid)
 
 $split.Panel1.Controls.Add($grid)
@@ -406,7 +472,9 @@ $buttons.Controls.AddRange(@(
     ($btnApply = New-Control 'Button' @{ Text = 'Apply to Inventor'; Size = (New-Size 160 30)
                                          Font = (New-Object System.Drawing.Font('Segoe UI', 9, [System.Drawing.FontStyle]::Bold)) }),
     ($btnOpenFile = New-Control 'Button' @{ Text = 'Open parameter file'; Size = (New-Size 150 30) }),
-    ($btnReload = New-Control 'Button' @{ Text = 'Reload file'; Size = (New-Size 110 30) })
+    ($btnReload = New-Control 'Button' @{ Text = 'Reload file'; Size = (New-Size 110 30) }),
+    ($btnLearn = New-Control 'Button' @{ Text = 'Learn hardware holes'; Size = (New-Size 160 30) }),
+    ($btnTree = New-Control 'Button' @{ Text = 'Export assembly tree...'; Size = (New-Size 170 30) })
 ))
 $LogBox = New-Control 'TextBox' @{ Multiline = $true; ReadOnly = $true; ScrollBars = 'Vertical'; Dock = 'Fill'
                                    Font = (New-Object System.Drawing.Font('Consolas', 9)) }
@@ -418,12 +486,7 @@ $form.Controls.Add($bottom)
 
 $grid.add_DataBindingComplete({
     foreach ($c in 'Name', 'Unit', 'Description') { if ($grid.Columns[$c]) { $grid.Columns[$c].ReadOnly = $true } }
-    foreach ($gr in $grid.Rows) {
-        if ($FixedParams -contains $gr.Cells['Name'].Value) {
-            $gr.ReadOnly = $true
-            $gr.DefaultCellStyle.ForeColor = [System.Drawing.Color]::Gray
-        }
-    }
+    Update-GridLocks
 })
 
 $grid.add_DataError({ param($s, $e)
@@ -453,6 +516,7 @@ $chkFolder.add_CheckedChanged({ Update-FolderControls })
 $gapBox.add_ValueChanged({ if (-not $script:Syncing) { Update-SettingsFromForm; Update-Preview } })
 $thickBox.add_ValueChanged({ if (-not $script:Syncing) { Update-SettingsFromForm; Update-Preview } })
 $splitBox.add_ValueChanged({ if (-not $script:Syncing) { Update-SettingsFromForm; Update-Preview } })
+$pitchBox.add_ValueChanged({ if (-not $script:Syncing) { Update-SettingsFromForm; Update-GridLocks; Update-Preview } })
 
 $btnMaster.add_Click({ Invoke-Step 'Open master' { $nameBox.Text = Open-InventorAssembly $State.Standard.Master } })
 $btnOpen.add_Click({ Invoke-Step 'Open assembly' { Open-AssemblyFile } })
@@ -460,6 +524,8 @@ $btnRead.add_Click({ Invoke-Step 'Read from Inventor' { Read-FromInventor } })
 $btnApply.add_Click({ Invoke-Step 'Apply to Inventor' { Invoke-ApplyToInventor } })
 $btnReload.add_Click({ Invoke-Step 'Reload file' { Set-Grid (Read-ParamFile $ParamPath); Update-NameFromGrid; Update-Preview } })
 $btnOpenFile.add_Click({ Invoke-Step 'Open parameter file' { Start-Process notepad.exe -ArgumentList "`"$ParamPath`"" } })
+$btnLearn.add_Click({ Invoke-Step 'Learn hardware holes' { Invoke-LearnHardwareStep } })
+$btnTree.add_Click({ Invoke-Step 'Export assembly tree' { Export-TreeStep } })
 $btnSvg.add_Click({ Invoke-Step 'Save drawing' { Save-Drawing } })
 $btnBrowse.add_Click({ Select-OutputFolder })
 
@@ -471,6 +537,7 @@ $form.add_Shown({
         $gapBox.Value   = [decimal]$State.Settings.minHoleGap
         $thickBox.Value = [decimal][math]::Max(0.1, $State.Settings.thickness)
         $splitBox.Value = [decimal]$State.Settings.splitWidth
+        $pitchBox.Value = [decimal]$State.Settings.maxHolePitch
         $viewBox.SelectedIndex = 0
     } finally { $script:Syncing = $false }
     Update-FolderControls

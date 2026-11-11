@@ -32,6 +32,9 @@ Nothing to install. The tool uses:
 | `lib\Standards.ps1` | Product types from `standards\` and the bill of materials. |
 | `lib\Inventor.ps1` | Inventor COM: open, push parameters, inner-panel split, rebuild, save as new size, Part Number. |
 | `lib\Twin.ps1` | Drawings: views, bill of materials, axis, painting in the window, SVG sheet. |
+| `lib\Hardware.ps1` | Hinge and handle holes: learned from a master, re-placed for every size. |
+| `lib\TreeExport.ps1` | Exports any assembly's component tree, constraints and patterns to CSV and JSON. |
+| `standards\hardware\` | Learned hardware holes per type (created by **Learn hardware holes**). |
 | `standards\FP.json`, `TP.json`, `RP.json` | One file per panel type. |
 | `docs\PANEL_RULES.md` | Equations, the split rule, setup per master, open points. |
 | `Parameters.xml`, `settings.json` | Created on first run, next to the script. |
@@ -67,6 +70,10 @@ Nothing to install. The tool uses:
      too. The original files on disk are not touched. Existing files are never overwritten.
 7. The log at the bottom lists every parameter that changed and in which file. Errors include
    the script line number.
+8. **Learn hardware holes** (once per type, with its master open): reads the hinge and handle
+   holes from Inventor. From then on they show in orange in every drawing of that type.
+9. **Export assembly tree...**: writes the component tree, the files used (with how many times
+   and their lengths) and every constraint of the active assembly to CSV and JSON.
 
 ## Where new files are saved
 
@@ -86,13 +93,16 @@ Under the grid, saved to `settings.json`:
 - **Minimum hole gap**: smallest distance between hole centres before Apply is blocked (default 10 mm).
 - **Sheet thickness** (Stärke): used for the centre-pair offset and the inner-panel size (default 1 mm).
 - **Split inner panel above width**: wider panels get 2 inner panels (default 500 mm, 0 = never).
+- **Automatic hole counts, max. pitch**: `HolesL` and `HolesW` follow the size so no gap between
+  wall holes exceeds this value (default 400 mm; 0 = enter the counts by hand).
 
 ## Inner-panel split
 
 Above the split width the `-In` part is made half as wide and used twice. On Apply the app
 sets `InSplit = 2`, adds a second copy of the `-In` part to the assembly next to the first, and
 mates the two with three flush constraints on their origin planes. Going back below the split
-width deletes the second copy. A split panel always gets 4 holes on the width wall (2 edge
+width deletes the second copy. The inner part's file is always named `-In-2T` when split and
+`-In` when not, for every type; the app renames it on Apply when needed (the old file stays). A split panel always gets 4 holes on the width wall (2 edge
 holes + the centre pair), because each half has a hole at both of its ends. The `-In` part
 needs the `InSplit` parameter from its setup file; see [docs/PANEL_RULES.md](docs/PANEL_RULES.md).
 
@@ -104,7 +114,7 @@ Each `*.json` file in `standards\` is one panel type shown in the **Type** list.
 |---|---|---|
 | FP (`FP-`) | 47 | active; master `FP-386x656x47.iam` next to the app |
 | TP (`TP-`) | 42 | active; put the master path into `TP.json` |
-| RP (`RP-`) | 44 | prepared; waits for its parameter files and master path |
+| RP (`RP-`) | 44 | active; put the master path into `RP.json` |
 
 Fields of a type:
 
@@ -176,7 +186,8 @@ correct import changes no geometry. Then build the hole patterns as described in
 | `386x656x47-In-setup.xml` | `386x656x47-In.ipt` (import again: it now adds `InSplit`) |
 | `FP-386x656x47-setup.xml` | `FP-386x656x47.iam` |
 | `6357-3 519x1194x42-Au-setup.xml`, `…-In-setup.xml`, `6357-3 TP-519x1194x42-setup.xml` | the TP 519 master |
-| `6357-3 724x1194x42-Au-setup.xml`, `…-In-2T-setup.xml` | the TP 724 parts |
+| `6357-3 724x1194x42-Au-setup.xml`, `…-In-2T-setup.xml`, `6357-3 TP-724x1194x42-setup.xml` | the TP 724 master (recommended TP master) |
+| `6357-3 571x996x44-Au-setup.xml`, `…-In-setup.xml`, `6357-3 RP-571x996x44-setup.xml` | the RP 571 master |
 
 ## `Parameters.xml`
 
@@ -198,7 +209,6 @@ Inventor. Older files without `HolesL` / `HolesW` are upgraded automatically.
 ## Not done yet
 
 - Drawings (`.idw` / `.dwg`) aren't copied or renamed for new sizes.
-- RP has no setup files yet.
 - Hinge and handle counts are fixed by the master (see docs/PANEL_RULES.md, section 8).
 - Building a whole box (profiles, corner joints, panels) is planned (section 9 there).
 - Read-only files (library, Content Center, Vault checked-in) are skipped. With Vault, check out first.

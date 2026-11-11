@@ -21,6 +21,7 @@
         },
         {
           "suffix": "-In",
+          "splitSuffix": "-In-2T",
           "description": "Inner panel (In)",
           "role": "inner",
           "qty": 1

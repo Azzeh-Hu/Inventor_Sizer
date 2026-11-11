@@ -269,5 +269,21 @@
       <isKey>false</isKey>
       <tolerance>Default;Nominal;Document Precision</tolerance>
     </ParamWithValue>
+    <ParamWithValue>
+      <name>d91</name>
+      <typeCode>mm</typeCode>
+      <value>HoleMidOffsetW</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d92</name>
+      <typeCode>mm</typeCode>
+      <value>HoleMidOffsetW</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
   </parameters>
 </ParamWithValueList>

@@ -1,6 +1,6 @@
 {
   "family": "RP",
-  "description": "Panel with 2 handles",
+  "description": "Panel with 2 handles across the middle",
   "variants": [
     {
       "id": "RP",
@@ -9,7 +9,11 @@
       "prefix": "RP-",
       "height": 44,
       "master": "",
-      "notes": "Waiting for the RP parameter files: master path, HoleZ default and the setup-xml files are still to be added.",
+      "defaults": {
+        "HoleZ": 20
+      },
+      "minHolesL": 2,
+      "notes": "master: path of the 6357-3 RP-571x996x44 assembly. Its tray has no length-wall hole pattern yet: add one like the TP tray (count HoleCountL - 1, spacing HolePitchL).",
       "parts": [
         {
           "suffix": "-Au",
@@ -19,6 +23,7 @@
         },
         {
           "suffix": "-In",
+          "splitSuffix": "-In-2T",
           "description": "Inner panel (In)",
           "role": "inner",
           "qty": 1

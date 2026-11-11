@@ -324,32 +324,36 @@ function Update-PartNumber($Doc, $Old, $New, [string]$FileName = '') {
     }
 }
 
-# Save the assembly and every file whose name contains the old size under the new name.
-# $Old / $New come from Split-PanelName (project lead + size). Inner-panel files of types with
-# a split suffix are named for the split state (-In or -In-2T).
+# Saves the panel under its new name. Every file whose name contains the old size gets the new
+# size (and project lead); the inner panel's file always matches the split state (-In when one
+# piece, -In-2T when split, for every type), even when the size stays the same. Only files
+# whose name changes are written as new files; the rest is saved in place.
 # Standard rule: each new file goes into the folder of the file it was made from. Only when
 # $OutputFolder is given (chosen in the window for that session) do all new files go there.
 function Save-AsNewSize($asm, $Old, $New, [string]$NewAsmName, [string]$OutputFolder, $Standard = $null, [int]$Split = 1) {
-    if ($OutputFolder -and -not (Test-Path $OutputFolder)) {
-        [void](New-Item -ItemType Directory -Path $OutputFolder)
-        Write-Log "  created folder $OutputFolder"
-    }
     $plan = New-Object System.Collections.Generic.List[object]
     foreach ($doc in (Get-ModelDocuments $asm)) {
         if ($doc.FullFileName -eq $asm.FullFileName -or -not $doc.IsModifiable) { continue }
         $base = [IO.Path]::GetFileNameWithoutExtension($doc.FullFileName)
-        if ($base.Contains($Old.Token)) {
-            $dir = $(if ($OutputFolder) { $OutputFolder } else { Split-Path $doc.FullFileName })
-            $newBase = Convert-PanelText $base $Old $New
-            if ($Standard) { $newBase = Convert-SplitName $Standard $newBase $Split }
-            $plan.Add(@{ Doc = $doc; Name = $newBase; Path = (Join-Path $dir ($newBase + [IO.Path]::GetExtension($doc.FullFileName))) })
-        }
+        if (-not $base.Contains($Old.Token)) { continue }
+        $newBase = Convert-PanelText $base $Old $New
+        if ($Standard) { $newBase = Convert-SplitName $Standard $newBase $Split }
+        if ($newBase -eq $base -and -not $OutputFolder) { continue }
+        $dir = $(if ($OutputFolder) { $OutputFolder } else { Split-Path $doc.FullFileName })
+        $plan.Add(@{ Doc = $doc; Name = $newBase; Path = (Join-Path $dir ($newBase + [IO.Path]::GetExtension($doc.FullFileName))) })
     }
-    $asmDir = $(if ($OutputFolder) { $OutputFolder } else { Split-Path $asm.FullFileName })
-    $plan.Add(@{ Doc = $asm; Name = $NewAsmName; Path = (Join-Path $asmDir ($NewAsmName + [IO.Path]::GetExtension($asm.FullFileName))) })
+    $curAsm = [IO.Path]::GetFileNameWithoutExtension($asm.FullFileName)
+    if ($NewAsmName -ne $curAsm -or $OutputFolder) {
+        $asmDir = $(if ($OutputFolder) { $OutputFolder } else { Split-Path $asm.FullFileName })
+        $plan.Add(@{ Doc = $asm; Name = $NewAsmName; Path = (Join-Path $asmDir ($NewAsmName + [IO.Path]::GetExtension($asm.FullFileName))) })
+    }
 
     $existing = @($plan | Where-Object { Test-Path $_.Path } | ForEach-Object { $_.Path })
     if ($existing) { throw "These files already exist, nothing was saved:`n" + ($existing -join "`n") }
+    if ($OutputFolder -and -not (Test-Path $OutputFolder)) {
+        [void](New-Item -ItemType Directory -Path $OutputFolder)
+        Write-Log "  created folder $OutputFolder"
+    }
 
     $inv = $asm.Parent
     $inv.SilentOperation = $true
@@ -360,7 +364,7 @@ function Save-AsNewSize($asm, $Old, $New, [string]$NewAsmName, [string]$OutputFo
             $item.Doc.SaveAs($item.Path, $false)
             Write-Log "  saved $($item.Path)"
         }
-        $asm.Save2($true)   # flush sub-assemblies whose references changed
+        $asm.Save2($true)   # the assembly in place (when its name stays) and sub-assemblies whose references changed
     } finally {
         $inv.SilentOperation = $false
     }
@@ -392,9 +396,12 @@ function Update-PanelAssembly($asm, $Standards, $Standard, [string]$NewName, [ob
     Update-InnerSplit $asm $Standard $Layout.Split $Layout.InnerWidth
     $asm.Update2($true)
 
-    if ($NewName -eq $curName) {
+    if (-not $old) {
         $asm.Save2($true)
         Write-Log "Saved $curName in place."
+    } elseif ($NewName -eq $curName) {   # same name: always in place, also when another folder is chosen
+        Save-AsNewSize $asm $old $new $NewName '' $Standard $Layout.Split   # renames the inner panel if the split state changed
+        Write-Log "Saved $curName."
     } else {
         Write-Log "Saving as $NewName ..."
         Save-AsNewSize $asm $old $new $NewName $OutputFolder $Standard $Layout.Split

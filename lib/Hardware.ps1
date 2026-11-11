@@ -86,21 +86,21 @@ function ConvertTo-HoleTemplate($Circles, [double[]]$BoxMin, [double[]]$BoxSize,
 # along, and Bad = the hole falls outside the panel at this size.
 function Get-HardwareHoles($Template, [double]$W, [double]$L, [double]$H) {
     if (-not $Template) { return @() }
-    , @(foreach ($h in @($Template.Holes)) {
-        $r = [double]$h.Dia / 2
-        switch ($h.Wall) {
-            'face'   { $x = Resolve-Anchor $h.U $W; $y = Resolve-Anchor $h.V $L; $z = $(if ($h.Side -eq 'top') { $H } else { 0 }); $axis = 'z'
+    , @(foreach ($hole in @($Template.Holes)) {
+        $r = [double]$hole.Dia / 2
+        switch ($hole.Wall) {
+            'face'   { $x = Resolve-Anchor $hole.U $W; $y = Resolve-Anchor $hole.V $L; $z = $(if ($hole.Side -eq 'top') { $H } else { 0 }); $axis = 'z'
                        $bad = $x - $r -lt 0 -or $x + $r -gt $W -or $y - $r -lt 0 -or $y + $r -gt $L }
-            'length' { $y = Resolve-Anchor $h.U $L; $z = Resolve-Anchor $h.V $H; $x = $(if ($h.Side -eq 'xW') { $W } else { 0 }); $axis = 'x'
+            'length' { $y = Resolve-Anchor $hole.U $L; $z = Resolve-Anchor $hole.V $H; $x = $(if ($hole.Side -eq 'xW') { $W } else { 0 }); $axis = 'x'
                        $bad = $y - $r -lt 0 -or $y + $r -gt $L }
-            default  { $x = Resolve-Anchor $h.U $W; $z = Resolve-Anchor $h.V $H; $y = $(if ($h.Side -eq 'yL') { $L } else { 0 }); $axis = 'y'
+            default  { $x = Resolve-Anchor $hole.U $W; $z = Resolve-Anchor $hole.V $H; $y = $(if ($hole.Side -eq 'yL') { $L } else { 0 }); $axis = 'y'
                        $bad = $x - $r -lt 0 -or $x + $r -gt $W }
         }
-        [pscustomobject]@{ X = $x; Y = $y; Z = $z; Axis = $axis; Dia = [double]$h.Dia; Wall = $h.Wall; Side = $h.Side; Bad = [bool]$bad }
+        [pscustomobject]@{ X = $x; Y = $y; Z = $z; Axis = $axis; Dia = [double]$hole.Dia; Wall = $hole.Wall; Side = $hole.Side; Bad = [bool]$bad }
     })
 }
 
-# Holes closer than their radii, or outside the panel, at this size (shown as notes).
+# Holes that fall outside the panel at this size (shown as a note).
 function Get-HardwareNotes($Holes) {
     $out = @(@($Holes) | Where-Object { $_.Bad }).Count
     if ($out) { , @("Door hardware: $out hole(s) fall outside the panel at this size (red in the drawing).") } else { , @() }
@@ -185,8 +185,8 @@ function Invoke-LearnHardware($Standards, $Standard, [string]$StandardsDir, [dou
     $path = Save-HardwareTemplate $StandardsDir $Standard $template $asm.FullFileName
     $byWall = @($template.Holes | Group-Object Wall | ForEach-Object { "$($_.Count) on the $($_.Name)" }) -join ', '
     Write-Log "Learned $(@($template.Holes).Count) hardware hole(s) from $name ($byWall); skipped $($template.RuleHolesSkipped) wall hole(s) made by the hole rules."
-    foreach ($h in $template.Holes) {
-        Write-Log ("  {0} {1}: dia {2}, {3} {4} / {5} {6}" -f $h.Wall, $h.Side, (Format-Number $h.Dia), $h.U.From, (Format-Number $h.U.Value), $h.V.From, (Format-Number $h.V.Value))
+    foreach ($hole in $template.Holes) {
+        Write-Log ("  {0} {1}: dia {2}, {3} {4} / {5} {6}" -f $hole.Wall, $hole.Side, (Format-Number $hole.Dia), $hole.U.From, (Format-Number $hole.U.Value), $hole.V.From, (Format-Number $hole.V.Value))
     }
     Write-Log "Saved $path"
     $template

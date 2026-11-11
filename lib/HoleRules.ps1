@@ -60,6 +60,19 @@ function New-WallLayout([string]$Wall, [double]$Span, [double]$Holes, [double]$E
     $r
 }
 
+# Automatic hole count for a wall: the fewest holes that keep every gap at or below the
+# maximum pitch, with the 2 end holes at HoleEdge:  n = ceil((span - 2 * HoleEdge) / maxPitch) + 1.
+# Width walls take even counts above 2 (3 -> 4). Checked against the masters: with 400 mm it
+# gives 386x656 3/2, 726x1616 5/4, 519x1194 and 724x1194 4/4, 444x654 3/2, 546x1197 4/4.
+function Get-AutoHoleCount([double]$Span, [double]$Edge, [double]$MaxPitch, [bool]$WidthWall) {
+    if ($MaxPitch -le 0) { throw 'Automatic hole counts need a maximum pitch above 0.' }
+    $free = $Span - 2 * $Edge
+    if ($free -le 0) { return 1 }
+    $n = [int][math]::Ceiling($free / $MaxPitch - 1e-9) + 1
+    if ($WidthWall -and $n -gt 2 -and ($n % 2) -ne 0) { $n++ }
+    $n
+}
+
 # Inner-panel rule (all types): a panel wider than the split width gets its -In part split in
 # 2 equal halves, placed side by side across the width.
 function Get-InnerSplit([double]$Width, $Settings) {

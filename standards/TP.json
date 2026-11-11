@@ -13,7 +13,7 @@
         "HoleZ": 20
       },
       "minHolesL": 2,
-      "notes": "master: path of the master assembly, e.g. the 519x1194x42 one. minHolesL 2: the model has a fixed hole at each end of the length wall plus a pattern of HoleCountL - 1.",
+      "notes": "master: path of the 6357-3 TP-724x1194x42 assembly (split, with the centre-pair holes d91/d92). minHolesL 2: the tray has a fixed hole at each end of the length wall plus a pattern of HoleCountL - 1.",
       "parts": [
         {
           "suffix": "-Au",

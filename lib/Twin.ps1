@@ -119,6 +119,58 @@ function Get-HoleKind($WallLayout, [bool]$Hidden) {
     if ($Hidden) { 'hiddenHole' } elseif (@($WallLayout.Errors).Count -gt 0) { 'holeBad' } else { 'hole' }
 }
 
+# ------------------------------------------------------------------ door hardware
+
+# Circle of radius R around a model point, in the plane across the given axis (x, y or z).
+function Add-Ring3($List, [string]$Kind, $T, [double[]]$C, [string]$Axis, [double]$R) {
+    $ring = for ($i = 0; $i -lt 24; $i++) {
+        $a = $i / 24 * 2 * [math]::PI; $p = [math]::Cos($a) * $R; $q = [math]::Sin($a) * $R
+        switch ($Axis) {
+            'x' { , @($C[0], ($C[1] + $p), ($C[2] + $q)) }
+            'y' { , @(($C[0] + $p), $C[1], ($C[2] + $q)) }
+            default { , @(($C[0] + $p), ($C[1] + $q), $C[2]) }
+        }
+    }
+    Add-Poly3 $List $Kind $T $ring $true
+}
+
+# Which hardware holes a view shows, and whether they are seen directly (else dashed).
+# Face holes show in the isometric and plan views; wall holes in the elevation facing that wall.
+function Get-HardwareVisibility($Hole, [string]$View) {
+    switch ($View) {
+        'Isometric' { switch ($Hole.Wall) { 'face' { return $Hole.Side -eq 'top' } 'length' { return $Hole.Side -eq 'xW' } default { return $Hole.Side -eq 'yL' } } }
+        'Top'    { if ($Hole.Wall -eq 'face') { return $Hole.Side -eq 'top' } }
+        'Bottom' { if ($Hole.Wall -eq 'face') { return $Hole.Side -eq 'bottom' } }
+        'Front'  { if ($Hole.Wall -eq 'length') { return $Hole.Side -eq 'xW' } }
+        'Back'   { if ($Hole.Wall -eq 'length') { return $Hole.Side -eq 'x0' } }
+        'Right'  { if ($Hole.Wall -eq 'width') { return $Hole.Side -eq 'yL' } }
+        'Left'   { if ($Hole.Wall -eq 'width') { return $Hole.Side -eq 'y0' } }
+    }
+    $null   # not shown in this view
+}
+
+# Hinge / handle holes. Holes on the far face are dashed but always drawn in the isometric and
+# plan views (the hardware is usually on the outside face, which these views look away from);
+# in the elevations the far wall's holes only appear with hidden edges on.
+function Add-HardwareHoles($List, $T, $V, [string]$View, [bool]$ShowHidden) {
+    foreach ($h in @($V.HW)) {
+        $seen = Get-HardwareVisibility $h $View
+        if ($null -eq $seen) { continue }
+        if (-not $seen -and $View -notin 'Isometric', 'Top', 'Bottom' -and -not $ShowHidden) { continue }
+        $kind = $(if ($h.Bad) { 'hwBad' } elseif ($seen) { 'hw' } else { 'hwHidden' })
+        $r = [math]::Max($h.Dia / 2, 4.5 / $T.S)   # at least 4.5 px, so small holes stay visible on a large panel
+        $c = [double[]]@($h.X, $h.Y, $h.Z)
+        Add-Ring3 $List $kind $T $c $h.Axis $r
+        if ($seen) {
+            $k = 1.6 * $r
+            $d = switch ($h.Axis) { 'x' { @(@(0, $k, 0), @(0, 0, $k)) } 'y' { @(@($k, 0, 0), @(0, 0, $k)) } default { @(@($k, 0, 0), @(0, $k, 0)) } }
+            foreach ($e in $d) {
+                Add-Poly3 $List 'center' $T @(@(($c[0] - $e[0]), ($c[1] - $e[1]), ($c[2] - $e[2])), @(($c[0] + $e[0]), ($c[1] + $e[1]), ($c[2] + $e[2]))) $false
+            }
+        }
+    }
+}
+
 # ------------------------------------------------------------------ isometric view
 
 function Add-IsoHoles($List, $T, $WallLayout, [string]$Along, [double]$Fixed, [double]$Z, [double]$R, [bool]$Hidden) {
@@ -180,6 +232,7 @@ function Add-IsoView($List, $V, $Layout, [double[]]$Rect, [bool]$ShowHidden) {
     }
     Add-IsoHoles $List $T $lenWall 'y' $W $V.Z $r $false
     Add-IsoHoles $List $T $widWall 'x' $L $V.Z $r $false
+    Add-HardwareHoles $List $T $V 'Isometric' $ShowHidden
 
     Add-IsoDim $List $T @(0, $L, 0) @($W, $L, 0) @(0, $off, 0) (Format-Number $W) (Get-HoleText $widWall $V.D)
     Add-IsoDim $List $T @($W, 0, 0) @($W, $L, 0) @($off, 0, 0) (Format-Number $L) (Get-HoleText $lenWall $V.D)
@@ -259,6 +312,8 @@ function Add-OrthoView($List, $V, $Layout, [string]$View, [double[]]$Rect, [bool
             }
         }
     }
+
+    Add-HardwareHoles $List $T $V $View $ShowHidden
 
     # Overall dimensions: horizontal below, vertical on the left
     $hSpan = $(if ($View -in 'Left', 'Right') { $W } else { $L })
@@ -348,25 +403,31 @@ function Get-HoleNotes($Layout, $V) {
                         else { "$($wall.Wall) walls (2x): $n hole(s) at $at mm from the wall end" })
         }
     }
+    $hw = @($V.HW)
+    if ($hw.Count) {
+        $face = @($hw | Where-Object { $_.Wall -eq 'face' }).Count
+        $lines += "Door hardware (orange): $($hw.Count) hole(s), $face in the face, $($hw.Count - $face) in the walls; dashed = far side"
+        foreach ($g in ($hw | Group-Object { Format-Number $_.Dia })) { $lines += "  $([char]0x00D8)$($g.Name) mm: $($g.Count)x" }
+    }
     $lines += 'All dimensions in mm. Drawing not to scale.'
     $lines
 }
 
 # ------------------------------------------------------------------ compositions
 
-function ConvertTo-TwinValues([hashtable]$Values, [double]$Thickness) {
+function ConvertTo-TwinValues([hashtable]$Values, [double]$Thickness, $Hardware) {
     $d = [double]$Values['HoleDia']
     if ($d -le 0) { $d = 4.1 }
     @{ W = [double]$Values['Width']; L = [double]$Values['Length']; H = [double]$Values['Height']
-       Z = [double]$Values['HoleZ']; D = $d; C = [double]$Values['Clearance']; T = $Thickness }
+       Z = [double]$Values['HoleZ']; D = $d; C = [double]$Values['Clearance']; T = $Thickness; HW = @($Hardware) }
 }
 
 function Test-TwinValues($V) { $V.W -gt 0 -and $V.L -gt 0 -and $V.H -gt 0 }
 
 # One view in the window, with the bill of materials bottom right and the axis bottom left.
-function Get-WindowShapes([hashtable]$Values, $Layout, [string]$View, [double]$W, [double]$H, [bool]$ShowHidden, $Bom, [double]$Thickness) {
+function Get-WindowShapes([hashtable]$Values, $Layout, [string]$View, [double]$W, [double]$H, [bool]$ShowHidden, $Bom, [double]$Thickness, $Hardware = @()) {
     $list = New-Object System.Collections.Generic.List[object]
-    $V = ConvertTo-TwinValues $Values $Thickness
+    $V = ConvertTo-TwinValues $Values $Thickness $Hardware
     if (-not (Test-TwinValues $V) -or $W -lt 160 -or $H -lt 160) {
         Add-Text $list 'empty' ($W / 2) ($H / 2) 'Enter the dimensions'
         return , $list.ToArray()
@@ -378,6 +439,7 @@ function Get-WindowShapes([hashtable]$Values, $Layout, [string]$View, [double]$W
     if ($View -eq 'Isometric') { Add-IsoView $list $V $Layout $rect $ShowHidden }
     else { Add-OrthoView $list $V $Layout $View $rect $ShowHidden }
     Add-Text $list 'caption' 10 14 $View.ToUpperInvariant() 0 0 'left'
+    if (@($V.HW).Count) { Add-Text $list 'sub' 10 32 'Orange: door hardware holes (dashed = far side)' 0 0 'left' }
     $bomW = [math]::Min(620, $W - 110)
     Add-Bom $list $Bom ($W - $bomW - 10) ($H - $bomH - 8) $bomW $rowH
     Add-Axis $list $View 48 ($H - 48)
@@ -385,9 +447,9 @@ function Get-WindowShapes([hashtable]$Values, $Layout, [string]$View, [double]$W
 }
 
 # Drawing sheet for the SVG file (1400 x 990, A3 proportions).
-function Get-SheetShapes([hashtable]$Values, $Layout, $Bom, [double]$Thickness, [bool]$ShowHidden) {
+function Get-SheetShapes([hashtable]$Values, $Layout, $Bom, [double]$Thickness, [bool]$ShowHidden, $Hardware = @()) {
     $list = New-Object System.Collections.Generic.List[object]
-    $V = ConvertTo-TwinValues $Values $Thickness
+    $V = ConvertTo-TwinValues $Values $Thickness $Hardware
     Add-Rect $list 'frame' 15 15 1385 975
     if (-not (Test-TwinValues $V)) {
         Add-Text $list 'empty' 700 495 'Enter the dimensions'
@@ -421,6 +483,7 @@ function Initialize-TwinGdi {
         hole = @('Black', 1.1); holeBad = @('DarkRed', 1.5); hiddenHole = @('Gray', 1, 'Dash'); center = @('Gray', 0.8, 'DashDot')
         dim = @('DimGray', 1); ext = @('Silver', 1); table = @('Black', 1); frame = @('Black', 1.6)
         axisX = @('Red', 1.6); axisY = @('ForestGreen', 1.6); axisZ = @('Blue', 1.6); axisRing = @('Black', 1)
+        hw = @('DarkOrange', 1.4); hwHidden = @('DarkOrange', 1.3, 'Dash'); hwBad = @('DarkRed', 1.5)
     }
     foreach ($k in $pens.Keys) {
         $d = $pens[$k]
@@ -428,7 +491,7 @@ function Initialize-TwinGdi {
         if ($d.Count -gt 2) { $p.DashStyle = [System.Drawing.Drawing2D.DashStyle]::($d[2]) }
         $TwinGdi["pen.$k"] = $p
     }
-    $fills = @{ face = 'White'; holeBad = 'Red'; arrow = 'DimGray'; axisX = 'Red'; axisY = 'ForestGreen'; axisZ = 'Blue' }
+    $fills = @{ face = 'White'; holeBad = 'Red'; hwBad = 'Red'; arrow = 'DimGray'; axisX = 'Red'; axisY = 'ForestGreen'; axisZ = 'Blue' }
     foreach ($k in $fills.Keys) { $TwinGdi["fill.$k"] = New-Object System.Drawing.SolidBrush ([System.Drawing.Color]::($fills[$k])) }
     $texts = @{
         label = @('Black', 9, 'Bold'); sub = @('DimGray', 8, 'Regular'); caption = @('DimGray', 9, 'Bold')
@@ -497,6 +560,9 @@ $TwinSvgStyle = @{
     axisY      = 'fill="#228b22" stroke="#228b22" stroke-width="1.6"'
     axisZ      = 'fill="#0000ff" stroke="#0000ff" stroke-width="1.6"'
     axisRing   = 'fill="none" stroke="#000000" stroke-width="1"'
+    hw         = 'fill="none" stroke="#ff8c00" stroke-width="1.4"'
+    hwHidden   = 'fill="none" stroke="#ff8c00" stroke-width="1.3" stroke-dasharray="2.5 1.5"'
+    hwBad      = 'fill="#ff0000" stroke="#8b0000" stroke-width="1.5"'
     label      = "$TwinSvgFont font-size=""13"" font-weight=""bold"" fill=""#000000"""
     sub        = "$TwinSvgFont font-size=""11"" fill=""#696969"""
     caption    = "$TwinSvgFont font-size=""14"" font-weight=""bold"" fill=""#696969"""
