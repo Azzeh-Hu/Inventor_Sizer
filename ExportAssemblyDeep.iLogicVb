@@ -1,0 +1,464 @@
+' =====================================================================
+' DEEP EXPORT - Parts, Features, Sketches, Sketch Geometry, Parameters
+' iLogic rule - run from the top-level assembly (.iam)
+'
+' Every unique part file in the assembly (all levels) is exported ONCE.
+' Output folder (next to the assembly):  <AssemblyName>_DeepExport\
+'   Parts.xml          -> one row per part: size (bounding box), volume,
+'                         mass, material, quantity in assembly, counts
+'   Features.xml       -> every feature: type, Join/Cut/..., sketch used,
+'                         extent (distance/angle/through all), size
+'   Sketches.xml       -> every sketch: plane, shape, width x height,
+'                         number of lines/circles/arcs, dimensions
+'   SketchGeometry.xml -> every line/circle/arc: length, diameter,
+'                         radius, angle, position
+'   Parameters.xml     -> every parameter (d0, d1, user params...):
+'                         expression, value, which sketch dimension it is
+'
+' All lengths in mm, angles in degrees, volume in mm^3, mass in kg.
+' =====================================================================
+
+Sub Main()
+    ' ---------------- Settings ----------------
+    Dim skipContentCenter As Boolean = True   ' skip screws, nuts etc. from Content Center
+    Dim exportFormat As String = "xml"        ' "xml" or "csv"
+    ' ------------------------------------------
+
+    Dim doc As Document = ThisDoc.Document
+    If doc.DocumentType <> DocumentTypeEnum.kAssemblyDocumentObject Then
+        MessageBox.Show("Please open an assembly (.iam) before running this rule.", _
+                        "Deep Export", MessageBoxButtons.OK, MessageBoxIcon.Warning)
+        Exit Sub
+    End If
+
+    Dim asm As AssemblyDocument = CType(doc, AssemblyDocument)
+    Dim asmName As String = System.IO.Path.GetFileNameWithoutExtension(asm.FullFileName)
+    Dim baseFolder As String = System.IO.Path.GetDirectoryName(asm.FullFileName)
+    If String.IsNullOrEmpty(baseFolder) Then baseFolder = "C:\Temp"
+    Dim outFolder As String = System.IO.Path.Combine(baseFolder, asmName & "_DeepExport")
+    If Not System.IO.Directory.Exists(outFolder) Then System.IO.Directory.CreateDirectory(outFolder)
+
+    Dim parts As New List(Of String)
+    parts.Add(Row("Part", "Part Number", "Description", "Material", "Part Type", "Quantity", _
+                  "Size X mm", "Size Y mm", "Size Z mm", "Volume mm3", "Mass kg", _
+                  "Bodies", "Sketches", "Features", "Full Path"))
+
+    Dim feats As New List(Of String)
+    feats.Add(Row("Part", "Feature", "Type", "Operation", "Sketch", "Extent", _
+                  "Size", "Direction", "Feature Parameters", "Suppressed", "Health"))
+
+    Dim sketches As New List(Of String)
+    sketches.Add(Row("Part", "Sketch", "Plane", "Shape", "Width mm", "Height mm", _
+                     "Lines", "Circles", "Arcs", "Splines", "Ellipses", _
+                     "Dimensions", "Dimension List", "Used By Features", "Constraint Status"))
+
+    Dim geo As New List(Of String)
+    geo.Add(Row("Part", "Sketch", "Entity", "Type", "Size", "Length mm", "Diameter mm", _
+                "Radius mm", "Angle deg", "X1 mm", "Y1 mm", "X2 mm", "Y2 mm", "Construction"))
+
+    Dim pars As New List(Of String)
+    pars.Add(Row("Part", "Parameter", "Kind", "Expression", "Value", "Units", _
+                 "Sketch Dimension", "Comment"))
+
+    Dim count As Integer = 0
+    For Each refDoc As Document In asm.AllReferencedDocuments
+        If refDoc.DocumentType <> DocumentTypeEnum.kPartDocumentObject Then Continue For
+        Dim pd As PartDocument = CType(refDoc, PartDocument)
+
+        Dim isCC As Boolean = False
+        Try : isCC = pd.ComponentDefinition.IsContentMember : Catch : End Try
+        If skipContentCenter AndAlso isCC Then Continue For
+
+        Try
+            ExportPart(asm, pd, parts, feats, sketches, geo, pars)
+            count += 1
+        Catch ex As Exception
+            parts.Add(Row(System.IO.Path.GetFileName(pd.FullFileName), "ERROR: " & ex.Message))
+        End Try
+    Next
+
+    WriteTable(outFolder, "Parts", "Part", asm.FullFileName, parts, exportFormat)
+    WriteTable(outFolder, "Features", "Feature", asm.FullFileName, feats, exportFormat)
+    WriteTable(outFolder, "Sketches", "Sketch", asm.FullFileName, sketches, exportFormat)
+    WriteTable(outFolder, "SketchGeometry", "Entity", asm.FullFileName, geo, exportFormat)
+    WriteTable(outFolder, "Parameters", "Parameter", asm.FullFileName, pars, exportFormat)
+
+    MessageBox.Show("Exported " & count & " parts to:" & vbCrLf & outFolder, _
+                    "Deep Export", MessageBoxButtons.OK, MessageBoxIcon.Information)
+End Sub
+
+' ---------------------------------------------------------------------
+' One part file
+' ---------------------------------------------------------------------
+Sub ExportPart(asm As AssemblyDocument, pd As PartDocument, _
+               parts As List(Of String), feats As List(Of String), sketches As List(Of String), _
+               geo As List(Of String), pars As List(Of String))
+
+    Dim def As PartComponentDefinition = pd.ComponentDefinition
+    Dim partName As String = System.IO.Path.GetFileName(pd.FullFileName)
+    Dim uom As UnitsOfMeasure = pd.UnitsOfMeasure
+
+    ' ---------- Features ----------
+    ' also remembers which features use which sketch
+    Dim featBySketch As New Dictionary(Of String, List(Of String))
+
+    For Each f As PartFeature In def.Features
+        Dim o As Object = f
+        Dim fType As String = Clean(f.Type.ToString(), "FeatureObject", "Object")
+
+        Dim op As String = ""
+        Try : op = Clean(o.Operation.ToString(), "Operation") : Catch : End Try
+        If fType = "Hole" Then op = "Cut"
+
+        Dim skName As String = ""
+        Try
+            skName = o.Profile.Parent.Name
+        Catch
+            Try : skName = o.Sketch.Name : Catch : End Try
+        End Try
+        If skName <> "" Then
+            If Not featBySketch.ContainsKey(skName) Then featBySketch(skName) = New List(Of String)
+            featBySketch(skName).Add(f.Name)
+        End If
+
+        Dim extent As String = ""
+        Try : extent = Clean(o.ExtentType.ToString(), "Extent") : Catch : End Try
+
+        Dim size As String = ""
+        Try
+            size = "Distance " & o.Extent.Distance.Expression
+        Catch
+            Try : size = "Angle " & o.Extent.Angle.Expression : Catch : End Try
+        End Try
+        If fType = "Hole" Then
+            Try
+                size = "Dia " & o.HoleDiameter.Expression & If(size <> "", ", " & size, "")
+            Catch
+            End Try
+        End If
+        If size = "" AndAlso extent <> "" Then size = extent
+
+        Dim dirn As String = ""
+        Try : dirn = Clean(o.Extent.Direction.ToString(), "ExtentDirection") : Catch : End Try
+
+        ' Parameters owned by the feature (fillet radius, chamfer size, ...)
+        Dim fParams As New List(Of String)
+        Try
+            For Each p As Object In o.Parameters
+                fParams.Add(p.Name & "=" & p.Expression)
+            Next
+        Catch
+        End Try
+
+        Dim health As String = ""
+        Try : health = Clean(f.HealthStatus.ToString(), "HealthStatus") : Catch : End Try
+
+        feats.Add(Row(partName, f.Name, fType, op, skName, extent, size, dirn, _
+                      String.Join(" | ", fParams.ToArray()), f.Suppressed.ToString(), health))
+    Next
+
+    ' ---------- Sketches ----------
+    Dim dimMap As New Dictionary(Of String, String)   ' parameter name -> "Sketch1 / Diameter"
+
+    For Each sk As PlanarSketch In def.Sketches
+        Dim plane As String = ""
+        Try
+            plane = sk.PlanarEntity.Name
+        Catch
+            plane = "Face / other"
+        End Try
+
+        Dim nL As Integer = 0, nC As Integer = 0, nA As Integer = 0, nS As Integer = 0, nE As Integer = 0
+        Dim minX As Double = Double.MaxValue, minY As Double = Double.MaxValue
+        Dim maxX As Double = Double.MinValue, maxY As Double = Double.MinValue
+        Dim firstDia As Double = 0
+
+        ' Lines
+        For Each ln As SketchLine In sk.SketchLines
+            Dim p1 As Point2d = ln.StartSketchPoint.Geometry
+            Dim p2 As Point2d = ln.EndSketchPoint.Geometry
+            If Not ln.Construction Then
+                nL += 1
+                Grow(minX, minY, maxX, maxY, p1.X, p1.Y, 0)
+                Grow(minX, minY, maxX, maxY, p2.X, p2.Y, 0)
+            End If
+            geo.Add(Row(partName, sk.Name, "Line " & nL, "Line", "L " & N(ln.Length * 10) & " mm", _
+                        N(ln.Length * 10), "", "", N(LineAngle(p1, p2)), _
+                        N(p1.X * 10), N(p1.Y * 10), N(p2.X * 10), N(p2.Y * 10), ln.Construction.ToString()))
+        Next
+
+        ' Circles
+        For Each c As SketchCircle In sk.SketchCircles
+            Dim cp As Point2d = c.CenterSketchPoint.Geometry
+            If Not c.Construction Then
+                nC += 1
+                If firstDia = 0 Then firstDia = c.Radius * 20
+                Grow(minX, minY, maxX, maxY, cp.X, cp.Y, c.Radius)
+            End If
+            geo.Add(Row(partName, sk.Name, "Circle " & nC, "Circle", "Dia " & N(c.Radius * 20) & " mm", _
+                        "", N(c.Radius * 20), N(c.Radius * 10), "", _
+                        N(cp.X * 10), N(cp.Y * 10), "", "", c.Construction.ToString()))
+        Next
+
+        ' Arcs
+        For Each a As SketchArc In sk.SketchArcs
+            Dim cp As Point2d = a.CenterSketchPoint.Geometry
+            Dim ang As Double = a.SweepAngle * 180 / Math.PI
+            If Not a.Construction Then
+                nA += 1
+                Try
+                    Grow(minX, minY, maxX, maxY, a.StartSketchPoint.Geometry.X, a.StartSketchPoint.Geometry.Y, 0)
+                    Grow(minX, minY, maxX, maxY, a.EndSketchPoint.Geometry.X, a.EndSketchPoint.Geometry.Y, 0)
+                Catch
+                End Try
+            End If
+            geo.Add(Row(partName, sk.Name, "Arc " & nA, "Arc", "R " & N(a.Radius * 10) & " mm, " & N(ang) & " deg", _
+                        N(a.Radius * 10 * a.SweepAngle), N(a.Radius * 20), N(a.Radius * 10), N(ang), _
+                        N(cp.X * 10), N(cp.Y * 10), "", "", a.Construction.ToString()))
+        Next
+
+        ' Splines / ellipses (counted, size not exported)
+        Try
+            For Each s As SketchSpline In sk.SketchSplines
+                If Not s.Construction Then nS += 1
+            Next
+        Catch
+        End Try
+        Try
+            For Each e As SketchEllipse In sk.SketchEllipses
+                If Not e.Construction Then nE += 1
+                geo.Add(Row(partName, sk.Name, "Ellipse " & nE, "Ellipse", _
+                            "Major R " & N(e.MajorRadius * 10) & ", Minor R " & N(e.MinorRadius * 10) & " mm", _
+                            "", "", "", "", N(e.CenterSketchPoint.Geometry.X * 10), _
+                            N(e.CenterSketchPoint.Geometry.Y * 10), "", "", e.Construction.ToString()))
+            Next
+        Catch
+        End Try
+
+        Dim w As Double = 0, h As Double = 0
+        If maxX > minX Then w = (maxX - minX) * 10
+        If maxY > minY Then h = (maxY - minY) * 10
+
+        ' Dimensions
+        Dim dimList As New List(Of String)
+        Dim nDims As Integer = 0
+        For Each dc As DimensionConstraint In sk.DimensionConstraints
+            nDims += 1
+            Dim dType As String = Clean(dc.Type.ToString(), "DimConstraintObject", "Object")
+            Try
+                Dim prm As Parameter = dc.Parameter
+                Dim driven As String = ""
+                If dc.Driven Then driven = " (driven)"
+                dimList.Add(prm.Name & "=" & prm.Expression & driven)
+                dimMap(prm.Name) = sk.Name & " / " & dType & driven
+            Catch
+            End Try
+        Next
+
+        Dim status As String = ""
+        Try : status = Clean(sk.ConstraintStatus.ToString(), "ConstraintStatus") : Catch : End Try
+
+        Dim usedBy As String = ""
+        If featBySketch.ContainsKey(sk.Name) Then usedBy = String.Join(", ", featBySketch(sk.Name).ToArray())
+
+        sketches.Add(Row(partName, sk.Name, plane, ShapeName(nL, nC, nA, nS, nE, w, h, firstDia), _
+                         N(w), N(h), nL.ToString(), nC.ToString(), nA.ToString(), nS.ToString(), nE.ToString(), _
+                         nDims.ToString(), String.Join(" | ", dimList.ToArray()), usedBy, status))
+    Next
+
+    ' ---------- Parameters ----------
+    AddParams(partName, def.Parameters.ModelParameters, "Model", uom, dimMap, pars)
+    AddParams(partName, def.Parameters.UserParameters, "User", uom, dimMap, pars)
+    AddParams(partName, def.Parameters.ReferenceParameters, "Reference", uom, dimMap, pars)
+
+    ' ---------- Part summary ----------
+    Dim sx As String = "", sy As String = "", sz As String = ""
+    Try
+        Dim b As Box = def.RangeBox
+        sx = N((b.MaxPoint.X - b.MinPoint.X) * 10)
+        sy = N((b.MaxPoint.Y - b.MinPoint.Y) * 10)
+        sz = N((b.MaxPoint.Z - b.MinPoint.Z) * 10)
+    Catch
+    End Try
+
+    Dim vol As String = "", mass As String = ""
+    Try
+        vol = N(def.MassProperties.Volume * 1000)
+        mass = N(def.MassProperties.Mass)
+    Catch
+    End Try
+
+    Dim mat As String = ""
+    Try
+        mat = pd.ActiveMaterial.DisplayName
+    Catch
+        mat = GetProp(pd.PropertySets, "Design Tracking Properties", "Material")
+    End Try
+
+    Dim partType As String = "Standard"
+    If TypeOf def Is SheetMetalComponentDefinition Then partType = "Sheet Metal"
+
+    Dim qty As String = ""
+    Try : qty = asm.ComponentDefinition.Occurrences.AllReferencedOccurrences(pd).Count.ToString() : Catch : End Try
+
+    parts.Add(Row(partName, _
+                  GetProp(pd.PropertySets, "Design Tracking Properties", "Part Number"), _
+                  GetProp(pd.PropertySets, "Design Tracking Properties", "Description"), _
+                  mat, partType, qty, sx, sy, sz, vol, mass, _
+                  def.SurfaceBodies.Count.ToString(), def.Sketches.Count.ToString(), _
+                  def.Features.Count.ToString(), pd.FullFileName))
+End Sub
+
+Sub AddParams(partName As String, coll As Object, kind As String, uom As UnitsOfMeasure, _
+              dimMap As Dictionary(Of String, String), pars As List(Of String))
+    Try
+        For Each p As Object In coll
+            Dim nm As String = "", expr As String = "", valStr As String = "", units As String = "", cmt As String = ""
+            Try : nm = p.Name : Catch : End Try
+            Try : expr = p.Expression : Catch : End Try
+            Try : units = p.Units : Catch : End Try
+            Try : valStr = uom.GetStringFromValue(p.Value, units) : Catch : End Try
+            Try : cmt = p.Comment : Catch : End Try
+            Dim skDim As String = ""
+            If dimMap.ContainsKey(nm) Then skDim = dimMap(nm)
+            pars.Add(Row(partName, nm, kind, expr, valStr, units, skDim, cmt))
+        Next
+    Catch
+    End Try
+End Sub
+
+' ---------------------------------------------------------------------
+' Helpers
+' ---------------------------------------------------------------------
+
+' Rough shape name from what the sketch contains
+Function ShapeName(nL As Integer, nC As Integer, nA As Integer, nS As Integer, nE As Integer, _
+                   w As Double, h As Double, dia As Double) As String
+    Dim other As Integer = nS + nE
+    If nL = 0 AndAlso nA = 0 AndAlso other = 0 AndAlso nC = 1 Then Return "Circle Dia " & N(dia)
+    If nL = 0 AndAlso nA = 0 AndAlso other = 0 AndAlso nC > 1 Then Return nC & " circles"
+    If nC = 0 AndAlso nA = 0 AndAlso other = 0 Then
+        If nL = 3 Then Return "Triangle"
+        If nL = 4 Then Return "Rectangle / 4-sided " & N(w) & " x " & N(h)
+        If nL > 4 Then Return "Polygon (" & nL & " sides)"
+        If nL > 0 Then Return nL & " line(s)"
+    End If
+    If nL = 2 AndAlso nA = 2 AndAlso nC = 0 AndAlso other = 0 Then Return "Slot " & N(w) & " x " & N(h)
+    If nL = 0 AndAlso nC = 0 AndAlso nA = 0 AndAlso other = 0 Then Return "Empty / points only"
+    Return "Mixed profile (" & nL & " lines, " & nA & " arcs, " & nC & " circles" & _
+           If(other > 0, ", " & other & " splines/ellipses", "") & ")"
+End Function
+
+Sub Grow(ByRef minX As Double, ByRef minY As Double, ByRef maxX As Double, ByRef maxY As Double, _
+         x As Double, y As Double, r As Double)
+    If x - r < minX Then minX = x - r
+    If y - r < minY Then minY = y - r
+    If x + r > maxX Then maxX = x + r
+    If y + r > maxY Then maxY = y + r
+End Sub
+
+Function LineAngle(p1 As Point2d, p2 As Point2d) As Double
+    Return Math.Atan2(p2.Y - p1.Y, p2.X - p1.X) * 180 / Math.PI
+End Function
+
+' Number -> text, 3 decimals
+Function N(v As Double) As String
+    Return Math.Round(v, 3).ToString()
+End Function
+
+' "kExtrudeFeatureObject" -> "Extrude"
+Function Clean(s As String, ParamArray suffixes() As String) As String
+    If s Is Nothing Then Return ""
+    If s.StartsWith("k") Then s = s.Substring(1)
+    For Each suf As String In suffixes
+        If s.EndsWith(suf) Then
+            s = s.Substring(0, s.Length - suf.Length)
+            Exit For
+        End If
+    Next
+    Return s
+End Function
+
+Function GetProp(sets As PropertySets, setName As String, propName As String) As String
+    If sets Is Nothing Then Return ""
+    Try
+        Dim v As Object = sets.Item(setName).Item(propName).Value
+        If v Is Nothing Then Return ""
+        Return v.ToString()
+    Catch
+        Return ""
+    End Try
+End Function
+
+' One row; fields joined with an invisible separator
+Function Row(ParamArray fields() As String) As String
+    Dim q As New List(Of String)
+    For Each f As String In fields
+        If f Is Nothing Then f = ""
+        q.Add(f.Replace(Chr(31), " ").Replace(vbCr, " ").Replace(vbLf, " "))
+    Next
+    Return String.Join(Chr(31).ToString(), q.ToArray())
+End Function
+
+' Writes one table as XML or CSV. First row = column names.
+Sub WriteTable(folder As String, tableName As String, itemTag As String, source As String, _
+               rows As List(Of String), fmt As String)
+    Dim sep As Char = Chr(31)
+    Dim headers() As String = rows(0).Split(sep)
+
+    If fmt.ToLower() = "csv" Then
+        ' ";" for German Excel
+        Dim lines As New List(Of String)
+        For Each r As String In rows
+            Dim cells As New List(Of String)
+            For Each v As String In r.Split(sep)
+                cells.Add("""" & v.Replace("""", """""") & """")
+            Next
+            lines.Add(String.Join(";", cells.ToArray()))
+        Next
+        System.IO.File.WriteAllLines(System.IO.Path.Combine(folder, tableName & ".csv"), _
+                                     lines.ToArray(), System.Text.Encoding.UTF8)
+        Exit Sub
+    End If
+
+    For i As Integer = 0 To headers.Length - 1
+        headers(i) = TagName(headers(i))
+    Next
+
+    Dim sb As New System.Text.StringBuilder()
+    sb.AppendLine("<?xml version=""1.0"" encoding=""utf-8""?>")
+    sb.AppendLine("<" & tableName & " source=""" & Esc(source) & """ exported=""" & _
+                  DateTime.Now.ToString("yyyy-MM-dd HH:mm") & """>")
+    For r As Integer = 1 To rows.Count - 1
+        Dim vals() As String = rows(r).Split(sep)
+        sb.AppendLine("  <" & itemTag & ">")
+        For i As Integer = 0 To headers.Length - 1
+            Dim v As String = ""
+            If i < vals.Length Then v = vals(i)
+            sb.AppendLine("    <" & headers(i) & ">" & Esc(v) & "</" & headers(i) & ">")
+        Next
+        sb.AppendLine("  </" & itemTag & ">")
+    Next
+    sb.AppendLine("</" & tableName & ">")
+
+    System.IO.File.WriteAllText(System.IO.Path.Combine(folder, tableName & ".xml"), _
+                                sb.ToString(), New System.Text.UTF8Encoding(False))
+End Sub
+
+' "Size X mm" -> "SizeXmm"
+Function TagName(header As String) As String
+    Dim t As New System.Text.StringBuilder()
+    For Each ch As Char In header
+        If Char.IsLetterOrDigit(ch) Then t.Append(ch)
+    Next
+    Dim s As String = t.ToString()
+    If s.Length = 0 OrElse Char.IsDigit(s(0)) Then s = "_" & s
+    Return s
+End Function
+
+' Escape & < > " ' for XML
+Function Esc(s As String) As String
+    If s Is Nothing Then Return ""
+    Return s.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;") _
+            .Replace("""", "&quot;").Replace("'", "&apos;")
+End Function

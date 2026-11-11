@@ -1,0 +1,308 @@
+' =====================================================================
+' Export Assembly Tree + iProperties + Constraints/Joints to XML
+' (same rows and columns as the CSV version)
+' iLogic rule - run from the top-level assembly (.iam)
+'
+' Output (written next to the assembly file):
+'   <AssemblyName>_Tree.xml         -> full component tree with iProperties
+'   <AssemblyName>_Constraints.xml  -> all constraints + joints, every level
+' Open in a browser to read, or in Excel (Data > Get Data > From XML)
+' to get the same table as the CSV.
+' =====================================================================
+
+
+Sub Main()
+    Dim doc As Document = ThisDoc.Document
+    If doc.DocumentType <> DocumentTypeEnum.kAssemblyDocumentObject Then
+        MessageBox.Show("Please open an assembly (.iam) before running this rule.", _
+                        "Export Assembly Tree", MessageBoxButtons.OK, MessageBoxIcon.Warning)
+        Exit Sub
+    End If
+
+    Dim asm As AssemblyDocument = CType(doc, AssemblyDocument)
+    Dim asmName As String = System.IO.Path.GetFileNameWithoutExtension(asm.FullFileName)
+    Dim outFolder As String = System.IO.Path.GetDirectoryName(asm.FullFileName)
+    If String.IsNullOrEmpty(outFolder) Then outFolder = "C:\Temp" ' unsaved assembly
+    If Not System.IO.Directory.Exists(outFolder) Then System.IO.Directory.CreateDirectory(outFolder)
+
+    ' ---------- Tree ----------
+    Dim tree As New List(Of String)
+    tree.Add(Row("Level", "Tree", "Occurrence Path", "File Name", "File Type", "Full Path", _
+                 "Part Number", "Description", "Revision", "Material", "Stock Number", _
+                 "Designer", "Project", "BOM Structure", "Suppressed", "Grounded", _
+                 "Visible", "Custom iProperties"))
+
+    ' Row for the top-level assembly itself
+    tree.Add(Row("0", asmName, asmName, System.IO.Path.GetFileName(asm.FullFileName), ".iam", _
+                 asm.FullFileName, _
+                 GetProp(asm.PropertySets, "Design Tracking Properties", "Part Number"), _
+                 GetProp(asm.PropertySets, "Design Tracking Properties", "Description"), _
+                 GetProp(asm.PropertySets, "Inventor Summary Information", "Revision Number"), _
+                 "", _
+                 GetProp(asm.PropertySets, "Design Tracking Properties", "Stock Number"), _
+                 GetProp(asm.PropertySets, "Design Tracking Properties", "Designer"), _
+                 GetProp(asm.PropertySets, "Design Tracking Properties", "Project"), _
+                 asm.ComponentDefinition.BOMStructure.ToString(), "False", "", "True", _
+                 GetCustomProps(asm.PropertySets)))
+
+    ' ---------- Constraints / Joints ----------
+    Dim cons As New List(Of String)
+    cons.Add(Row("Assembly", "Kind", "Name", "Type", "Component 1", "Component 2", _
+                 "Offset / Angle", "Suppressed", "Health"))
+
+    Dim visited As New HashSet(Of String)(StringComparer.OrdinalIgnoreCase)
+    ExportConstraints(asm.ComponentDefinition, asmName, cons)
+    visited.Add(asm.FullFileName)
+
+    WalkTree(asm.ComponentDefinition.Occurrences, 1, asmName, tree, cons, visited)
+
+    ' ---------- Write files ----------
+    Dim treeFile As String = System.IO.Path.Combine(outFolder, asmName & "_Tree.xml")
+    Dim consFile As String = System.IO.Path.Combine(outFolder, asmName & "_Constraints.xml")
+    WriteXml(treeFile, "AssemblyTree", "Component", asm.FullFileName, tree)
+    WriteXml(consFile, "AssemblyConstraints", "Constraint", asm.FullFileName, cons)
+
+    MessageBox.Show("Export complete:" & vbCrLf & treeFile & vbCrLf & consFile, _
+                    "Export Assembly Tree", MessageBoxButtons.OK, MessageBoxIcon.Information)
+End Sub
+
+' ---------------------------------------------------------------------
+' Recursive tree walk
+' ---------------------------------------------------------------------
+Sub WalkTree(occs As ComponentOccurrencesEnumerator, level As Integer, parentPath As String, _
+             tree As List(Of String), cons As List(Of String), visited As HashSet(Of String))
+    For Each occ As ComponentOccurrence In occs
+        WriteOccurrence(occ, level, parentPath, tree, cons, visited)
+    Next
+End Sub
+
+' Top level uses ComponentOccurrences (different type than the enumerator)
+Sub WalkTree(occs As ComponentOccurrences, level As Integer, parentPath As String, _
+             tree As List(Of String), cons As List(Of String), visited As HashSet(Of String))
+    For Each occ As ComponentOccurrence In occs
+        WriteOccurrence(occ, level, parentPath, tree, cons, visited)
+    Next
+End Sub
+
+Sub WriteOccurrence(occ As ComponentOccurrence, level As Integer, parentPath As String, _
+                    tree As List(Of String), cons As List(Of String), visited As HashSet(Of String))
+    Dim occPath As String = parentPath & " > " & occ.Name
+    Dim fullPath As String = ""
+    Dim fileName As String = ""
+    Dim fileType As String = ""
+    Dim propSets As PropertySets = Nothing
+    Dim isVirtual As Boolean = False
+
+    Try
+        If TypeOf occ.Definition Is VirtualComponentDefinition Then
+            isVirtual = True
+            propSets = CType(occ.Definition, VirtualComponentDefinition).PropertySets
+            fileName = "(virtual component)"
+            fileType = "virtual"
+        End If
+    Catch
+    End Try
+
+    If Not isVirtual Then
+        Try
+            fullPath = occ.ReferencedDocumentDescriptor.FullDocumentName
+            fileName = System.IO.Path.GetFileName(fullPath)
+            fileType = System.IO.Path.GetExtension(fullPath)
+        Catch
+        End Try
+        Try
+            propSets = CType(occ.Definition.Document, Document).PropertySets
+        Catch
+            ' suppressed occurrence -> document not loaded
+        End Try
+    End If
+
+    Dim bom As String = ""
+    Try : bom = occ.BOMStructure.ToString().Replace("BOMStructure", "").TrimStart("k"c) : Catch : End Try
+
+    Dim grounded As String = ""
+    Try : grounded = occ.Grounded.ToString() : Catch : End Try
+
+    tree.Add(Row(level.ToString(), _
+                 New String(" "c, level * 3) & occ.Name, _
+                 occPath, fileName, fileType, fullPath, _
+                 GetProp(propSets, "Design Tracking Properties", "Part Number"), _
+                 GetProp(propSets, "Design Tracking Properties", "Description"), _
+                 GetProp(propSets, "Inventor Summary Information", "Revision Number"), _
+                 GetProp(propSets, "Design Tracking Properties", "Material"), _
+                 GetProp(propSets, "Design Tracking Properties", "Stock Number"), _
+                 GetProp(propSets, "Design Tracking Properties", "Designer"), _
+                 GetProp(propSets, "Design Tracking Properties", "Project"), _
+                 bom, occ.Suppressed.ToString(), grounded, occ.Visible.ToString(), _
+                 GetCustomProps(propSets)))
+
+    ' Recurse into sub-assemblies
+    If Not occ.Suppressed AndAlso occ.DefinitionDocumentType = DocumentTypeEnum.kAssemblyDocumentObject Then
+        ' Constraints of each sub-assembly file are exported once (not per instance)
+        Try
+            Dim subDoc As AssemblyDocument = CType(occ.Definition.Document, AssemblyDocument)
+            If Not visited.Contains(subDoc.FullFileName) Then
+                visited.Add(subDoc.FullFileName)
+                ExportConstraints(subDoc.ComponentDefinition, _
+                                  System.IO.Path.GetFileNameWithoutExtension(subDoc.FullFileName), cons)
+            End If
+        Catch
+        End Try
+
+        WalkTree(occ.SubOccurrences, level + 1, occPath, tree, cons, visited)
+    End If
+End Sub
+
+' ---------------------------------------------------------------------
+' Constraints + joints of one assembly definition
+' ---------------------------------------------------------------------
+Sub ExportConstraints(def As AssemblyComponentDefinition, asmName As String, cons As List(Of String))
+    For Each c As AssemblyConstraint In def.Constraints
+        Dim o1 As String = "(assembly geometry)"
+        Dim o2 As String = "(assembly geometry)"
+        Try
+            If c.OccurrenceOne IsNot Nothing Then o1 = c.OccurrenceOne.Name
+        Catch
+        End Try
+        Try
+            If c.OccurrenceTwo IsNot Nothing Then o2 = c.OccurrenceTwo.Name
+        Catch
+        End Try
+
+        Dim value As String = ""
+        Try
+            Select Case c.Type
+                Case ObjectTypeEnum.kMateConstraintObject : value = CType(c, MateConstraint).Offset.Expression
+                Case ObjectTypeEnum.kFlushConstraintObject : value = CType(c, FlushConstraint).Offset.Expression
+                Case ObjectTypeEnum.kAngleConstraintObject : value = CType(c, AngleConstraint).Angle.Expression
+                Case ObjectTypeEnum.kTangentConstraintObject : value = CType(c, TangentConstraint).Offset.Expression
+                Case ObjectTypeEnum.kInsertConstraintObject : value = CType(c, InsertConstraint).Distance.Expression
+            End Select
+        Catch
+        End Try
+
+        Dim health As String = ""
+        Try : health = c.HealthStatus.ToString().Replace("HealthStatus", "").TrimStart("k"c) : Catch : End Try
+
+        cons.Add(Row(asmName, "Constraint", c.Name, ConstraintTypeName(c.Type), o1, o2, _
+                     value, c.Suppressed.ToString(), health))
+    Next
+
+    ' Joints (Inventor 2014+)
+    Try
+        For Each j As AssemblyJoint In def.Joints
+            Dim o1 As String = "", o2 As String = ""
+            Try : o1 = j.OccurrenceOne.Name : Catch : End Try
+            Try : o2 = j.OccurrenceTwo.Name : Catch : End Try
+            Dim jType As String = ""
+            Try : jType = j.Definition.JointType.ToString().Replace("JointType", "").TrimStart("k"c) : Catch : End Try
+            Dim health As String = ""
+            Try : health = j.HealthStatus.ToString().Replace("HealthStatus", "").TrimStart("k"c) : Catch : End Try
+            cons.Add(Row(asmName, "Joint", j.Name, jType, o1, o2, "", j.Suppressed.ToString(), health))
+        Next
+    Catch
+    End Try
+End Sub
+
+' ---------------------------------------------------------------------
+' Helpers
+' ---------------------------------------------------------------------
+Function ConstraintTypeName(t As ObjectTypeEnum) As String
+    Select Case t
+        Case ObjectTypeEnum.kMateConstraintObject : Return "Mate"
+        Case ObjectTypeEnum.kFlushConstraintObject : Return "Flush"
+        Case ObjectTypeEnum.kAngleConstraintObject : Return "Angle"
+        Case ObjectTypeEnum.kTangentConstraintObject : Return "Tangent"
+        Case ObjectTypeEnum.kInsertConstraintObject : Return "Insert"
+        Case ObjectTypeEnum.kSymmetryConstraintObject : Return "Symmetry"
+        Case ObjectTypeEnum.kTransitionalConstraintObject : Return "Transitional"
+        Case ObjectTypeEnum.kRotateRotateConstraintObject : Return "Motion (Rotation)"
+        Case ObjectTypeEnum.kRotateTranslateConstraintObject : Return "Motion (Rotation-Translation)"
+        Case Else : Return t.ToString()
+    End Select
+End Function
+
+Function GetProp(sets As PropertySets, setName As String, propName As String) As String
+    If sets Is Nothing Then Return ""
+    Try
+        Dim v As Object = sets.Item(setName).Item(propName).Value
+        If v Is Nothing Then Return ""
+        Return v.ToString()
+    Catch
+        Return ""
+    End Try
+End Function
+
+' All custom iProperties as "Name=Value | Name=Value"
+Function GetCustomProps(sets As PropertySets) As String
+    If sets Is Nothing Then Return ""
+    Dim parts As New List(Of String)
+    Try
+        For Each p As [Property] In sets.Item("Inventor User Defined Properties")
+            Dim v As String = ""
+            Try : v = p.Value.ToString() : Catch : End Try
+            parts.Add(p.Name & "=" & v)
+        Next
+    Catch
+    End Try
+    Return String.Join(" | ", parts.ToArray())
+End Function
+
+' Builds one row; fields are joined with an invisible separator
+' and turned into XML elements in WriteXml
+Function Row(ParamArray fields() As String) As String
+    Dim q As New List(Of String)
+    For Each f As String In fields
+        If f Is Nothing Then f = ""
+        q.Add(f.Replace(Chr(31), " "))
+    Next
+    Return String.Join(Chr(31).ToString(), q.ToArray())
+End Function
+
+' Writes the rows as XML. First row = column names.
+'   <AssemblyTree source="..." exported="...">
+'     <Component>
+'       <Level>1</Level>
+'       <PartNumber>...</PartNumber>
+'       ...
+Sub WriteXml(filePath As String, rootTag As String, itemTag As String, source As String, rows As List(Of String))
+    Dim sep As Char = Chr(31)
+    Dim headers() As String = rows(0).Split(sep)
+    For i As Integer = 0 To headers.Length - 1
+        headers(i) = TagName(headers(i))
+    Next
+
+    Dim sb As New System.Text.StringBuilder()
+    sb.AppendLine("<?xml version=""1.0"" encoding=""utf-8""?>")
+    sb.AppendLine("<" & rootTag & " source=""" & Esc(source) & """ exported=""" & _
+                  DateTime.Now.ToString("yyyy-MM-dd HH:mm") & """>")
+    For r As Integer = 1 To rows.Count - 1
+        Dim vals() As String = rows(r).Split(sep)
+        sb.AppendLine("  <" & itemTag & ">")
+        For i As Integer = 0 To headers.Length - 1
+            Dim v As String = ""
+            If i < vals.Length Then v = vals(i)
+            sb.AppendLine("    <" & headers(i) & ">" & Esc(v) & "</" & headers(i) & ">")
+        Next
+        sb.AppendLine("  </" & itemTag & ">")
+    Next
+    sb.AppendLine("</" & rootTag & ">")
+
+    System.IO.File.WriteAllText(filePath, sb.ToString(), New System.Text.UTF8Encoding(False))
+End Sub
+
+' "Component 1" -> "Component1", "Offset / Angle" -> "OffsetAngle"
+Function TagName(header As String) As String
+    Dim t As New System.Text.StringBuilder()
+    For Each ch As Char In header
+        If Char.IsLetterOrDigit(ch) Then t.Append(ch)
+    Next
+    Return t.ToString()
+End Function
+
+' Escape & < > " ' for XML
+Function Esc(s As String) As String
+    If s Is Nothing Then Return ""
+    Return s.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;") _
+            .Replace("""", "&quot;").Replace("'", "&apos;")
+End Function
