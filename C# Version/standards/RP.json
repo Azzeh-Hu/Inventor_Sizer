@@ -1,0 +1,383 @@
+{
+  "family": "RP",
+  "description": "Panel with 2 handles across the middle",
+  "variants": [
+    {
+      "id": "RP",
+      "name": "RP - panel with handles (44 mm)",
+      "enabled": true,
+      "prefix": "RP-",
+      "height": 44,
+      "master": "",
+      "defaults": {
+        "HoleZ": 20
+      },
+      "minHolesL": 2,
+      "notes": "master: path of the 6357-3 RP-571x996x44 assembly. Its tray has no length-wall hole pattern yet: add one like the TP tray (count HoleCountL - 1, spacing HolePitchL).",
+      "parts": [
+        {
+          "suffix": "-Au",
+          "description": "Outer tray (Au)",
+          "role": "outer",
+          "qty": 1
+        },
+        {
+          "suffix": "-In",
+          "splitSuffix": "-In-2T",
+          "description": "Inner panel (In)",
+          "role": "inner",
+          "qty": 1
+        }
+      ],
+      "setup": {
+        "master": "6357-3 RP-571x996x44",
+        "notes": "Applied to the open master by 'Set up master' (Inventor parameters): per role the user parameters are created or set, then the model dimensions get these formulas. The d-numbers belong to this master.",
+        "outer": {
+          "user": [
+            {
+              "name": "Width",
+              "value": "571 mm",
+              "unit": "mm"
+            },
+            {
+              "name": "Length",
+              "value": "996 mm",
+              "unit": "mm"
+            },
+            {
+              "name": "Height",
+              "value": "44 mm",
+              "unit": "mm"
+            },
+            {
+              "name": "HoleEdge",
+              "value": "50 mm",
+              "unit": "mm"
+            },
+            {
+              "name": "HoleZ",
+              "value": "20 mm",
+              "unit": "mm"
+            },
+            {
+              "name": "HoleDia",
+              "value": "4.1 mm",
+              "unit": "mm"
+            },
+            {
+              "name": "Clearance",
+              "value": "0.5 mm",
+              "unit": "mm"
+            },
+            {
+              "name": "HolesL",
+              "value": "4 ul",
+              "unit": "ul"
+            },
+            {
+              "name": "HolesW",
+              "value": "4 ul",
+              "unit": "ul"
+            },
+            {
+              "name": "HoleStartL",
+              "value": "50 mm",
+              "unit": "mm"
+            },
+            {
+              "name": "HolePitchL",
+              "value": "298.666666667 mm",
+              "unit": "mm"
+            },
+            {
+              "name": "HoleCountL",
+              "value": "4 ul",
+              "unit": "ul"
+            },
+            {
+              "name": "HoleOnL",
+              "value": "1 ul",
+              "unit": "ul"
+            },
+            {
+              "name": "HoleStartW",
+              "value": "50 mm",
+              "unit": "mm"
+            },
+            {
+              "name": "HolePitchW",
+              "value": "471 mm",
+              "unit": "mm"
+            },
+            {
+              "name": "HoleCountW",
+              "value": "2 ul",
+              "unit": "ul"
+            },
+            {
+              "name": "HoleOnW",
+              "value": "1 ul",
+              "unit": "ul"
+            },
+            {
+              "name": "HoleMidOnW",
+              "value": "1 ul",
+              "unit": "ul"
+            },
+            {
+              "name": "HoleMidOffsetW",
+              "value": "HoleEdge - Stärke - Clearance",
+              "unit": "mm"
+            }
+          ],
+          "formulas": [
+            {
+              "name": "d0",
+              "formula": "Width"
+            },
+            {
+              "name": "d1",
+              "formula": "Length"
+            },
+            {
+              "name": "d7",
+              "formula": "Height"
+            },
+            {
+              "name": "d13",
+              "formula": "HoleZ"
+            },
+            {
+              "name": "d14",
+              "formula": "HoleEdge"
+            },
+            {
+              "name": "d15",
+              "formula": "HoleEdge"
+            },
+            {
+              "name": "d16",
+              "formula": "HoleZ"
+            },
+            {
+              "name": "d17",
+              "formula": "HoleDia"
+            },
+            {
+              "name": "d24",
+              "formula": "HoleEdge"
+            },
+            {
+              "name": "d25",
+              "formula": "HoleZ"
+            },
+            {
+              "name": "d28",
+              "formula": "HoleZ"
+            },
+            {
+              "name": "d29",
+              "formula": "HoleEdge"
+            },
+            {
+              "name": "d30",
+              "formula": "HoleDia"
+            },
+            {
+              "name": "d96",
+              "formula": "HoleMidOffsetW"
+            }
+          ]
+        },
+        "inner": {
+          "user": [
+            {
+              "name": "Width",
+              "value": "571 mm",
+              "unit": "mm"
+            },
+            {
+              "name": "Length",
+              "value": "996 mm",
+              "unit": "mm"
+            },
+            {
+              "name": "Height",
+              "value": "44 mm",
+              "unit": "mm"
+            },
+            {
+              "name": "HoleEdge",
+              "value": "50 mm",
+              "unit": "mm"
+            },
+            {
+              "name": "HoleZ",
+              "value": "20 mm",
+              "unit": "mm"
+            },
+            {
+              "name": "HoleDia",
+              "value": "4.1 mm",
+              "unit": "mm"
+            },
+            {
+              "name": "Clearance",
+              "value": "0.5 mm",
+              "unit": "mm"
+            },
+            {
+              "name": "HolesL",
+              "value": "4 ul",
+              "unit": "ul"
+            },
+            {
+              "name": "HolesW",
+              "value": "4 ul",
+              "unit": "ul"
+            },
+            {
+              "name": "HoleStartL",
+              "value": "50 mm",
+              "unit": "mm"
+            },
+            {
+              "name": "HolePitchL",
+              "value": "298.666666667 mm",
+              "unit": "mm"
+            },
+            {
+              "name": "HoleCountL",
+              "value": "4 ul",
+              "unit": "ul"
+            },
+            {
+              "name": "HoleOnL",
+              "value": "1 ul",
+              "unit": "ul"
+            },
+            {
+              "name": "HoleStartW",
+              "value": "50 mm",
+              "unit": "mm"
+            },
+            {
+              "name": "HolePitchW",
+              "value": "471 mm",
+              "unit": "mm"
+            },
+            {
+              "name": "HoleCountW",
+              "value": "2 ul",
+              "unit": "ul"
+            },
+            {
+              "name": "HoleOnW",
+              "value": "1 ul",
+              "unit": "ul"
+            },
+            {
+              "name": "HoleMidOnW",
+              "value": "1 ul",
+              "unit": "ul"
+            },
+            {
+              "name": "InSplit",
+              "value": "2 ul",
+              "unit": "ul"
+            },
+            {
+              "name": "InHolePitchW",
+              "value": "187 mm",
+              "unit": "mm"
+            },
+            {
+              "name": "InHoleCountW",
+              "value": "2 ul",
+              "unit": "ul"
+            },
+            {
+              "name": "InHoleMidOnW",
+              "value": "0 ul",
+              "unit": "ul"
+            },
+            {
+              "name": "HoleMidOffsetW",
+              "value": "HoleEdge - Stärke - Clearance",
+              "unit": "mm"
+            }
+          ],
+          "formulas": [
+            {
+              "name": "d0",
+              "formula": "( Width - 2 * Stärke - 2 * Clearance ) / InSplit"
+            },
+            {
+              "name": "d1",
+              "formula": "Length - 2 * Stärke - 2 * Clearance"
+            },
+            {
+              "name": "d7",
+              "formula": "Height - Stärke"
+            },
+            {
+              "name": "d13",
+              "formula": "HoleMidOffsetW"
+            },
+            {
+              "name": "d14",
+              "formula": "HoleMidOffsetW"
+            },
+            {
+              "name": "d15",
+              "formula": "HoleZ"
+            },
+            {
+              "name": "d16",
+              "formula": "HoleDia"
+            },
+            {
+              "name": "d23",
+              "formula": "HoleMidOffsetW"
+            },
+            {
+              "name": "d24",
+              "formula": "HoleMidOffsetW"
+            },
+            {
+              "name": "d25",
+              "formula": "HoleZ"
+            },
+            {
+              "name": "d26",
+              "formula": "HoleDia"
+            }
+          ]
+        },
+        "assembly": {
+          "user": [
+            {
+              "name": "Clearance",
+              "value": "0.5 mm",
+              "unit": "mm"
+            }
+          ],
+          "formulas": [
+            {
+              "name": "d1",
+              "formula": "Clearance"
+            },
+            {
+              "name": "d2",
+              "formula": "Clearance"
+            },
+            {
+              "name": "d17",
+              "formula": "Clearance"
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,8 @@
+# build output (InventorSizer.exe is built from src\, see README)
+/InventorSizer.exe
+/InventorSizer.pdb
+/InventorSizer.exe.config
+/obj/
+/src/obj/
+/src/bin/
+devlog.txt
