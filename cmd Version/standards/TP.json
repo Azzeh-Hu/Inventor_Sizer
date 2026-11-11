@@ -1,0 +1,734 @@
+{
+  "family": "TP",
+  "description": "Door panel: 2 hinges (Scharnier) + 2 lockable handles (Türgriff abschließbar)",
+  "variants": [
+    {
+      "id": "TP",
+      "name": "TP - door panel (42 mm)",
+      "enabled": true,
+      "prefix": "TP-",
+      "height": 42,
+      "master": "",
+      "defaults": {
+        "HoleZ": 20
+      },
+      "minHolesL": 2,
+      "notes": "master: path of the 6357-3 TP-724x1194x42 assembly (split, with the centre-pair holes d91/d92). minHolesL 2: fixed hole at each end of the length wall + a pattern of HoleCountL - 1. HingeCount / HandleCount: hinges and handles per door, evenly spaced (linear patterns in the master, see docs section 14).",
+      "parts": [
+        {
+          "suffix": "-Au",
+          "description": "Outer tray (Au)",
+          "role": "outer",
+          "qty": 1
+        },
+        {
+          "suffix": "-In",
+          "splitSuffix": "-In-2T",
+          "description": "Inner panel (In)",
+          "role": "inner",
+          "qty": 1
+        }
+      ],
+      "setup": {
+        "master": "6357-3 TP-724x1194x42",
+        "notes": "Applied to the open master by 'Set up master' (Inventor parameters): per role the user parameters are created or set, then the model dimensions get these formulas. The d-numbers belong to this master.",
+        "outer": {
+          "user": [
+            {
+              "name": "Width",
+              "value": "724 mm",
+              "unit": "mm"
+            },
+            {
+              "name": "Length",
+              "value": "1194 mm",
+              "unit": "mm"
+            },
+            {
+              "name": "Height",
+              "value": "42 mm",
+              "unit": "mm"
+            },
+            {
+              "name": "HoleEdge",
+              "value": "50 mm",
+              "unit": "mm"
+            },
+            {
+              "name": "HoleZ",
+              "value": "20 mm",
+              "unit": "mm"
+            },
+            {
+              "name": "HoleDia",
+              "value": "4.1 mm",
+              "unit": "mm"
+            },
+            {
+              "name": "Clearance",
+              "value": "0.5 mm",
+              "unit": "mm"
+            },
+            {
+              "name": "HolesL",
+              "value": "4 ul",
+              "unit": "ul"
+            },
+            {
+              "name": "HolesW",
+              "value": "4 ul",
+              "unit": "ul"
+            },
+            {
+              "name": "HoleStartL",
+              "value": "50 mm",
+              "unit": "mm"
+            },
+            {
+              "name": "HolePitchL",
+              "value": "364.666666667 mm",
+              "unit": "mm"
+            },
+            {
+              "name": "HoleCountL",
+              "value": "4 ul",
+              "unit": "ul"
+            },
+            {
+              "name": "HoleOnL",
+              "value": "1 ul",
+              "unit": "ul"
+            },
+            {
+              "name": "HoleStartW",
+              "value": "50 mm",
+              "unit": "mm"
+            },
+            {
+              "name": "HolePitchW",
+              "value": "624 mm",
+              "unit": "mm"
+            },
+            {
+              "name": "HoleCountW",
+              "value": "2 ul",
+              "unit": "ul"
+            },
+            {
+              "name": "HoleOnW",
+              "value": "1 ul",
+              "unit": "ul"
+            },
+            {
+              "name": "HoleMidOnW",
+              "value": "1 ul",
+              "unit": "ul"
+            },
+            {
+              "name": "HoleMidOffsetW",
+              "value": "HoleEdge - Stärke - Clearance",
+              "unit": "mm"
+            },
+            {
+              "name": "HingeEdge",
+              "value": "98 mm",
+              "unit": "mm"
+            },
+            {
+              "name": "HandleEdge",
+              "value": "161 mm",
+              "unit": "mm"
+            }
+          ],
+          "formulas": [
+            {
+              "name": "d0",
+              "formula": "Width"
+            },
+            {
+              "name": "d1",
+              "formula": "Length"
+            },
+            {
+              "name": "d7",
+              "formula": "Height"
+            },
+            {
+              "name": "d13",
+              "formula": "HoleZ"
+            },
+            {
+              "name": "d14",
+              "formula": "HoleEdge"
+            },
+            {
+              "name": "d15",
+              "formula": "HoleEdge"
+            },
+            {
+              "name": "d16",
+              "formula": "HoleZ"
+            },
+            {
+              "name": "d17",
+              "formula": "HoleDia"
+            },
+            {
+              "name": "d24",
+              "formula": "HoleEdge"
+            },
+            {
+              "name": "d25",
+              "formula": "HoleZ"
+            },
+            {
+              "name": "d28",
+              "formula": "HoleZ"
+            },
+            {
+              "name": "d29",
+              "formula": "HoleEdge"
+            },
+            {
+              "name": "d30",
+              "formula": "HoleDia"
+            },
+            {
+              "name": "d84",
+              "formula": "HoleCountL - 1 ul"
+            },
+            {
+              "name": "d86",
+              "formula": "HolePitchL"
+            },
+            {
+              "name": "d91",
+              "formula": "HoleMidOffsetW"
+            },
+            {
+              "name": "d92",
+              "formula": "HoleMidOffsetW"
+            },
+            {
+              "name": "d81",
+              "formula": "HingeEdge"
+            },
+            {
+              "name": "d114",
+              "formula": "Length - 2 * d81 - d48"
+            },
+            {
+              "name": "d121",
+              "formula": "d114"
+            },
+            {
+              "name": "d102",
+              "formula": "HandleEdge"
+            },
+            {
+              "name": "d107",
+              "formula": "Length - 2 * d102 - d95"
+            }
+          ]
+        },
+        "inner": {
+          "user": [
+            {
+              "name": "Width",
+              "value": "724 mm",
+              "unit": "mm"
+            },
+            {
+              "name": "Length",
+              "value": "1194 mm",
+              "unit": "mm"
+            },
+            {
+              "name": "Height",
+              "value": "42 mm",
+              "unit": "mm"
+            },
+            {
+              "name": "HoleEdge",
+              "value": "50 mm",
+              "unit": "mm"
+            },
+            {
+              "name": "HoleZ",
+              "value": "20 mm",
+              "unit": "mm"
+            },
+            {
+              "name": "HoleDia",
+              "value": "4.1 mm",
+              "unit": "mm"
+            },
+            {
+              "name": "Clearance",
+              "value": "0.5 mm",
+              "unit": "mm"
+            },
+            {
+              "name": "HolesL",
+              "value": "4 ul",
+              "unit": "ul"
+            },
+            {
+              "name": "HolesW",
+              "value": "4 ul",
+              "unit": "ul"
+            },
+            {
+              "name": "HoleStartL",
+              "value": "50 mm",
+              "unit": "mm"
+            },
+            {
+              "name": "HolePitchL",
+              "value": "364.666666667 mm",
+              "unit": "mm"
+            },
+            {
+              "name": "HoleCountL",
+              "value": "4 ul",
+              "unit": "ul"
+            },
+            {
+              "name": "HoleOnL",
+              "value": "1 ul",
+              "unit": "ul"
+            },
+            {
+              "name": "HoleStartW",
+              "value": "50 mm",
+              "unit": "mm"
+            },
+            {
+              "name": "HolePitchW",
+              "value": "624 mm",
+              "unit": "mm"
+            },
+            {
+              "name": "HoleCountW",
+              "value": "2 ul",
+              "unit": "ul"
+            },
+            {
+              "name": "HoleOnW",
+              "value": "1 ul",
+              "unit": "ul"
+            },
+            {
+              "name": "HoleMidOnW",
+              "value": "1 ul",
+              "unit": "ul"
+            },
+            {
+              "name": "InSplit",
+              "value": "2 ul",
+              "unit": "ul"
+            },
+            {
+              "name": "InHolePitchW",
+              "value": "263.5 mm",
+              "unit": "mm"
+            },
+            {
+              "name": "InHoleCountW",
+              "value": "2 ul",
+              "unit": "ul"
+            },
+            {
+              "name": "InHoleMidOnW",
+              "value": "0 ul",
+              "unit": "ul"
+            },
+            {
+              "name": "HoleMidOffsetW",
+              "value": "HoleEdge - Stärke - Clearance",
+              "unit": "mm"
+            }
+          ],
+          "formulas": [
+            {
+              "name": "d0",
+              "formula": "( Width - 2 * Stärke - 2 * Clearance ) / InSplit"
+            },
+            {
+              "name": "d1",
+              "formula": "Length - 2 * Stärke - 2 * Clearance"
+            },
+            {
+              "name": "d7",
+              "formula": "Height - Stärke"
+            },
+            {
+              "name": "d27",
+              "formula": "HoleMidOffsetW"
+            },
+            {
+              "name": "d28",
+              "formula": "HoleMidOffsetW"
+            },
+            {
+              "name": "d29",
+              "formula": "HoleZ"
+            },
+            {
+              "name": "d30",
+              "formula": "HoleDia"
+            },
+            {
+              "name": "d37",
+              "formula": "HoleMidOffsetW"
+            },
+            {
+              "name": "d38",
+              "formula": "HoleMidOffsetW"
+            },
+            {
+              "name": "d39",
+              "formula": "HoleZ"
+            },
+            {
+              "name": "d47",
+              "formula": "HoleDia"
+            },
+            {
+              "name": "d40",
+              "formula": "HoleCountL - 1 ul"
+            },
+            {
+              "name": "d42",
+              "formula": "HolePitchL"
+            }
+          ]
+        },
+        "assembly": {
+          "user": [
+            {
+              "name": "Clearance",
+              "value": "0.5 mm",
+              "unit": "mm"
+            }
+          ],
+          "formulas": [
+            {
+              "name": "d6",
+              "formula": "Clearance"
+            },
+            {
+              "name": "d7",
+              "formula": "Clearance"
+            },
+            {
+              "name": "d26",
+              "formula": "Clearance"
+            },
+            {
+              "name": "d27",
+              "formula": "Clearance"
+            }
+          ]
+        }
+      },
+      "hardware": {
+        "source": "6357-3 TP-724x1194x42 deep export (Hole4, Hole5, Cut1 / Sketch8) and the dimensioned screenshots",
+        "learned": "2026-11-11",
+        "notes": "U = across the panel (start = hinge edge, end = handle edge), V = along the length (start / end = distance from that end). Hinge: d81 = 98, d48 = 24, d50/d51 = 8, d55 = 28 (Ø4.1); d66/d67 = 19.5, d68 = 24, d70 = 33, d71 = 16, d73 = 4 (Ø11). Handle: d102 = 161, d95 = 78, d104 = 22, Ø9 (d93). Replace this file with 'Learn hardware holes' to read the holes straight from Inventor.",
+        "holes": [
+          {
+            "Wall": "face",
+            "Side": "bottom",
+            "Dia": 4.1,
+            "U": {
+              "From": "start",
+              "Value": 8
+            },
+            "V": {
+              "From": "start",
+              "Value": 98
+            },
+            "Group": "hinge"
+          },
+          {
+            "Wall": "face",
+            "Side": "bottom",
+            "Dia": 4.1,
+            "U": {
+              "From": "start",
+              "Value": 8
+            },
+            "V": {
+              "From": "start",
+              "Value": 122
+            },
+            "Group": "hinge"
+          },
+          {
+            "Wall": "face",
+            "Side": "bottom",
+            "Dia": 4.1,
+            "U": {
+              "From": "start",
+              "Value": 36
+            },
+            "V": {
+              "From": "start",
+              "Value": 98
+            },
+            "Group": "hinge"
+          },
+          {
+            "Wall": "face",
+            "Side": "bottom",
+            "Dia": 4.1,
+            "U": {
+              "From": "start",
+              "Value": 36
+            },
+            "V": {
+              "From": "start",
+              "Value": 122
+            },
+            "Group": "hinge"
+          },
+          {
+            "Wall": "face",
+            "Side": "bottom",
+            "Dia": 11,
+            "U": {
+              "From": "start",
+              "Value": 19.5
+            },
+            "V": {
+              "From": "start",
+              "Value": 98
+            },
+            "Group": "hinge"
+          },
+          {
+            "Wall": "face",
+            "Side": "bottom",
+            "Dia": 11,
+            "U": {
+              "From": "start",
+              "Value": 19.5
+            },
+            "V": {
+              "From": "start",
+              "Value": 122
+            },
+            "Group": "hinge"
+          },
+          {
+            "Wall": "face",
+            "Side": "bottom",
+            "Dia": 11,
+            "U": {
+              "From": "start",
+              "Value": 52.5
+            },
+            "V": {
+              "From": "start",
+              "Value": 102
+            },
+            "Group": "hinge"
+          },
+          {
+            "Wall": "face",
+            "Side": "bottom",
+            "Dia": 11,
+            "U": {
+              "From": "start",
+              "Value": 52.5
+            },
+            "V": {
+              "From": "start",
+              "Value": 118
+            },
+            "Group": "hinge"
+          },
+          {
+            "Wall": "face",
+            "Side": "bottom",
+            "Dia": 9,
+            "U": {
+              "From": "end",
+              "Value": 22
+            },
+            "V": {
+              "From": "start",
+              "Value": 161
+            },
+            "Group": "handle"
+          },
+          {
+            "Wall": "face",
+            "Side": "bottom",
+            "Dia": 9,
+            "U": {
+              "From": "end",
+              "Value": 22
+            },
+            "V": {
+              "From": "start",
+              "Value": 239
+            },
+            "Group": "handle"
+          },
+          {
+            "Wall": "face",
+            "Side": "bottom",
+            "Dia": 4.1,
+            "U": {
+              "From": "start",
+              "Value": 8
+            },
+            "V": {
+              "From": "end",
+              "Value": 98
+            },
+            "Group": "hinge"
+          },
+          {
+            "Wall": "face",
+            "Side": "bottom",
+            "Dia": 4.1,
+            "U": {
+              "From": "start",
+              "Value": 8
+            },
+            "V": {
+              "From": "end",
+              "Value": 122
+            },
+            "Group": "hinge"
+          },
+          {
+            "Wall": "face",
+            "Side": "bottom",
+            "Dia": 4.1,
+            "U": {
+              "From": "start",
+              "Value": 36
+            },
+            "V": {
+              "From": "end",
+              "Value": 98
+            },
+            "Group": "hinge"
+          },
+          {
+            "Wall": "face",
+            "Side": "bottom",
+            "Dia": 4.1,
+            "U": {
+              "From": "start",
+              "Value": 36
+            },
+            "V": {
+              "From": "end",
+              "Value": 122
+            },
+            "Group": "hinge"
+          },
+          {
+            "Wall": "face",
+            "Side": "bottom",
+            "Dia": 11,
+            "U": {
+              "From": "start",
+              "Value": 19.5
+            },
+            "V": {
+              "From": "end",
+              "Value": 98
+            },
+            "Group": "hinge"
+          },
+          {
+            "Wall": "face",
+            "Side": "bottom",
+            "Dia": 11,
+            "U": {
+              "From": "start",
+              "Value": 19.5
+            },
+            "V": {
+              "From": "end",
+              "Value": 122
+            },
+            "Group": "hinge"
+          },
+          {
+            "Wall": "face",
+            "Side": "bottom",
+            "Dia": 11,
+            "U": {
+              "From": "start",
+              "Value": 52.5
+            },
+            "V": {
+              "From": "end",
+              "Value": 102
+            },
+            "Group": "hinge"
+          },
+          {
+            "Wall": "face",
+            "Side": "bottom",
+            "Dia": 11,
+            "U": {
+              "From": "start",
+              "Value": 52.5
+            },
+            "V": {
+              "From": "end",
+              "Value": 118
+            },
+            "Group": "hinge"
+          },
+          {
+            "Wall": "face",
+            "Side": "bottom",
+            "Dia": 9,
+            "U": {
+              "From": "end",
+              "Value": 22
+            },
+            "V": {
+              "From": "end",
+              "Value": 161
+            },
+            "Group": "handle"
+          },
+          {
+            "Wall": "face",
+            "Side": "bottom",
+            "Dia": 9,
+            "U": {
+              "From": "end",
+              "Value": 22
+            },
+            "V": {
+              "From": "end",
+              "Value": 239
+            },
+            "Group": "handle"
+          }
+        ]
+      },
+      "hardwareCounts": {
+        "hinge": {
+          "param": "HingeCount",
+          "pitchParam": "HingePitch"
+        },
+        "handle": {
+          "param": "HandleCount",
+          "pitchParam": "HandlePitch"
+        }
+      }
+    }
+  ]
+}
