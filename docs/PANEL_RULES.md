@@ -1,176 +1,245 @@
 # Panel rules: FP, TP, RP
 
-Equations, the inner-panel split, and the one-time setup per master. Everything here was
-derived from the parameter exports of `386x656x47` (FP), `519x1194x42` and `724x1194x42` (TP).
-RP is prepared and waits for its parameter files.
+These are the equations, the inner-panel split, the hardware holes, and the one-time setup per
+master. They were derived from the parameter exports of:
 
-Symbols: `W` × `L` × `H` = Width × Length × Height from the name, `T` = Stärke (1 mm),
-`C` = Clearance (0.5 mm), `E` = HoleEdge (50 mm), `n` = holes per wall.
+- FP: 386×656, 276×696, 521×1616 and 726×1616
+- TP: 519×1194 and 724×1194
+- RP: 571×996 and 546×1197
+
+Symbols:
+
+- `W` × `L` × `H` = Width × Length × Height from the name
+- `T` = Stärke (1 mm)
+- `C` = Clearance (0.5 mm)
+- `E` = HoleEdge (50 mm)
+- `n` = holes per wall
 
 ## 1. Types
 
 | Type | Height | HoleZ | Name | Inner part | Hardware |
 |---|---|---|---|---|---|
-| FP | 47 | 22 | `FP-WxLxH` | `-In` | none |
+| FP | 47 | 22 | `[project ]FP-WxLxH` | `-In`, split: `-In-2T` | none |
 | TP | 42 | 20 | `[project ]TP-WxLxH` | `-In`, split: `-In-2T` | 2 hinges, 2 lockable handles |
-| RP | 44 | to confirm | `[project ]RP-WxLxH` | `-In` (also when split) | 2 handles |
+| RP | 44 | 20 | `[project ]RP-WxLxH` | `-In`, split: `-In-2T` | 2 handles across the middle |
 
-The type is taken from the prefix in front of the size; without a known prefix, from the height.
-Text in front of the prefix (`6357-3 `) is the project lead: it is kept, and part files carry it
-without the type prefix (`6357-3 519x1194x42-Au`).
+How names work:
+
+- The type comes from the prefix in front of the size. If there is no prefix, it comes from the height.
+- Text in front of the prefix (`6357-3 `) is the project lead. It is kept.
+- Part files carry the lead but not the type prefix, e.g. `6357-3 519x1194x42-Au`.
+
+**`-In-2T` rule (every type):** a split inner panel's file always ends in `-In-2T`, and a
+one-piece inner panel's file always ends in `-In`.
+
+- The app renames the inner part on Apply whenever the two disagree, also when the size stays the same.
+- Example: the RP 571 master's split part is called `-In`. The first Apply saves it as `-In-2T`.
+- The old file stays on disk, untouched.
 
 ## 2. Size equations
 
 | Quantity | Equation | 519×1194×42 | 724×1194×42 |
 |---|---|---|---|
 | Tray (`-Au`) | `W` × `L` × `H` | 519 × 1194 × 42 | 724 × 1194 × 42 |
-| Inner panels | `InSplit = 1` if `W ≤ 500`, else `2` | (as built: 1) | 2 |
-| Inner width | `(W − 2T − 2C) / InSplit` | 516 | 360.5 |
+| Inner panels | `InSplit = 1` if `W ≤ 500`, else `2` | 2 | 2 |
+| Inner width | `(W − 2T − 2C) / InSplit` | 258 | 360.5 |
 | Inner length | `L − 2T − 2C` | 1191 | 1191 |
 | Inner flange height | `H − T` | 41 | 41 |
 | Assembly clearance offsets | `C` | 0.5 | 0.5 |
-| Pitch between the 2 halves | inner width (the halves touch) | – | 360.5 |
 
-The split width (500) is in Settings. By this rule the 519 master would be split; it was built
-with one inner panel, so the first Apply at 519 splits it unless the split width is raised.
+The 519 master was built with one inner panel by mistake (as you confirmed). The first Apply at
+519 splits it.
 
 ## 3. Hole equations
 
-Hole diameter 4.1, height `HoleZ` (same value in `-Au` and `-In`).
+Hole diameter 4.1, height `HoleZ`.
 
 | Quantity | Equation | Example |
 |---|---|---|
 | Hole offset in the `-In` part | `MidOffset = E − T − C` | 48.5 |
-| Length wall positions (`-Au`) | `E + i · PitchL`, `i = 0 … n − 1` | 50, 414.67, 779.33, 1144 |
-| `HolePitchL` | `(L − 2E) / (n − 1)` | 1094 / 3 = 364.667 |
-| Width wall, 2 holes | `E` and `W − E` | 50, 469 |
-| Width wall, 4 holes | `E`, `W/2 − MidOffset`, `W/2 + MidOffset`, `W − E` | 50, 313.5, 410.5, 674 |
-| `HolePitchW` (edge pair) | `W − 2E` | 624 |
-| Width wall of one half (`-In`, split) | `MidOffset` from each end of the half | 48.5, 312 |
-| `InHolePitchW` (split) | `(W − 2T − 2C)/2 − 2 · MidOffset` | 263.5 |
+| Holes per length wall (automatic) | `n = ceil((L − 2E) / 400) + 1` | 1194 → 4 |
+| Holes per width wall (automatic) | the same; an odd count above 2 becomes even; split → 4 | 724 → 4 |
+| Length-wall positions | `E + i · (L − 2E) / (n − 1)` | 50, 414.67, 779.33, 1144 |
+| Width wall, 2 holes | `E`, `W − E` | 50, 469 |
+| Width wall, 4 holes | `E`, `W/2 − 48.5`, `W/2 + 48.5`, `W − E` | 50, 313.5, 410.5, 674 |
+| `-In` half, width wall | 48.5 from both ends of the half; pitch `(W − 2T − 2C)/2 − 97` | 263.5 |
 
-Why a split panel needs 4 holes on the width wall: each half has a hole 48.5 from both of its
-ends. Seen from the tray these are at `E`, `W/2 − 48.5`, `W/2 + 48.5` and `W − E`, which is
-exactly the "2 edge holes + centre pair" layout. So with a split, `HolesW = 2` is raised to 4
-automatically, and 1, 6, 8 … are refused.
+### Checking the automatic count against your masters
 
-TP as built: each length wall has one fixed hole at each end plus a pattern, so the pattern
-count is `HoleCountL − 1` and TP needs at least 2 holes per length wall.
+The 400 mm maximum gap is a setting; 0 = enter the counts by hand.
 
-## 4. Parameters the app writes
+| Master | The formula gives (L / W) | Master has | |
+|---|---|---|---|
+| FP 386×656 | 3 / 2 | 3 / 2 | ✓ |
+| FP 726×1616 | 5 / 4 | 5 (pitch 379) / centre pair | ✓ |
+| FP 521×1616 | 5 / 4 | 4 (pitch 505) / no centre pair | ✗ manual |
+| TP 519×1194 | 4 / 4 | 4 (pitch 364.67) / 2 | ✓ / ✗ manual (not split) |
+| TP 724×1194 | 4 / 4 | 4 / centre pair `d91`, `d92` | ✓ |
+| RP 546×1197 | 4 / 4 | 4 (pitch 365.67) / 2 | ✓ / ✗ (not split) |
+| RP 571×996 | 4 / 4 | 2 (no pattern) / centre pair `d96` | ✗ / ✓ |
 
-Inputs: `Width`, `Length`, `Height`, `HoleEdge`, `HoleZ`, `HoleDia`, `Clearance`, `HolesL`, `HolesW`.
+The ✗ rows are the same kind of hand slip as the 519. Another one:
 
-Calculated: `HoleStartL/W`, `HolePitchL/W`, `HoleCountL/W`, `HoleOnL/W`, `HoleMidOnW`, and new:
+- The RP 546 `-In` part's pattern spacing was typed as 366.666 instead of 365.667.
+- So its holes do not line up with the tray's.
 
-| Parameter | Meaning |
-|---|---|
-| `InSplit` | 1 or 2. The `-In` width formula divides by it. |
-| `InHolePitchW`, `InHoleCountW`, `InHoleMidOnW` | Width-wall pattern of the `-In` part. Equal to the tray's values when not split; for a half: pitch as above, count 2, no centre pair. |
+Patterns as built:
+
+- **TP and RP trays:** a fixed hole 50 from each end of the length wall, plus a pattern of `HoleCountL − 1` holes at `HolePitchL`.
+  - So these types need at least 2 holes per length wall.
+- **FP and RP 546:** the pattern holds all `HoleCountL` holes.
+
+## 4. What the parameters in the TP and RP trays are
+
+| Part | Parameter | Value | Meaning |
+|---|---|---|---|
+| TP 724 `-Au` | `d91`, `d92` | 48.5 | Centre-pair holes on the width wall. Now mapped to `HoleMidOffsetW`. |
+| RP 571 `-Au` | `d96`, `d97 = d96` | 48.5 | The same centre pair. Mapped. |
+| RP `-Au` | `d84` / `d142` = 117, `d85` / `d143` = Ø9 | | One handle: 2 Ø9 holes 117 apart. |
+| RP `-Au` | `d94` / `d167` = 58.5 | | Handle holes at `W/2 ± 58.5`, centred on the seam between the 2 halves. |
+| RP `-Au` | `d95` = 225 (996 long), `d166` = 300 (1197 long) | | Handle distance from the panel end. No single rule fits both. |
+| TP `-Au` | `d48`–`d81` | same in 519 and 724 | Hinge cut-outs: fixed hardware geometry. |
+| TP `-Au` | `d37`–`d41` (519) and `d93`–`d100` (724) | 78, 22, Ø9, 161 / 358 | Handle and lock holes. |
+
+The last row cannot be settled from numbers alone: a `d` parameter does not say which direction
+it runs. The **Learn hardware holes** button (section 6) reads the real hole positions from
+Inventor instead, so this no longer blocks the drawing.
 
 ## 5. The split script (`Update-InnerSplit` in `lib\Inventor.ps1`)
 
 On every Apply:
 
-1. `W ≤ split width`: every `-In` occurrence after the first is deleted.
+1. When `W ≤ split width`, every inner panel after the first is deleted.
 2. The values are pushed (`InSplit` halves the part) and everything is rebuilt.
-3. `W > split width` and only one `-In` occurrence:
-   - the width direction of the part is found by comparing its extents with the expected half width,
-   - a second occurrence of the same file is added one half width from the first, on the side of the tray's middle,
-   - it is tied to the first with 3 flush constraints between the origin planes: two with offset 0, one (named `InSplit_Offset`) with the half width.
-4. On later Applies the `InSplit_Offset` value follows the new half width.
-5. If the master already has 2 inner panels with your own constraints, they are left as they are.
-6. When saving as a new size, TP names the inner file `-In-2T` when split and `-In` when not.
+3. When `W > split width` and there is only one inner panel, a second copy is added:
+   - It is placed one half width from the first, towards the middle of the tray.
+   - It is tied to the first with 3 flush constraints on the origin planes. The one with the
+     half-width offset is named `InSplit_Offset`.
+4. On later Applies, `InSplit_Offset` follows the new half width.
+5. When the master already has 2 inner panels with its own constraints, they are left alone.
+   - Example: TP 724 has each half held against its own tray wall (`d26`, `d27`).
+   - That works at any width: both halves shrink and still meet in the middle.
+6. The inner part's file name follows the `-In` / `-In-2T` rule from section 1.
 
-If the constraints cannot be created, the second half is grounded at the right place instead and
-the log says so; the app then moves it on every Apply.
+## 6. Hinge and handle holes in the drawing
 
-## 6. One-time setup per master
+The drawing shows the door hardware holes in orange.
+
+- A solid circle is a hole on the visible side.
+- A dashed circle is a hole on the far side.
+- A red circle is a hole that falls outside the panel at the current size.
+
+The holes are learned once per type from its master:
+
+1. Open the master (for example `6357-3 TP-724x1194x42.iam`) and select its type.
+2. Click **Learn hardware holes**. The app reads every drilled hole of the `-Au` and `-In` parts.
+3. The holes the hole rules make (Ø4.1 at `HoleZ` in the walls) are left out. The rest is saved
+   to `standards\hardware\TP.json`.
+4. Each hole is stored by its distance from the nearest panel edge, or from the middle of the
+   panel when it is near the middle. So hinges stay at the same distance from the ends, and the
+   RP handles stay centred, at every size.
+
+The JSON file is plain text: `from` is `start`, `end` or `mid`. If a hole is measured from the
+wrong edge, change `from` and `value` there.
+
+Please send me `TP.json` and `RP.json` from `standards\hardware\` after learning. With the
+real positions I can name `d37`–`d41` / `d91`–`d100` exactly and map them to parameters.
+
+## 7. One-time setup per master
 
 Do this on copies first. Import through *Manage → Parameters → Import from XML*.
 
 | Master document | Import |
 |---|---|
-| `6357-3 519x1194x42-Au.ipt` | `6357-3 519x1194x42-Au-setup.xml` |
-| `6357-3 519x1194x42-In.ipt` | `6357-3 519x1194x42-In-setup.xml` |
-| `6357-3 TP-519x1194x42.iam` | `6357-3 TP-519x1194x42-setup.xml` |
-| `6357-3 724x1194x42-Au.ipt` | `6357-3 724x1194x42-Au-setup.xml` |
+| `6357-3 724x1194x42-Au.ipt` (TP master) | `6357-3 724x1194x42-Au-setup.xml` |
 | `6357-3 724x1194x42-In-2T.ipt` | `6357-3 724x1194x42-In-2T-setup.xml` |
+| `6357-3 TP-724x1194x42.iam` | `6357-3 TP-724x1194x42-setup.xml` |
+| `6357-3 571x996x44-Au.ipt` (RP master) | `6357-3 571x996x44-Au-setup.xml` |
+| `6357-3 571x996x44-In.ipt` | `6357-3 571x996x44-In-setup.xml` |
+| `6357-3 RP-571x996x44.iam` | `6357-3 RP-571x996x44-setup.xml` |
 | `386x656x47-In.ipt` (FP, again) | `386x656x47-In-setup.xml` (adds `InSplit`) |
+| 519 TP files (only if you keep them) | the `519x1194x42` setup files |
 
-Every formula gives the number the model has today (the 519 hole pitch goes from the typed
-364.666 to the exact 364.667). Then:
+Every formula gives the number the model has today, so a correct import changes no geometry. Then:
 
-1. Check that nothing moved, and that the `-In` part halves when you set `InSplit = 2` by hand.
-2. Put the master path into `"master"` in `standards\TP.json` (and `RP.json`).
-3. The `-In` part must be constrained to **one wall** of the `-Au` part (offset `Clearance`), not
-   to its middle, so the halved part stays against that wall. Your 0.5 offsets suggest it already is.
-4. The `-In` part's origin planes must be intact (the script mates on them).
-5. FP only: point the width-wall hole pattern of the `-In` part at `InHolePitchW`, `InHoleCountW`
-   and suppress its centre pair with `InHoleMidOnW = 0` instead of the tray's values.
+1. Put the master paths into `"master"` in `standards\TP.json` and `RP.json`.
+2. **TP:** use the 724 as the master. It has the centre-pair holes (`d91`, `d92`).
+   - For widths up to 500, set *Suppress if* `HoleMidOnW = 0` on the centre-pair features.
+3. **RP 571:** its tray has no length-wall hole pattern.
+   - Add one like TP's: count `HoleCountL - 1 ul`, spacing `HolePitchL`.
+   - Without it, RP only ever gets 2 holes per length wall.
+4. **FP:** point the width-wall hole pattern of the `-In` part at `InHolePitchW` and `InHoleCountW`.
+   - Suppress its centre pair with `InHoleMidOnW = 0`.
+5. Click **Learn hardware holes** once per type (section 6).
 
-### TP model dimensions mapped by the setup files
-
-| Part | Dimension | Formula |
-|---|---|---|
-| `-Au` | `d0`, `d1`, `d7` | `Width`, `Length`, `Height` |
-| `-Au` | `d14`, `d15`, `d24`, `d29` | `HoleEdge` |
-| `-Au` | `d13`, `d16`, `d25`, `d28` | `HoleZ` |
-| `-Au` | `d17`, `d30` | `HoleDia` |
-| `-Au` | `d84`, `d86` | `HoleCountL - 1 ul`, `HolePitchL` |
-| `-In` | `d0` | `( Width - 2 * Stärke - 2 * Clearance ) / InSplit` |
-| `-In` | `d1`, `d7` | `Length - 2 * Stärke - 2 * Clearance`, `Height - Stärke` |
-| `-In` | `d27`, `d28`, `d37`, `d38` | `HoleMidOffsetW` (= `HoleEdge - Stärke - Clearance`) |
-| `-In` | `d29`, `d39` | `HoleZ` |
-| `-In` | `d30`, `d47` | `HoleDia` |
-| `-In` | `d40`, `d42` | `HoleCountL - 1 ul`, `HolePitchL` |
-| assembly | `d6`, `d7` | `Clearance` |
-
-Not mapped, because the exports do not say what they are (all are the same in 519 and 724
-unless noted, so they are treated as fixed hardware dimensions):
-
-- `-Au` `d48`–`d81` (24, 8, 28, 19.5, 33, 16, 4, 11, 98, Ø4.1): hinge and handle cut-outs.
-- `-Au` 519 `d37`–`d41` (22, 22, 78, 161, Ø9) and 724 `d91`–`d96` (48.5, 48.5, Ø9, 78, 78, 22).
-- `-Au` 724 `d97`–`d100` (358, `d97`, `Stärke`, 0°).
-
-## 7. Open points
-
-1. What are `d37`–`d41` (519) and `d91`–`d100` (724) in the TP tray? In particular: is `d91`/`d92`
-   = 48.5 the centre pair for the split, and what is 358 (it equals `(W − 8)/2` for 724)?
-2. Is the 519 TP meant to stay unsplit although it is wider than 500?
-3. Split file name for FP and RP: TP uses `-In-2T`, the RP example uses plain `-In`.
-4. RP: parameter exports of the tray, the inner part and the assembly; `HoleZ`.
-5. Is the hole count per length wall a rule? `n = ceil((L − 2E) / 400) + 1` gives 3 for 656 and
-   4 for 1194, matching both masters; it could be filled in automatically.
+In the screenshot, **Sheet thickness is 2.00** in Settings. The models use `Stärke = 1`. Please
+set it to 1: the drawing, the bill of materials and the 48.5 offset all use it.
 
 ## 8. More hinges or handles (3 or 4)
 
-Possible, and best done with Inventor's own patterns so nothing has to be mated by script:
+The plan is unchanged:
 
-1. In the tray, make the cut-out for one hinge a single feature set and repeat it with a
-   rectangular pattern along the length: count `HingeCount`, spacing `HingePitch`.
-2. In the assembly, replace the second hinge with *Pattern Component → Associative*, picking that
-   feature pattern. Inventor then adds or removes hinges with the count.
-3. The same for the handles (`HandleCount`, `HandlePitch`).
+1. In the tray, repeat the hinge cut-out with a rectangular pattern: count `HingeCount`, spacing `HingePitch`.
+2. In the assembly, replace the second hinge with *Pattern Component → Associative* on that
+   pattern. Inventor then adds or removes hinges with the count.
+3. Do the same for the handles.
 
-The app would then write `HingeCount`, `HingePitch = (L − 2 · HingeEdge) / (HingeCount − 1)` and
-the handle equivalents. Needed for that: which dimensions position the first and last hinge and
-handle (see open point 1), and the spacing rule you want for 3 and 4.
+The app would write `HingePitch = (L − 2 · HingeEdge) / (HingeCount − 1)`. The learned hole
+template (section 6) gives `HingeEdge` and the hole layout of one hinge, so after the hardware
+files arrive this can be added to the rules and the drawing.
 
-## 9. Whole box (profiles, corner joints, panels)
+## 9. Whole box: what the GR-Box export shows, and what is still needed
 
-The code is laid out for it: the rules are plain functions without Inventor, and
-`Update-PanelAssembly` resizes any panel assembly without the window, so a box builder can call
-it once per panel. Needed to build it:
+`6357 2035-N1-ZK750-GR-params.xml` holds 662 parameters, all assembly constraint offsets:
 
-1. The parameter export and a screenshot of the browser tree of a box assembly and of one
-   section, with the constraint list of one panel, one profile and one corner joint.
-2. The profile and corner-joint files: which are library parts, which are cut to length, and the
-   length rule (for example profile length = box length − 2 × corner size).
-3. The equations from box size to panel sizes: gaps between panel and profile, and how a side is
-   divided into several panels (maximum panel width, where doors go).
-4. Naming and folders for the box, its sections, profiles and panels.
-5. How a panel is located in the frame (which faces or planes it is mated to), so each generated
-   panel can be placed by the same three constraints.
-6. Which inputs you want in the window: box W × L × H only, or a list of sections with a panel
-   type per opening.
+| Count | Value | Probably |
+|---|---|---|
+| 546 | 0 | flush / mate with no offset |
+| 85 | 2 mm | gap between panel and profile |
+| 13 | −25 mm | profile set-back at the corners |
+| 8 | 3 mm | |
+| 4 + 3 + 1 + 1 | 280, 450, 525, 730 | positions of sections or parts |
+
+A parameter export has no component names and does not say which faces a constraint joins. It
+cannot describe the box. That is what **Export assembly tree...** is for (section 10).
+
+### What is needed to mate profiles, corner joints and panels freely, in one box or many
+
+1. **Named mating geometry in every library part.** Use the iLogic *Names* tab you showed:
+   right-click a face or work plane → *Name entity*.
+   - **Profile:** `End_A`, `End_B` (end faces), `Panel_Seat` (face the panel lies on), `Axis`.
+   - **Corner joint:** `Leg_X`, `Leg_Y`, `Leg_Z` (faces a profile end sits on), `Panel_Seat_*`.
+   - **Panel assembly:** `Back` (outside face), `Edge_W0`, `Edge_WL`, `Edge_L0`, `Edge_LL`.
+   - With names, a constraint is "profile `End_A` flush to corner `Leg_X`", the same for every
+     size. The export reports these names, so I can check them.
+2. **One skeleton per box.** A part with work planes at the box's outer faces and at each
+   section split (the 280 / 450 / 525 / 730 values).
+   - Profiles, corners and panels are mated to the skeleton's planes, not to each other.
+   - Moving a plane resizes the box. Several boxes are several skeletons in one top assembly,
+     each placed by 3 offsets.
+3. **One profile part with a length parameter.**
+   - Either iPart or model-state rows, or `Length` as a parameter and Save As per length (like the panels).
+   - The export's `-parts.csv` groups files by family (`PF-#.ipt`), so it shows which way you use today.
+4. **The rules, from you or from the exports:**
+   - profile length = section size − 2 × corner size? (the −25 mm offsets suggest the corners set the profiles back by 25)
+   - panel size = opening − 2 × 2 mm gap?
+   - maximum panel width before a side is divided
+   - where doors (TP) and handle panels (RP) go
+5. **The box input.** For example, sections along the length (`750, 450, 1200`) with a panel
+   type per opening (front: TP, top: FP, …). The app turns that into skeleton planes, profile
+   lengths and panel names, then runs the panel resize for each panel.
+
+## 10. Exporting the component tree
+
+Open the box (or any assembly) in Inventor and click **Export assembly tree...**. It writes four files:
+
+| File | Contents |
+|---|---|
+| `…-tree.csv` | one row per component at any depth: level, path, file, part number, position, rotation, size, length |
+| `…-parts.csv` | one row per file: how many times it is used, its length and size, family (`PF-#.ipt`), user parameters |
+| `…-constraints.csv` | every constraint and joint: type, the 2 components, the geometry joined (plane name, face normal, iLogic name), offset |
+| `….json` | all of the above in one file |
+
+The CSV files open directly in Excel (`;`, decimal comma on a German Windows). Repeated
+profiles show up in `-parts.csv` as one row per length with the count. Please send me the
+`.json` of the GR box. It is the information sections 8 and 9 need.
