@@ -1,0 +1,442 @@
+From 2dc9425345306a223dcd7d3c59e10f645b651f42 Mon Sep 17 00:00:00 2001
+From: AZZEH <64805865+Azzeh-Hu@users.noreply.github.com>
+Date: Wed, 11 Nov 2026 05:34:04 +0000
+Subject: [PATCH] Update to the newest Inventor Sizer version
+
+- Add standards/FP.json: FP types (1 inner panel active; 2 and 3 prepared, disabled)
+  with name prefix, master assembly and parts for the bill of materials
+- New files are always saved next to the files they are made from; another
+  folder is only a per-session choice and is no longer stored in settings.json
+- Open an assembly by file (starts Inventor if needed)
+- README rewritten for the current version; add PROJECT_SUMMARY.md handoff
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_016kTia74UCJFVGjzm4Kqecv
+---
+ PROJECT_SUMMARY.md | 130 +++++++++++++++++++++++++++++++++++++++++++++
+ README.md          |  90 ++++++++++++++++++++++++-------
+ lib/Common.ps1     |   7 ++-
+ lib/Inventor.ps1   |  27 ++++++++--
+ standards/FP.json  |  41 ++++++++++++++
+ 5 files changed, 266 insertions(+), 29 deletions(-)
+ create mode 100644 PROJECT_SUMMARY.md
+ create mode 100644 standards/FP.json
+
+diff --git a/PROJECT_SUMMARY.md b/PROJECT_SUMMARY.md
+new file mode 100644
+index 0000000..d1e814a
+--- /dev/null
++++ b/PROJECT_SUMMARY.md
+@@ -0,0 +1,130 @@
++# Inventor Sizer – project summary (handoff)
++
++Paste this file into a new chat to continue. The full code is in `InventorSizer.zip`.
++
++## Goal
++
++A tool for Autodesk Inventor 2024 (German locale) that resizes a panel assembly
++("Festes-Paneel", FP) from its file name. Example: `FP-386x656x47` → Width 386 × Length 656 ×
++Height 47 mm. Changing the name resizes the assembly and its parts, keeps their features, and
++saves the new size as new files.
++
++## The user's model
++
++- Assembly `FP-386x656x47.iam`. The master currently sits in the app folder
++  (`C:\Users\la\Desktop\InventorSizer\`).
++- Parts are in `K:\CAD Bibliothek\2. Paneele\47er\Einzelteile\`:
++  - `386x656x47-Au.ipt`: outer sheet-metal tray.
++  - `386x656x47-In.ipt`: inner panel, inset by thickness 1 mm + clearance 0.5 mm per side.
++- The assembly has offset constraints `d0` and `d2` of 0.5 mm (clearance), and `d1` = 0.
++- Hole mapping, confirmed by the user in Inventor's Parameters dialog:
++  - **Au part:**
++    - `d0`, `d1`, `d7` are the width, length and height.
++    - `HoleEdge_Au` (renamed by the user), `d63`, `d64` and `d94` are 50 mm, the hole distance from the edge.
++    - `HoleZ_Au`, `d65` and `d66` are 22 mm, the hole height.
++    - `d47` and `d67` are the 4.1 mm hole diameter.
++  - **In part:**
++    - `d0` and `d1` are `W-3` and `L-3`.
++    - `d59` is `H-1`.
++    - `d97`, `d98`, `d107` and `d108` are 48.5 mm.
++    - `d99` and `d109` are 22 mm.
++    - `d100` and `d110` are 4.1 mm.
++- The sheet-metal thickness parameter is `Stärke` (German parameter names).
++
++## Language and approach
++
++- **Windows PowerShell 5.1 + COM:** it ships with Windows, so nothing needs installing.
++- **WinForms window:** the user chose to go back to the plain window after trying web-based
++  interfaces (gothic, white and Windows-XP styles), all of which were removed.
++- **Value store:** `Parameters.xml` in Inventor's own parameter-export format. Excel was
++  dropped, but the Excel version is kept separately.
++- **How values reach Inventor:**
++  - The app writes **user parameters** only.
++  - Model dimensions reference those user parameters through formulas, set up once with the `setup-xml` files.
++  - Values are matched by parameter name across the assembly and every part.
++
++## Files (in the zip)
++
++| File | Purpose |
++|---|---|
++| `Launch.bat` | Starts the app: `powershell -STA -ExecutionPolicy Bypass`. |
++| `InventorSizer.ps1` | The WinForms window. |
++| `lib\Common.ps1` | Logging (with script line numbers) and `settings.json` (minimum hole gap, thickness). |
++| `lib\ParamFile.ps1` | Reads and writes `Parameters.xml`, and adds missing default entries. |
++| `lib\HoleRules.ps1` | Hole rules and the checks that block Apply. |
++| `lib\Standards.ps1` | Product types from `standards\*.json`, and the bill of materials. |
++| `lib\Inventor.ps1` | COM: open or start Inventor, push values, rebuild, save as a new size, update the Part Number. |
++| `lib\Twin.ps1` | Vector drawings: isometric and orthographic views, bill of materials, axis icon, painting in the window, the SVG sheet. |
++| `standards\FP.json` | FP-1In is active. FP-2In and FP-3In are prepared but disabled, with placeholder prefixes `FP2-` and `FP3-`. |
++| `setup-xml\*.xml` | One-time imports that add the user parameters and the `d…` formulas to the 386 master files. |
++| `InventorSizer_excel.ps1` + `Launch_excel.bat` | The old Excel-based version, kept on request. |
++| `README.md` | The full user guide. |
++
++## Features (current version)
++
++- **Name and grid stay in sync:** editing the name `FP-WxLxH` updates the values in the grid, and editing the grid updates the name.
++- **Getting the starting assembly:** **Open master** (the selected type's master), **Open assembly…** (a file picker that starts Inventor if needed), or **Read from Inventor**.
++- **Type dropdown:** product types come from `standards\`. The type is chosen automatically from the name prefix, and changing the type swaps the prefix in the name.
++- **Apply to Inventor:**
++  - Saves `Parameters.xml` and pushes the values.
++  - Values are compared as numbers and written in Inventor's internal units, so the Windows decimal setting doesn't matter.
++  - Rebuilds parts first, then the assembly.
++  - If the name is unchanged, it saves in place.
++  - If the name changed:
++    - It does a Save As of every file whose name contains the old size, then the assembly.
++    - It updates the Part Number iProperty.
++    - It never overwrites existing files, and the originals stay untouched.
++- **Save-location rule:**
++  - Each new file goes in the folder of the file it was made from.
++  - Another folder is used only if **Save new sizes to another folder (this session only)** is ticked. The tick is off at every start and the folder is never saved, as the user asked.
++- **Hole rules:** set per wall, with opposite walls always matching. Diameter is fixed at 4.1 mm. E = HoleEdge = 50.
++  - **Any wall:**
++    - 0 holes: none.
++    - 1 hole: in the middle.
++    - 2 holes: E from each end.
++  - **Length wall, 3 or more holes:** E from each end, the rest evenly spaced at (L − 2E)/(n − 1).
++  - **Width wall:**
++    - Even counts only above 2.
++    - 4 holes: the 2 edge holes plus a centre pair at W/2 ± 48.5.
++    - 6 or more: evenly spaced, like the length wall.
++  - 48.5 = HoleEdge − thickness − Clearance.
++- **Warn and block:** Apply is locked, with red messages under the grid, when:
++  - two hole centres are closer than the minimum gap (default 10 mm)
++  - a width wall gets an odd count above 2
++  - a wall is too short for HoleEdge, or too narrow for the centre pair
++  - the name has no size in it, or disagrees with the values
++- **What the app writes for the holes:**
++  - The counts: `HolesL` and `HolesW`.
++  - The pattern values: `HoleStartL`/`W`, `HolePitchL`/`W` and `HoleCountL`/`W`.
++  - The on/off flags: `HoleOnL`/`W` and `HoleMidOnW`.
++  - `HoleMidOffsetW` is a formula set in the part.
++- **The drawing:**
++  - Views: Isometric, Front, Back, Left, Right, Top and Bottom. **Show hidden edges** adds dashed lines.
++  - Holes have centre marks, and holes that break a rule are red.
++  - A bill of materials and an XYZ axis icon appear in every view.
++- **Save drawing (SVG):**
++  - A 1400×990 sheet: the isometric view centred top-left, the front and top views in the middle area (top below front), hole notes, and the bill of materials bottom-right.
++- **Settings:** minimum hole gap and sheet thickness, saved to `settings.json`.
++
++## Test status
++
++- The user confirmed earlier versions work against Inventor: renaming 386→399→800 saved the files correctly.
++- The latest window was shown running (screenshot), with **Read from Inventor** working.
++- Of the newest features, only the drawings were tested, rendered on Linux. Still untested on Windows: the Type dropdown, Open master, Open assembly, the folder checkbox, the view selector, the SVG sheet, and the BOM/axis painting in the window.
++
++## Open items / next steps
++
++1. **Test the latest version on Windows** and check:
++   - Sheet thickness shows 1.00. A bug used to save 0.1, so the user may need to set it once.
++   - The Browse button is visible.
++2. **Model work still needed in Inventor:**
++   - Import the `setup-xml` files into copies of the masters.
++   - Build each wall's holes as a hole plus a rectangular pattern, using `HoleStart`/`Pitch`/`Count`.
++   - Set *Feature Properties → Suppress if* using `HoleOnL`/`W` and `HoleMidOnW`.
++3. **FP-2In / FP-3In:**
++   - Build their masters.
++   - Set the prefixes and master paths in `standards\FP.json` and enable them.
++   - Define the inner-panel size rule; it's currently `role: other`, so no size is shown.
++   - The drawing still shows one inner panel.
++4. **Drawings (`.idw`/`.dwg`):** these aren't copied or renamed for new sizes yet.
++5. **Possible:** a better-defined place for product rules such as edge distance, thickness and gap per type (currently in settings and defaults).
+diff --git a/README.md b/README.md
+index 77f00df..1f1e395 100644
+--- a/README.md
++++ b/README.md
+@@ -1,13 +1,14 @@
+ # Inventor Sizer
+ 
+ Change the size in the assembly name, for example `FP-386x656x47` → `FP-800x1200x47`, set the
+-number of holes per wall, and the assembly and all its parts resize. An isometric vector
+-drawing of the panel updates as you type, before anything touches Inventor.
++number of holes per wall, and the assembly and all its parts resize. A vector drawing of the
++panel (any view, with bill of materials and reference axis) updates as you type, before
++anything touches Inventor.
+ 
+ ```
+- Window (name, grid, settings) ──► hole rules + checks ──► Parameters.xml
+-        isometric drawing                                   Inventor user parameters
+-                                                            (assembly + every part)
++ Window (type, name, grid, settings) ──► hole rules + checks ──► Parameters.xml
++        drawing + bill of materials                               Inventor user parameters
++                                                                  (assembly + every part)
+ ```
+ 
+ ## Requirements
+@@ -22,38 +23,87 @@ Nothing to install. The tool uses:
+ | File | Purpose |
+ |---|---|
+ | `Launch.bat` | Double-click to start. |
+-| `InventorSizer.ps1` | The window: name box, parameter grid, settings, drawing, log. |
++| `InventorSizer.ps1` | The window: type, name, parameter grid, settings, drawing, log. |
+ | `lib\Common.ps1` | Logging, error line numbers, `settings.json`. |
+ | `lib\ParamFile.ps1` | `Parameters.xml` in Inventor's parameter-export format. |
+ | `lib\HoleRules.ps1` | Hole count → positions, pattern values and the blocking checks. |
+-| `lib\Inventor.ps1` | Inventor COM: push parameters, rebuild, save as new size, Part Number. |
+-| `lib\Twin.ps1` | Isometric drawing: builds the shapes, paints them in the window, exports SVG. |
++| `lib\Standards.ps1` | Product types from `standards\` and the bill of materials. |
++| `lib\Inventor.ps1` | Inventor COM: open, push parameters, rebuild, save as new size, Part Number. |
++| `lib\Twin.ps1` | Drawings: views, bill of materials, axis, painting in the window, SVG sheet. |
++| `standards\FP.json` | The FP standard: one entry per FP type. |
+ | `Parameters.xml`, `settings.json` | Created on first run, next to the script. |
+ | `setup-xml\` | One-time setup files for the 386 master documents. |
+ | `InventorSizer_excel.ps1` + `Launch_excel.bat` | The older Excel version (no hole rules, no drawing). |
+ 
+ ## Using it
+ 
+-1. Open the master assembly (e.g. `FP-386x656x47.iam`) in Inventor.
+-2. Run `Launch.bat`. The window reads the active assembly's name; the status next to
+-   **Read from Inventor** shows what Inventor has open.
++1. Run `Launch.bat`. If Inventor has an assembly open, the window reads its name.
++2. Get the assembly you start from, in one of three ways:
++   - **Open master**: opens the master assembly of the selected **Type** (from the standard).
++   - **Open assembly...**: browse for any `.iam`. Inventor is started if it isn't running.
++   - **Read from Inventor**: uses the assembly that is already active in Inventor.
+ 3. Edit the **name** or the values in the **grid** (they stay in sync). `HolesL` and `HolesW`
+    set the holes per length wall and per width wall.
+-4. The drawing on the right updates as you type. **Show hidden edges** adds the back edges and
+-   back-wall holes as dashed lines. **Save drawing (SVG)...** writes the drawing to a file.
++4. The drawing on the right updates as you type:
++   - **View**: Isometric, Front, Back, Left, Right, Top or Bottom.
++   - **Show hidden edges**: back edges, back-wall holes, floor and wall thickness as dashed lines.
++   - The **bill of materials** (bottom right) lists the parts of the type with their sizes and
++     the number of holes; the **axis** (bottom left) shows X, Y and Z for the current view
++     (a dot = axis points at you, a cross = away from you).
++   - **Save drawing (SVG)...** writes a drawing sheet: the isometric view top left, the front
++     and top views in the middle area, hole notes, and the bill of materials.
+ 5. If a rule is broken, the reasons appear in red under the grid, the bad holes are red in the
+    drawing, and **Apply to Inventor** is greyed out.
+ 6. Click **Apply to Inventor**:
+    - **Name unchanged:** values go into Inventor, the model rebuilds, and the files are saved in place.
+    - **Name changed:** the model is saved as **new files** (`FP-800x1200x47.iam`,
+-     `800x1200x47-Au.ipt`, `800x1200x47-In.ipt`) in the settings folder, or next to the
+-     originals when it is empty. The Part Number iProperty gets the new size too. The
+-     original files on disk are not touched. Existing files are never overwritten.
++     `800x1200x47-Au.ipt`, `800x1200x47-In.ipt`). The Part Number iProperty gets the new size
++     too. The original files on disk are not touched. Existing files are never overwritten.
+ 7. The log at the bottom lists every parameter that changed and in which file. Errors include
+    the script line number.
+ 
+-**Settings** (under the grid, saved to `settings.json`): folder for new sizes, minimum gap
+-between hole centres (default 10 mm), sheet thickness (default 1 mm).
++## Where new files are saved
++
++**Standard rule: each new file is saved in the same folder as the file it was made from.**
++The new assembly goes next to the original assembly; each new part goes next to its original
++part (e.g. `K:\CAD Bibliothek\2. Paneele\47er\Einzelteile\`). Parts whose names don't contain
++the size (shared or library parts) are not copied; the new assembly keeps using them.
++
++Another folder is only used when you ask for it: tick **Save new sizes to another folder
++(this session only)** in Settings and choose the folder with **Browse...**. The tick is off
++every time the app starts and the folder is not saved, so the standard rule always comes back.
++
++## Settings
++
++Under the grid, saved to `settings.json`:
++
++- **Minimum hole gap**: smallest distance between hole centres before Apply is blocked (default 10 mm).
++- **Sheet thickness** (Stärke): used for the centre-pair offset and the inner-panel size (default 1 mm).
++
++## Product standards: `standards\`
++
++Each `*.json` file in `standards\` is one product family; each entry in `variants` is one type
++shown in the **Type** list. `FP.json` contains:
++
++| Type | State |
++|---|---|
++| FP with 1 inner panel (`FP-`) | active; master `FP-386x656x47.iam` next to the app |
++| FP with 2 inner panels (`FP2-`) | prepared, `enabled: false` |
++| FP with 3 inner panels (`FP3-`) | prepared, `enabled: false` |
++
++Fields of a type:
++
++| Field | Meaning |
++|---|---|
++| `id`, `name` | Identifier and the text shown in the Type list. |
++| `enabled` | `false` hides the type until it's ready. |
++| `prefix` | Start of the assembly name, e.g. `FP-`. The type is picked automatically from the name. |
++| `master` | Master assembly for **Open master**. A relative path is relative to the app folder. |
++| `parts` | Bill of materials: `suffix` (added to the size, e.g. `-Au` → `386x656x47-Au`), `description`, `qty`, and `role`: `outer` (size W × L × H), `inner` (size reduced by 2 × thickness + 2 × clearance, height − thickness) or `other` (no size shown). |
++| `notes` | Free text, ignored by the app. |
++
++To add the 2-panel type later: build its master assembly, put its path in `master`, check the
++prefix and parts, and set `enabled` to `true`.
+ 
+ ## Hole rules
+ 
+@@ -79,8 +129,6 @@ always match). Diameter is fixed at 4.1 mm (read-only in the grid). `E` = HoleEd
+ 
+ ## What the app writes into Inventor
+ 
+-Your inputs, and the hole values calculated from them:
+-
+ | Parameter | Use it in the model for |
+ |---|---|
+ | `Width`, `Length`, `Height`, `HoleEdge`, `HoleZ`, `HoleDia`, `Clearance` | Inputs; model dimensions reference them by formula. |
+@@ -121,10 +169,12 @@ Inventor. Older files without `HolesL` / `HolesW` are upgraded automatically.
+ | "Inventor is not running" although it is open | Inventor and the app run at different permission levels. Start both normally, or both as administrator. |
+ | Scripts blocked / nothing happens | Unblock the zip before extracting (right-click → *Properties* → *Unblock*), or unblock each `.ps1`, including those in `lib\`. |
+ | Error mentioning "language mode" | Company PowerShell lockdown (Constrained Language Mode). Needs an IT exception. |
++| **Open master** greyed out | The `master` path in `standards\FP.json` doesn't point to an existing file on this PC. |
+ | Parts not found | The `K:` drive isn't mapped the same way on this PC. |
+ | Saving `Parameters.xml` fails | The app folder is read-only (e.g. a network share). Copy the folder locally. |
+ 
+ ## Not done yet
+ 
+ - Drawings (`.idw` / `.dwg`) aren't copied or renamed for new sizes.
++- The drawing shows one inner panel; for the 2- and 3-panel types only the bill of materials changes.
+ - Read-only files (library, Content Center, Vault checked-in) are skipped. With Vault, check out first.
+diff --git a/lib/Common.ps1 b/lib/Common.ps1
+index 7aaf9bb..36635f3 100644
+--- a/lib/Common.ps1
++++ b/lib/Common.ps1
+@@ -25,8 +25,9 @@ function Format-Number([double]$v) { $v.ToString('0.###', $Invariant) }
+ 
+ # ------------------------------------------------------------------ settings.json
+ 
++# The folder for new sizes is deliberately not a saved setting: new files always go next to
++# the originals unless another folder is chosen in the window for that session.
+ $DefaultSettings = [ordered]@{
+-    outputFolder = ''    # empty = save new sizes next to the originals
+     minHoleGap   = 10    # mm between hole centres before Apply is blocked
+     thickness    = 1     # mm, sheet thickness (Staerke) used for the centre-pair offset
+ }
+@@ -40,7 +41,6 @@ function Read-Settings([string]$Path) {
+             if ($json.PSObject.Properties.Name -contains $k) { $s[$k] = $json.$k }
+         }
+     }
+-    $s.outputFolder = [string]$s.outputFolder
+     $s.minHoleGap   = [double]$s.minHoleGap
+     $s.thickness    = [double]$s.thickness
+     $s
+@@ -51,12 +51,11 @@ function Save-Settings([string]$Path, $Incoming) {
+     foreach ($k in $DefaultSettings.Keys) {
+         if ($Incoming.PSObject.Properties.Name -contains $k) { $s[$k] = $Incoming.$k }
+     }
+-    $s.outputFolder = ([string]$s.outputFolder).Trim()
+     $s.minHoleGap   = [double]$s.minHoleGap
+     $s.thickness    = [double]$s.thickness
+     if ($s.minHoleGap -lt 0) { throw 'Minimum hole gap cannot be negative.' }
+     if ($s.thickness -le 0) { throw 'Sheet thickness must be greater than 0.' }
+     $s | ConvertTo-Json | Set-Content $Path -Encoding UTF8
+-    Write-Log "Settings saved: output folder '$($s.outputFolder)', min hole gap $(Format-Number $s.minHoleGap) mm, thickness $(Format-Number $s.thickness) mm"
++    Write-Log "Settings saved: min hole gap $(Format-Number $s.minHoleGap) mm, thickness $(Format-Number $s.thickness) mm"
+     $s
+ }
+diff --git a/lib/Inventor.ps1 b/lib/Inventor.ps1
+index bc49df9..c2d2fa4 100644
+--- a/lib/Inventor.ps1
++++ b/lib/Inventor.ps1
+@@ -5,12 +5,28 @@ $kAssemblyDocumentObject = 12291
+ $DesignTrackingProps     = '{32853F0F-3444-11D1-9E93-0060B03C1CA6}'   # internal name, same in every language
+ $PartNumberPropId        = 5
+ 
+-function Get-InventorApp {
+-    try { [Runtime.InteropServices.Marshal]::GetActiveObject('Inventor.Application') }
+-    catch {
++# -Start launches Inventor when it is not running (takes a while).
++function Get-InventorApp([switch]$Start) {
++    try { return [Runtime.InteropServices.Marshal]::GetActiveObject('Inventor.Application') } catch { }
++    if (-not $Start) {
+         throw ('Autodesk Inventor is not running. If it is open, Inventor and this app must run at the same ' +
+                'permission level (both normal, or both "Run as administrator").')
+     }
++    Write-Log 'Starting Inventor - this can take a minute...'
++    $inv = New-Object -ComObject Inventor.Application
++    $inv.Visible = $true
++    $inv
++}
++
++# Opens an assembly in Inventor (starting Inventor if needed), makes it active, returns its name.
++function Open-InventorAssembly([string]$Path) {
++    if (-not (Test-Path $Path)) { throw "File not found: $Path" }
++    if ([IO.Path]::GetExtension($Path) -ne '.iam') { throw "'$Path' is not an assembly (.iam)." }
++    $inv = Get-InventorApp -Start
++    $doc = $inv.Documents.Open($Path, $true)
++    $doc.Activate()
++    Write-Log "Opened $Path"
++    Read-ActiveAssemblyName
+ }
+ 
+ # Status for the UI; never throws.
+@@ -135,8 +151,9 @@ function Update-PartNumber($Doc, [string]$OldToken, [string]$NewToken) {
+     }
+ }
+ 
+-# Save the assembly and every file whose name contains $OldToken under the new size,
+-# into $OutputFolder (or next to the originals when it is empty).
++# Save the assembly and every file whose name contains $OldToken under the new size.
++# Standard rule: each new file goes into the folder of the file it was made from. Only when
++# $OutputFolder is given (chosen in the window for that session) do all new files go there.
+ function Save-AsNewSize($asm, [string]$OldToken, [string]$NewToken, [string]$NewAsmName, [string]$OutputFolder) {
+     if ($OutputFolder -and -not (Test-Path $OutputFolder)) {
+         [void](New-Item -ItemType Directory -Path $OutputFolder)
+diff --git a/standards/FP.json b/standards/FP.json
+new file mode 100644
+index 0000000..3a29c8a
+--- /dev/null
++++ b/standards/FP.json
+@@ -0,0 +1,41 @@
++{
++  "family": "FP",
++  "description": "Festes-Paneel",
++  "variants": [
++    {
++      "id": "FP-1In",
++      "name": "FP with 1 inner panel",
++      "enabled": true,
++      "prefix": "FP-",
++      "master": "FP-386x656x47.iam",
++      "parts": [
++        { "suffix": "-Au", "description": "Outer tray (Au)", "role": "outer", "qty": 1 },
++        { "suffix": "-In", "description": "Inner panel (In)", "role": "inner", "qty": 1 }
++      ]
++    },
++    {
++      "id": "FP-2In",
++      "name": "FP with 2 inner panels",
++      "enabled": false,
++      "prefix": "FP2-",
++      "master": "",
++      "notes": "Prepared for later: set the prefix and the master assembly, check the parts, then set enabled to true.",
++      "parts": [
++        { "suffix": "-Au", "description": "Outer tray (Au)", "role": "outer", "qty": 1 },
++        { "suffix": "-In", "description": "Inner panel (In)", "role": "other", "qty": 2 }
++      ]
++    },
++    {
++      "id": "FP-3In",
++      "name": "FP with 3 inner panels",
++      "enabled": false,
++      "prefix": "FP3-",
++      "master": "",
++      "notes": "Prepared for later: set the prefix and the master assembly, check the parts, then set enabled to true.",
++      "parts": [
++        { "suffix": "-Au", "description": "Outer tray (Au)", "role": "outer", "qty": 1 },
++        { "suffix": "-In", "description": "Inner panel (In)", "role": "other", "qty": 3 }
++      ]
++    }
++  ]
++}
+-- 
+2.43.0
+

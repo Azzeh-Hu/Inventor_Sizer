@@ -25,8 +25,9 @@ function Format-Number([double]$v) { $v.ToString('0.###', $Invariant) }
 
 # ------------------------------------------------------------------ settings.json
 
+# The folder for new sizes is deliberately not a saved setting: new files always go next to
+# the originals unless another folder is chosen in the window for that session.
 $DefaultSettings = [ordered]@{
-    outputFolder = ''    # empty = save new sizes next to the originals
     minHoleGap   = 10    # mm between hole centres before Apply is blocked
     thickness    = 1     # mm, sheet thickness (Staerke) used for the centre-pair offset
 }
@@ -40,7 +41,6 @@ function Read-Settings([string]$Path) {
             if ($json.PSObject.Properties.Name -contains $k) { $s[$k] = $json.$k }
         }
     }
-    $s.outputFolder = [string]$s.outputFolder
     $s.minHoleGap   = [double]$s.minHoleGap
     $s.thickness    = [double]$s.thickness
     $s
@@ -51,12 +51,11 @@ function Save-Settings([string]$Path, $Incoming) {
     foreach ($k in $DefaultSettings.Keys) {
         if ($Incoming.PSObject.Properties.Name -contains $k) { $s[$k] = $Incoming.$k }
     }
-    $s.outputFolder = ([string]$s.outputFolder).Trim()
     $s.minHoleGap   = [double]$s.minHoleGap
     $s.thickness    = [double]$s.thickness
     if ($s.minHoleGap -lt 0) { throw 'Minimum hole gap cannot be negative.' }
     if ($s.thickness -le 0) { throw 'Sheet thickness must be greater than 0.' }
     $s | ConvertTo-Json | Set-Content $Path -Encoding UTF8
-    Write-Log "Settings saved: output folder '$($s.outputFolder)', min hole gap $(Format-Number $s.minHoleGap) mm, thickness $(Format-Number $s.thickness) mm"
+    Write-Log "Settings saved: min hole gap $(Format-Number $s.minHoleGap) mm, thickness $(Format-Number $s.thickness) mm"
     $s
 }

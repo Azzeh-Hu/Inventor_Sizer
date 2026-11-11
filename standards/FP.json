@@ -1,0 +1,41 @@
+{
+  "family": "FP",
+  "description": "Festes-Paneel",
+  "variants": [
+    {
+      "id": "FP-1In",
+      "name": "FP with 1 inner panel",
+      "enabled": true,
+      "prefix": "FP-",
+      "master": "FP-386x656x47.iam",
+      "parts": [
+        { "suffix": "-Au", "description": "Outer tray (Au)", "role": "outer", "qty": 1 },
+        { "suffix": "-In", "description": "Inner panel (In)", "role": "inner", "qty": 1 }
+      ]
+    },
+    {
+      "id": "FP-2In",
+      "name": "FP with 2 inner panels",
+      "enabled": false,
+      "prefix": "FP2-",
+      "master": "",
+      "notes": "Prepared for later: set the prefix and the master assembly, check the parts, then set enabled to true.",
+      "parts": [
+        { "suffix": "-Au", "description": "Outer tray (Au)", "role": "outer", "qty": 1 },
+        { "suffix": "-In", "description": "Inner panel (In)", "role": "other", "qty": 2 }
+      ]
+    },
+    {
+      "id": "FP-3In",
+      "name": "FP with 3 inner panels",
+      "enabled": false,
+      "prefix": "FP3-",
+      "master": "",
+      "notes": "Prepared for later: set the prefix and the master assembly, check the parts, then set enabled to true.",
+      "parts": [
+        { "suffix": "-Au", "description": "Outer tray (Au)", "role": "outer", "qty": 1 },
+        { "suffix": "-In", "description": "Inner panel (In)", "role": "other", "qty": 3 }
+      ]
+    }
+  ]
+}

@@ -5,12 +5,28 @@ $kAssemblyDocumentObject = 12291
 $DesignTrackingProps     = '{32853F0F-3444-11D1-9E93-0060B03C1CA6}'   # internal name, same in every language
 $PartNumberPropId        = 5
 
-function Get-InventorApp {
-    try { [Runtime.InteropServices.Marshal]::GetActiveObject('Inventor.Application') }
-    catch {
+# -Start launches Inventor when it is not running (takes a while).
+function Get-InventorApp([switch]$Start) {
+    try { return [Runtime.InteropServices.Marshal]::GetActiveObject('Inventor.Application') } catch { }
+    if (-not $Start) {
         throw ('Autodesk Inventor is not running. If it is open, Inventor and this app must run at the same ' +
                'permission level (both normal, or both "Run as administrator").')
     }
+    Write-Log 'Starting Inventor - this can take a minute...'
+    $inv = New-Object -ComObject Inventor.Application
+    $inv.Visible = $true
+    $inv
+}
+
+# Opens an assembly in Inventor (starting Inventor if needed), makes it active, returns its name.
+function Open-InventorAssembly([string]$Path) {
+    if (-not (Test-Path $Path)) { throw "File not found: $Path" }
+    if ([IO.Path]::GetExtension($Path) -ne '.iam') { throw "'$Path' is not an assembly (.iam)." }
+    $inv = Get-InventorApp -Start
+    $doc = $inv.Documents.Open($Path, $true)
+    $doc.Activate()
+    Write-Log "Opened $Path"
+    Read-ActiveAssemblyName
 }
 
 # Status for the UI; never throws.
@@ -135,8 +151,9 @@ function Update-PartNumber($Doc, [string]$OldToken, [string]$NewToken) {
     }
 }
 
-# Save the assembly and every file whose name contains $OldToken under the new size,
-# into $OutputFolder (or next to the originals when it is empty).
+# Save the assembly and every file whose name contains $OldToken under the new size.
+# Standard rule: each new file goes into the folder of the file it was made from. Only when
+# $OutputFolder is given (chosen in the window for that session) do all new files go there.
 function Save-AsNewSize($asm, [string]$OldToken, [string]$NewToken, [string]$NewAsmName, [string]$OutputFolder) {
     if ($OutputFolder -and -not (Test-Path $OutputFolder)) {
         [void](New-Item -ItemType Directory -Path $OutputFolder)
