@@ -34,6 +34,7 @@ function Read-Standards([string]$Dir, [string]$Root) {
         foreach ($file in Get-ChildItem $Dir -Filter '*.json' | Sort-Object Name) {
             try { $json = Get-Content $file.FullName -Raw -Encoding UTF8 | ConvertFrom-Json }
             catch { Write-Log "Standard $($file.Name) could not be read: $($_.Exception.Message)"; continue }
+            if (-not ($json.PSObject.Properties.Name -contains 'variants')) { continue }   # other settings files, e.g. gr-parts.json
             foreach ($v in @($json.variants)) {
                 if (-not (Get-JsonValue $v 'enabled' $true)) { continue }
                 if (-not $v.id -or -not $v.prefix -or -not $v.parts) {

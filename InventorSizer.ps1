@@ -245,7 +245,10 @@ function Update-Preview {
     }
     if (-not $SizeRegex.IsMatch($nameBox.Text)) { $errors += 'The name must contain a size like 386x656x47.' }
     $lines = $errors
-    if ($errors.Count -eq 0 -and $State.Layout) { $lines = @($State.Layout.Notes) + @(Get-HardwareNotes $State.HardwareHoles) }
+    if ($errors.Count -eq 0 -and $State.Layout) {
+        $hwNotes = Get-HardwareNotes $State.HardwareHoles   # assigning unwraps the returned list
+        $lines = @($State.Layout.Notes) + @($hwNotes)
+    }
     $errLabel.ForeColor = $(if ($errors.Count) { [System.Drawing.Color]::DarkRed } else { [System.Drawing.Color]::DimGray })
     $errLabel.Text = ($lines -join [Environment]::NewLine)
     $errLabel.Visible = $lines.Count -gt 0
@@ -357,8 +360,68 @@ function Set-TwinMode([string]$Mode) {
     $State.Mode = $Mode
     $script:Syncing = $true
     try { $modeBox.SelectedIndex = $(if ($Mode -eq 'GR') { 1 } else { 0 }) } finally { $script:Syncing = $false }
-    $chkHidden.Enabled = $Mode -ne 'GR'
+    $gr = $Mode -eq 'GR'
+    $chkHidden.Enabled = -not $gr
+    # Left side: the panel grid and settings, or the GR frame editor.
+    $grid.Visible = -not $gr; $settingsBox.Visible = -not $gr; $grPanel.Visible = $gr
+    if ($gr) { $errLabel.Visible = $false; $btnApply.Enabled = $false; Update-GrGrid; Update-Drawing } else { Update-Preview }
+}
+
+# ------------------------------------------------------------------ GR editor
+
+function Update-GrGrid {
+    $script:Syncing = $true
+    try {
+        $grTable.Rows.Clear()
+        if ($State.Gr) {
+            foreach ($f in ($State.Gr.Frames | Sort-Object No)) { [void]$grTable.Rows.Add("F$($f.No)", $f.Lx, $f.Wy, $f.Hz, $f.Panels.Count, $f.Dividers.Count) }
+        }
+        $grTable.AcceptChanges()
+    } finally { $script:Syncing = $false }
+    $grInfo.Text = $(if ($State.Gr) {
+        "$($State.Gr.Name)$(if ($State.Gr.Edited) { ' (edited)' }): outer $(Format-Number $State.Gr.Length) x $(Format-Number $State.Gr.OuterWidth) x $(Format-Number $State.Gr.OuterHeight) mm. " +
+        'Sizes are profile lengths; profiles, dividers and panel sides that depend on a size follow it.'
+    } else { 'Load a GR export or read a GR from Inventor.' })
+}
+
+function Get-SelectedGrFrame {
+    if (-not $State.Gr) { throw 'Load a GR first.' }
+    $row = $grGrid.CurrentRow
+    if ($null -eq $row) { throw 'Select a frame in the list first.' }
+    [int]([string]$row.Cells['Frame'].Value).TrimStart('F')
+}
+
+function Invoke-GrEdit([string]$Title, [scriptblock]$Body) {
+    try { & $Body } catch { Write-Log "ERROR ($Title): $($_.Exception.Message)" }
+    Update-GrGrid
     Update-Drawing
+}
+
+function Save-GrDesignFile {
+    if (-not $State.Gr) { throw 'Load a GR first.' }
+    $dlg = New-Object System.Windows.Forms.SaveFileDialog
+    $dlg.Filter = 'GR design (*.json)|*.json'
+    $dlg.FileName = "$($State.Gr.Name)-design.json"
+    if ($dlg.ShowDialog($form) -ne [System.Windows.Forms.DialogResult]::OK) { return }
+    Save-GrDesign $State.Gr $dlg.FileName
+    Write-Log "Saved GR design $($dlg.FileName)"
+}
+
+function Open-GrDesignFile {
+    $dlg = New-Object System.Windows.Forms.OpenFileDialog
+    $dlg.Filter = 'GR design (*.json)|*.json'
+    if ($dlg.ShowDialog($form) -ne [System.Windows.Forms.DialogResult]::OK) { return }
+    Set-GrModel (Read-GrDesign $dlg.FileName)
+}
+
+function Save-GrCutListFile {
+    if (-not $State.Gr) { throw 'Load a GR first.' }
+    $dlg = New-Object System.Windows.Forms.SaveFileDialog
+    $dlg.Filter = 'Cut list (*.csv)|*.csv'
+    $dlg.FileName = "$($State.Gr.Name)-cut-list.csv"
+    if ($dlg.ShowDialog($form) -ne [System.Windows.Forms.DialogResult]::OK) { return }
+    Export-GrCutList $State.Gr $dlg.FileName
+    Write-Log "Saved cut list $($dlg.FileName)"
 }
 
 function Set-GrModel($Model) {
@@ -368,6 +431,7 @@ function Set-GrModel($Model) {
         (Format-Number $Model.OuterHeight), $Model.Source)
     foreach ($w in $Model.Warnings) { Write-Log "  note: $w" }
     Set-TwinMode 'GR'
+    Update-GrGrid
 }
 
 function Open-GrExport {
@@ -477,7 +541,7 @@ $settingsGrid.Controls.Add($btnBrowse, 2, 1)
 $settingsGrid.Controls.Add($folderInfo, 0, 2); $settingsGrid.SetColumnSpan($folderInfo, 3)
 $settingsGrid.Controls.Add((New-Control 'Label' @{ Text = 'Minimum hole gap (mm):'; AutoSize = $true; Anchor = 'Left' }), 0, 3)
 $settingsGrid.Controls.Add($gapBox, 1, 3)
-$settingsGrid.Controls.Add((New-Control 'Label' @{ Text = 'Sheet thickness (mm):'; AutoSize = $true; Anchor = 'Left' }), 0, 4)
+$settingsGrid.Controls.Add((New-Control 'Label' @{ Text = 'Sheet thickness, one sheet (Staerke, mm):'; AutoSize = $true; Anchor = 'Left' }), 0, 4)
 $settingsGrid.Controls.Add($thickBox, 1, 4)
 $settingsGrid.Controls.Add((New-Control 'Label' @{ Text = 'Split inner panel above width (mm, 0 = never):'; AutoSize = $true; Anchor = 'Left' }), 0, 5)
 $settingsGrid.Controls.Add($splitBox, 1, 5)
@@ -485,6 +549,33 @@ $settingsGrid.Controls.Add((New-Control 'Label' @{ Text = 'Automatic hole counts
 $settingsGrid.Controls.Add($pitchBox, 1, 6)
 $settingsBox.Controls.Add($settingsGrid)
 
+# GR editor (shown instead of the panel grid in GR mode): one row per frame.
+$grTable = New-Object System.Data.DataTable
+[void]$grTable.Columns.Add('Frame', [string])
+foreach ($c in 'Length', 'Width', 'Height') { [void]$grTable.Columns.Add($c, [double]) }
+foreach ($c in 'Panels', 'Dividers') { [void]$grTable.Columns.Add($c, [int]) }
+$grPanel = New-Control 'Panel' @{ Dock = 'Fill'; Visible = $false }
+$grGrid = New-Control 'DataGridView' @{ Dock = 'Fill'; AllowUserToAddRows = $false; AllowUserToDeleteRows = $false
+                                        AutoSizeColumnsMode = 'Fill'; RowHeadersVisible = $false; SelectionMode = 'CellSelect' }
+$grGrid.DataSource = $grTable
+$grInfo = New-Control 'Label' @{ Dock = 'Top'; Height = 48; ForeColor = [System.Drawing.Color]::DimGray; Padding = (New-Object System.Windows.Forms.Padding(4)) }
+$grButtons = New-Control 'FlowLayoutPanel' @{ Dock = 'Bottom'; Height = 166; Padding = (New-Object System.Windows.Forms.Padding(2)) }
+$grButtons.Controls.AddRange(@(
+    ($chkGrShared = New-Control 'CheckBox' @{ Text = 'Frames with the same width / height change together'; AutoSize = $true; Checked = $true }),
+    ($btnGrAdd = New-Control 'Button' @{ Text = 'Add frame (like selected)'; Size = (New-Size 170 28) }),
+    ($btnGrRemove = New-Control 'Button' @{ Text = 'Remove frame'; Size = (New-Size 110 28) }),
+    ($btnGrSwapLW = New-Control 'Button' @{ Text = 'Swap L / W'; Size = (New-Size 90 28) }),
+    ($btnGrSwapWH = New-Control 'Button' @{ Text = 'Swap W / H'; Size = (New-Size 90 28) }),
+    ($btnGrSave = New-Control 'Button' @{ Text = 'Save GR design...'; Size = (New-Size 130 28) }),
+    ($btnGrOpen = New-Control 'Button' @{ Text = 'Load GR design...'; Size = (New-Size 130 28) }),
+    ($btnGrCut = New-Control 'Button' @{ Text = 'Save cut list (CSV)...'; Size = (New-Size 150 28) }),
+    ($btnGrApply = New-Control 'Button' @{ Text = 'Write profiles to Inventor'; Size = (New-Size 180 28)
+                                           Font = (New-Object System.Drawing.Font('Segoe UI', 9, [System.Drawing.FontStyle]::Bold)) })
+))
+$grPanel.Controls.Add($grGrid)
+$grPanel.Controls.Add($grInfo)
+$grPanel.Controls.Add($grButtons)
+$split.Panel1.Controls.Add($grPanel)
 $split.Panel1.Controls.Add($grid)
 $split.Panel1.Controls.Add($errLabel)
 $split.Panel1.Controls.Add($settingsBox)
@@ -570,6 +661,34 @@ $typeBox.add_SelectedIndexChanged({ if (-not $script:Syncing -and $typeBox.Selec
 $viewBox.add_SelectedIndexChanged({ Update-Drawing })
 $modeBox.add_SelectedIndexChanged({ if (-not $script:Syncing) { Set-TwinMode $(if ($modeBox.SelectedIndex -eq 1) { 'GR' } else { 'Panel' }) } })
 $btnGrLoad.add_Click({ Invoke-Step 'Load GR export' { Open-GrExport } })
+$grGrid.add_DataBindingComplete({
+    foreach ($c in 'Frame', 'Panels', 'Dividers') { if ($grGrid.Columns[$c]) { $grGrid.Columns[$c].ReadOnly = $true } }
+    foreach ($c in 'Length', 'Width', 'Height') { if ($grGrid.Columns[$c]) { $grGrid.Columns[$c].HeaderText = "$c (mm)" } }
+})
+$grGrid.add_DataError({ param($s, $e) Write-Log 'Enter a number in mm.'; $e.Cancel = $true })
+$grTable.add_ColumnChanged({ param($s, $e)
+    if ($script:Syncing) { return }
+    $dim = @{ Length = 'L'; Width = 'W'; Height = 'H' }[$e.Column.ColumnName]
+    if (-not $dim -or $e.Row[$e.Column.ColumnName] -is [DBNull]) { return }
+    $script:GrPending = @{ No = [int]([string]$e.Row['Frame']).TrimStart('F'); Dim = $dim; Value = [double]$e.Row[$e.Column.ColumnName] }
+    # Re-filling the grid inside its own change event upsets the grid, so the edit runs right after.
+    [void]$form.BeginInvoke([Action]{
+        $p = $script:GrPending; $script:GrPending = $null
+        if (-not $p) { return }
+        Invoke-GrEdit 'Edit frame' {
+            $changed = Set-GrFrameSize $State.Gr $p.No $p.Dim $p.Value -Shared:$chkGrShared.Checked
+            if ($changed) { Write-Log "GR: $($p.Dim) = $(Format-Number $p.Value) mm on $($changed -join ', ')" }
+        }
+    })
+})
+$btnGrAdd.add_Click({ Invoke-GrEdit 'Add frame' { $f = Add-GrFrame $State.Gr (Get-SelectedGrFrame); Write-Log "GR: added F$($f.No), $(Format-Number $f.Lx) x $(Format-Number $f.Wy) x $(Format-Number $f.Hz) mm, at the end" } })
+$btnGrRemove.add_Click({ Invoke-GrEdit 'Remove frame' { $no = Get-SelectedGrFrame; Remove-GrFrame $State.Gr $no; Write-Log "GR: removed F$no with its panels and dividers" } })
+$btnGrSwapLW.add_Click({ Invoke-GrEdit 'Swap' { if (-not $State.Gr) { throw 'Load a GR first.' }; Switch-GrAxes $State.Gr 'L' 'W'; Write-Log 'GR: swapped length and width' } })
+$btnGrSwapWH.add_Click({ Invoke-GrEdit 'Swap' { if (-not $State.Gr) { throw 'Load a GR first.' }; Switch-GrAxes $State.Gr 'W' 'H'; Write-Log 'GR: swapped width and height' } })
+$btnGrSave.add_Click({ Invoke-Step 'Save GR design' { Save-GrDesignFile } })
+$btnGrOpen.add_Click({ Invoke-Step 'Load GR design' { Open-GrDesignFile } })
+$btnGrCut.add_Click({ Invoke-Step 'Save cut list' { Save-GrCutListFile } })
+$btnGrApply.add_Click({ Invoke-Step 'Write GR profiles to Inventor' { if (-not $State.Gr) { throw 'Load a GR first.' }; Invoke-GrApply $State.Gr; Update-GrGrid } })
 $btnGrInv.add_Click({ Invoke-Step 'Read GR from Inventor' { Set-GrModel (Build-GrModel (Read-GrFromInventor)) } })
 $twinBox.add_Paint({ param($s, $e) Invoke-TwinPaint $e.Graphics $State.Shapes })
 $twinBox.add_Resize({ Update-Drawing })
@@ -610,6 +729,7 @@ $form.add_Shown({
         foreach ($s in $State.Standards) { [void]$typeBox.Items.Add("$($s.Name)   [$($s.Prefix)...]") }
         Select-Standard $State.Standards[0]
         Set-Grid (Read-ParamFile $ParamPath)
+        Read-GrPartRules (Join-Path $StandardsDir 'gr-parts.json')
         Update-NameFromGrid
     }
     try { Read-FromInventor } catch { Write-Log "Inventor: $($_.Exception.Message)" }

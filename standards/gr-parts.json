@@ -1,0 +1,41 @@
+{
+  "notes": "How the GR view recognises parts by file name (regular expressions, first match wins). Add lines for product lines that name parts differently. kind: corner, joint, frameProfile, divider, panel, base, damper, stub. lengthParameters: the parameter that holds the length of each profile kind (used to write new profile lengths into Inventor).",
+  "rules": [
+    {
+      "kind": "corner",
+      "pattern": "^APS Ecke"
+    },
+    {
+      "kind": "joint",
+      "pattern": "^Joint\\d*$"
+    },
+    {
+      "kind": "frameProfile",
+      "pattern": "^P150 "
+    },
+    {
+      "kind": "divider",
+      "pattern": "^P\\d+ \\d"
+    },
+    {
+      "kind": "panel",
+      "pattern": "(?:^|\\s)(FP|RP|TP)-\\d"
+    },
+    {
+      "kind": "base",
+      "pattern": "Grundrahmen"
+    },
+    {
+      "kind": "damper",
+      "pattern": "Jalousie"
+    },
+    {
+      "kind": "stub",
+      "pattern": "D.mmstutzen|Stutzen"
+    }
+  ],
+  "lengthParameters": {
+    "frameProfile": "d89",
+    "divider": "d0"
+  }
+}

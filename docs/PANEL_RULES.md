@@ -292,3 +292,113 @@ To place panels and dividers exactly, add to the iLogic tree export, per occurre
 
 **Export assembly tree...** in the app already writes these. With them, the GR view can draw every
 part where it really is, and the box builder can use the same layout rules.
+
+### Editing a GR in the app, and what writing it back to Inventor needs
+
+The GR editor changes frame sizes and adds or removes frames in the model. It also updates the
+profiles, dividers and panel sizes that depend on them.
+
+To push an edited GR into Inventor, each changed length needs its own profile file, made the
+same way as the panels:
+
+1. Open the profile part of that series, e.g. `P150 1580mm.ipt`.
+2. Set its length parameter.
+3. Save it as `P150 1700mm.ipt`.
+4. Replace the profile occurrences in the GR with the new file. The constraints stay.
+
+Panels are resized with the existing panel tool (Save As per size). Needed from you:
+
+- the name of the length parameter in a `P150` and a `P350` profile part, e.g. `d0` or `Länge`;
+  a parameter export of one of each is enough
+- the folder where profile files live, and whether new lengths may be created there
+
+## 12. Findings from the deep export (Parts, Parameters, Features, Sketches)
+
+**Profiles and corners**
+
+| Part | Size (mm) | Length parameter | Notes |
+|---|---|---|---|
+| `P150 <len>mm` (frame profile) | 70 × 70 | `d89` (extrusion) | same in every P150 file |
+| `P350 <len>mm` (divider) | 90 × 49.7 | `d0` | `gefräst`: 4 milled pockets, 20 mm offsets |
+| `APS Ecke Guß` (corner) | 130 × 130 × 130 | none (imported solid) | |
+| `Joint` | 50 × 48 × 60 | none (imported solid) | |
+
+**Frame outer size = profile length + 2 × 130.** Each profile is mated to a corner face and flush
+with its outer faces (Mate + 2 × Flush, offset 0), so each corner adds 130 mm. This replaces
+the earlier "+ 36" guess, which is only the panel overlap: panel length = profile + 36.
+Example: 6357 is about 5680 × 1840 × 1420 mm outside.
+
+**Panels in the GR confirm the panel rules**
+
+- `-In` = `-Au` − 3 in width and length, and `H − 1` in height, for FP, RP and TP. This means
+  Stärke 1 mm per sheet: the app's "Sheet thickness" setting is one sheet, so set it to 1.
+  - The −3 is 2 × 1 mm sheet + 2 × 0.5 mm clearance.
+  - With 2, the app computes `-In` = `-Au` − 5. That is why your screenshot showed 439 instead of 441.
+- Split inner panels: (W − 3) / 2. Examples: 521 → 259, 726 → 361.5, 724 → 360.5. The RP 521
+  inner part is split but named `-In`; the `-In-2T` rule renames it on the next Apply.
+- Data slips seen: `726x1196x44-Au` and `396x1196x44-Au` are 1197 long, but their names say 1196.
+
+**Hardware in the GR**
+
+- TP hinges: `Scharnier Teil1–4`, 8 of each = 4 doors × 2 hinges.
+- TP lockable handles: `MFG140-035`, 8 = 4 doors × 2.
+- RP handles: `MFG1000000` (139.8 long; its 2 holes are the 117 mm pair).
+
+### Writing an edited GR back to Inventor
+
+**Write profiles to Inventor** (GR editor) changes the GR that is open in Inventor:
+
+1. For every new profile length, it opens the profile part of that series.
+2. It sets `d89` (P150) or `d0` (P350), finding the parameter by its value if the name differs.
+3. It saves a copy next to the original as `P150 <new>mm.ipt`. The original part keeps its
+   length. An existing file of that name is used as it is.
+4. It replaces those occurrences with the new file, so their constraints stay.
+5. It leaves the GR unsaved, so you can check it before saving.
+
+The parameter names are in `standards\gr-parts.json` (`lengthParameters`).
+
+Not written yet, and reported in the log instead:
+
+- **Panels that need a new size.** Make them with the panel tool, then replace them.
+- **Added or removed frames.** Writing is refused while the design has them. Placing 8 corners
+  and 12 profiles with their constraints is the next step; it needs one frame's constraint list
+  with the faces named (iLogic Names).
+
+## 13. TP complete: hinges and handles (from the TP 724×1194 deep export)
+
+All positions are on the tray's face. The sketch origin is the panel centre.
+
+| Hardware | Holes | Position | Parameters |
+|---|---|---|---|
+| Hinge (one per end, mirrored) | Ø4.1 × 4: (8, 98), (8, 122), (36, 98), (36, 122) | (from the hinge edge, from the panel end) | Hole4: `d81` 98, `d48` 24, `d50`/`d51` 8, `d55` 28 |
+| | Ø11 × 4: (19.5, 98), (19.5, 122), (52.5, 102), (52.5, 118) | | Hole5: `d66`/`d67` 19.5, `d68` 24, `d70` 33, `d71` 16, `d73` 4 |
+| Lockable handle (one per end, mirrored) | Ø9 × 2 at 161 and 239 from the end | 22 from the handle edge (the opposite long edge) | Cut1: `d102` 161, `d95` 78, `d104` 22, `d93` Ø9 |
+
+**The 2 spacings that were typed numbers are now formulas** (setup file
+`6357-3 724x1194x42-Au-setup.xml`):
+
+- `d114` = `d121` = `Length - 2 * d81 - d48` (974 at 1194). It puts the second hinge at L − 122.
+- `d107` = `Length - 2 * d102 - d95` (794 at 1194). It puts the second handle at L − 239.
+- New user parameters: `HingeEdge` = 98 (drives `d81`) and `HandleEdge` = 161 (drives `d102`).
+
+The drawing uses `standards\hardware\TP.json`, built from these numbers. Its 6 sketch circles
+match the master exactly.
+
+**Local test** with the TP sizes of the 6357 GR, plus 444×654:
+
+| Size | Wall holes L / W | Inner panel | Hardware |
+|---|---|---|---|
+| 724×1194 | 4 / 4 (centre pair) | 2 × 360.5 (`-In-2T`) | ok |
+| 519×1194 | 4 / 4 (centre pair) | 2 × 258 (`-In-2T`) | ok |
+| 394×1194 | 4 / 2 | 1 × 391 (`-In`) | ok |
+| 519×569 | 3 / 4 (centre pair) | 2 × 258 (`-In-2T`) | ok |
+| 444×654 | 3 / 2 | 1 × 441 (`-In`) | ok |
+
+The shortest TP without hardware collisions is 487 mm. Below that, the two handles' inner holes
+overlap; the drawing shows them red, with a note.
+
+**One change needed in the TP master:**
+
+- In the tray, Hole1 holds both the width-wall edge holes (`d14`/`d15`) and the centre pair (`d91`/`d92`).
+- Narrow TPs (394, 444: 2 width-wall holes) need the centre pair off, which only works if it is its own feature.
+- Split the centre pair into its own hole feature, with *Suppress if* `HoleMidOnW = 0`.

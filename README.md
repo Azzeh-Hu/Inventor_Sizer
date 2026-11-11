@@ -232,3 +232,39 @@ It shows:
 
 **Save drawing (SVG)...** writes the GR sheet. The layout is worked out from the constraints,
 because these exports have no positions. See docs/PANEL_RULES.md, section 11.
+
+### Editing a GR (new GR types)
+
+In GR mode the left side shows one row per frame, with its **Length**, **Width** and **Height**
+as profile lengths in mm. Type a new size and press Enter, and the drawing and cut list follow:
+
+- **Frames with the same width / height change together** (ticked by default). Changing one
+  frame's width or height changes every frame that had the same value, so the unit stays one
+  size. A section of its own height, like a 410 end piece, keeps its height. Lengths change one
+  frame at a time.
+- **What follows a frame size:**
+  - frame profiles (`P150 1580mm` → `P150 1700mm`)
+  - dividers within 60 mm of the size, keeping their difference (milled `P350 1620mm gefräst` → `1740mm`)
+  - panel sides within 60 mm of the size (`FP-521x1616x47` → `FP-521x1736x47`)
+
+  Split panel widths keep their size; check them.
+- **Add frame (like selected)** adds a frame of the selected frame's size at the end of the unit.
+  **Remove frame** deletes the selected frame with its panels and dividers; the frames behind it move up.
+- **Swap L / W** and **Swap W / H** fix the orientation when the app guessed it wrong (common
+  for a GR with one frame).
+- **Save GR design...** / **Load GR design...** keep a GR as a JSON file, so a new GR type can
+  be built from an existing one and opened again later.
+- **Save cut list (CSV)...** writes every part with its length, count and frames.
+
+Part names differ between product lines (e.g. `Joint1`). `standards\gr-parts.json` lists the
+name patterns that mark corners, joints, frame profiles, dividers and panels; add a line there
+for new names.
+
+The edits stay in the app for now. Writing them back into Inventor needs the profile part's
+length parameter name; see docs/PANEL_RULES.md, section 11.
+- **Write profiles to Inventor**: for the GR open in Inventor, makes a copy of each profile
+  part for every new length (`P150 1700mm.ipt`, length parameter changed) and replaces those
+  occurrences with it. The constraints stay, and the GR is left unsaved for you to check.
+  Panels that need a new size are listed in the log. Added or removed frames are not written yet.
+
+Note: the frame drawing uses outer size = profile length + 2 × 130 (corner cube).

@@ -86,7 +86,7 @@ function ConvertTo-HoleTemplate($Circles, [double[]]$BoxMin, [double[]]$BoxSize,
 # along, and Bad = the hole falls outside the panel at this size.
 function Get-HardwareHoles($Template, [double]$W, [double]$L, [double]$H) {
     if (-not $Template) { return @() }
-    , @(foreach ($hole in @($Template.Holes)) {
+    $list = @(foreach ($hole in @($Template.Holes)) {
         $r = [double]$hole.Dia / 2
         switch ($hole.Wall) {
             'face'   { $x = Resolve-Anchor $hole.U $W; $y = Resolve-Anchor $hole.V $L; $z = $(if ($hole.Side -eq 'top') { $H } else { 0 }); $axis = 'z'
@@ -96,14 +96,29 @@ function Get-HardwareHoles($Template, [double]$W, [double]$L, [double]$H) {
             default  { $x = Resolve-Anchor $hole.U $W; $z = Resolve-Anchor $hole.V $H; $y = $(if ($hole.Side -eq 'yL') { $L } else { 0 }); $axis = 'y'
                        $bad = $x - $r -lt 0 -or $x + $r -gt $W }
         }
-        [pscustomobject]@{ X = $x; Y = $y; Z = $z; Axis = $axis; Dia = [double]$hole.Dia; Wall = $hole.Wall; Side = $hole.Side; Bad = [bool]$bad }
+        [pscustomobject]@{ X = $x; Y = $y; Z = $z; Axis = $axis; Dia = [double]$hole.Dia; Wall = $hole.Wall; Side = $hole.Side
+                           Group = [string]$hole.Group; Bad = [bool]$bad; Overlap = $false }
     })
+    # Holes in the same face that run into each other (e.g. the 2 handles on a short door).
+    for ($i = 0; $i -lt $list.Count; $i++) {
+        for ($j = $i + 1; $j -lt $list.Count; $j++) {
+            $a = $list[$i]; $b = $list[$j]
+            if ($a.Wall -ne $b.Wall -or $a.Side -ne $b.Side) { continue }
+            $d = [math]::Sqrt([math]::Pow($a.X - $b.X, 2) + [math]::Pow($a.Y - $b.Y, 2) + [math]::Pow($a.Z - $b.Z, 2))
+            if ($d -lt ($a.Dia + $b.Dia) / 2) { $a.Bad = $true; $b.Bad = $true; $a.Overlap = $true; $b.Overlap = $true }
+        }
+    }
+    , $list
 }
 
 # Holes that fall outside the panel at this size (shown as a note).
 function Get-HardwareNotes($Holes) {
-    $out = @(@($Holes) | Where-Object { $_.Bad }).Count
-    if ($out) { , @("Door hardware: $out hole(s) fall outside the panel at this size (red in the drawing).") } else { , @() }
+    $over = @(@($Holes) | Where-Object { $_.Overlap }).Count
+    $out = @(@($Holes) | Where-Object { $_.Bad -and -not $_.Overlap }).Count
+    $notes = @()
+    if ($out) { $notes += "Door hardware: $out hole(s) fall outside the panel at this size (red in the drawing)." }
+    if ($over) { $notes += "Door hardware: $over hole(s) run into each other at this size, e.g. the 2 handles on a short door (red in the drawing)." }
+    $notes   # plain output: @(Get-HardwareNotes ...) is then a flat list
 }
 
 # ------------------------------------------------------------------ files

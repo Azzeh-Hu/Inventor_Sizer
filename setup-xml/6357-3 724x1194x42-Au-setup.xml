@@ -150,6 +150,20 @@
       <isKey>false</isKey>
     </ParamWithValue>
     <ParamWithValue>
+      <name>HingeEdge</name>
+      <typeCode>mm</typeCode>
+      <value>98 mm</value>
+      <comment>InventorSizer TP: first hinge screw column from the panel end</comment>
+      <isKey>false</isKey>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>HandleEdge</name>
+      <typeCode>mm</typeCode>
+      <value>161 mm</value>
+      <comment>InventorSizer TP: first handle hole from the panel end</comment>
+      <isKey>false</isKey>
+    </ParamWithValue>
+    <ParamWithValue>
       <name>d0</name>
       <typeCode>mm</typeCode>
       <value>Width</value>
@@ -281,6 +295,46 @@
       <name>d92</name>
       <typeCode>mm</typeCode>
       <value>HoleMidOffsetW</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d81</name>
+      <typeCode>mm</typeCode>
+      <value>HingeEdge</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d114</name>
+      <typeCode>mm</typeCode>
+      <value>Length - 2 * d81 - d48</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d121</name>
+      <typeCode>mm</typeCode>
+      <value>d114</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d102</name>
+      <typeCode>mm</typeCode>
+      <value>HandleEdge</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d107</name>
+      <typeCode>mm</typeCode>
+      <value>Length - 2 * d102 - d95</value>
       <comment />
       <isKey>false</isKey>
       <tolerance>Default;Nominal;Document Precision</tolerance>
