@@ -212,3 +212,23 @@ Inventor. Older files without `HolesL` / `HolesW` are upgraded automatically.
 - Hinge and handle counts are fixed by the master (see docs/PANEL_RULES.md, section 8).
 - Building a whole box (profiles, corner joints, panels) is planned (section 9 there).
 - Read-only files (library, Content Center, Vault checked-in) are skipped. With Vault, check out first.
+
+## GR view (unit frame)
+
+Under the drawing, **Show** switches between **Panel** and **GR (box)**. The GR view draws a
+whole unit frame:
+
+- **Load GR export...**: choose the iLogic tree export and the constraints export (or one
+  export that contains both).
+- **Read GR from Inventor**: reads the active GR assembly. This also happens on **Read from
+  Inventor** or **Open assembly...** when the assembly's name ends in `GR`.
+
+It shows:
+
+- each frame as a profile wireframe, numbered F1, F2, ... along the unit
+- the frame lengths and the overall size
+- a frame table: sizes, plus the panels, dividers and parts on each frame
+- a cut list: profile lengths × count, corners, joints, panels by type and size, dampers, stubs, base frame
+
+**Save drawing (SVG)...** writes the GR sheet. The layout is worked out from the constraints,
+because these exports have no positions. See docs/PANEL_RULES.md, section 11.

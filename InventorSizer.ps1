@@ -29,6 +29,8 @@
     lib\Twin.ps1       drawings: views, bill of materials, axis, window painting, SVG sheet
     lib\Hardware.ps1   hinge / handle holes: learned from a master, re-placed for every size
     lib\TreeExport.ps1 component tree, constraints and patterns of any assembly to CSV + JSON
+    lib\GrModel.ps1    GR (unit frame): frames, profiles, panels from an export or Inventor
+    lib\GrTwin.ps1     GR drawings: frame wireframes, frame table, cut list
 
     Needs only what ships with Windows plus Inventor (Windows PowerShell 5.1 + COM).
     Start it with Launch.bat.
@@ -48,6 +50,8 @@ $Lib = Join-Path $Root 'lib'
 . (Join-Path $Lib 'Twin.ps1')
 . (Join-Path $Lib 'Hardware.ps1')
 . (Join-Path $Lib 'TreeExport.ps1')
+. (Join-Path $Lib 'GrModel.ps1')
+. (Join-Path $Lib 'GrTwin.ps1')
 
 $ParamPath    = Join-Path $Root 'Parameters.xml'
 $SettingsPath = Join-Path $Root 'settings.json'
@@ -59,6 +63,8 @@ $State = @{
     DefaultsFor = ''   # id of the type whose defaults (HoleZ, ...) were applied last
     Hardware = $null   # hole template of the selected type (standards\hardware\<id>.json)
     HardwareHoles = @()
+    Mode = 'Panel'     # drawing mode: Panel or GR
+    Gr = $null         # GR model (lib\GrModel.ps1)
 }
 $AutoParams = @('HolesL', 'HolesW')   # read-only while automatic hole counts are on
 $script:Syncing = $false
@@ -254,6 +260,11 @@ function Get-CurrentBom {
 
 function Update-Drawing {
     $size = $twinBox.ClientSize
+    if ($State.Mode -eq 'GR') {
+        $State.Shapes = Get-GrWindowShapes $State.Gr ([string]$viewBox.SelectedItem) $size.Width $size.Height
+        $twinBox.Invalidate()
+        return
+    }
     $State.Shapes = Get-WindowShapes $State.Values $State.Layout ([string]$viewBox.SelectedItem) $size.Width $size.Height `
                         $chkHidden.Checked (Get-CurrentBom) $State.Settings.thickness $State.HardwareHoles
     $twinBox.Invalidate()
@@ -328,8 +339,44 @@ function Invoke-Step([string]$Title, [scriptblock]$Body) {
     }
 }
 
+# Panel assemblies fill the name and grid; a GR assembly (name ending in GR, no panel size)
+# switches the drawing to the GR view.
 function Read-FromInventor {
+    $asm = Get-ActiveAssembly
+    $name = [IO.Path]::GetFileNameWithoutExtension($asm.FullFileName)
+    if (-not $SizeRegex.IsMatch($name) -and $name -match '(?:^|[\s-])GR$') {
+        Write-Log "Active assembly: $($asm.FullFileName) (GR)"
+        Set-GrModel (Build-GrModel (Read-GrFromInventor))
+        return
+    }
     $nameBox.Text = Read-ActiveAssemblyName   # fills the grid through TextChanged
+    if ($State.Mode -eq 'GR') { Set-TwinMode 'Panel' }
+}
+
+function Set-TwinMode([string]$Mode) {
+    $State.Mode = $Mode
+    $script:Syncing = $true
+    try { $modeBox.SelectedIndex = $(if ($Mode -eq 'GR') { 1 } else { 0 }) } finally { $script:Syncing = $false }
+    $chkHidden.Enabled = $Mode -ne 'GR'
+    Update-Drawing
+}
+
+function Set-GrModel($Model) {
+    $State.Gr = $Model
+    Write-Log ("GR {0}: {1} frame(s), {2} panels, outer about {3} x {4} x {5} mm ({6})" -f $Model.Name, $Model.Frames.Count,
+        @($Model.Components.Values | Where-Object { $_.Kind -eq 'panel' }).Count, (Format-Number $Model.Length), (Format-Number $Model.OuterWidth),
+        (Format-Number $Model.OuterHeight), $Model.Source)
+    foreach ($w in $Model.Warnings) { Write-Log "  note: $w" }
+    Set-TwinMode 'GR'
+}
+
+function Open-GrExport {
+    $dlg = New-Object System.Windows.Forms.OpenFileDialog
+    $dlg.Filter = 'GR export (*.xml)|*.xml'
+    $dlg.Title = 'GR export: select the tree and the constraints file (or one export that has both)'
+    $dlg.Multiselect = $true
+    if ($dlg.ShowDialog($form) -ne [System.Windows.Forms.DialogResult]::OK) { return }
+    Set-GrModel (Build-GrModel (Read-GrExportFiles $dlg.FileNames))
 }
 
 function Open-AssemblyFile {
@@ -338,7 +385,8 @@ function Open-AssemblyFile {
     $dlg.Title = 'Open assembly'
     if ($State.Standard.Master -and (Test-Path $State.Standard.Master)) { $dlg.InitialDirectory = Split-Path $State.Standard.Master }
     if ($dlg.ShowDialog($form) -ne [System.Windows.Forms.DialogResult]::OK) { return }
-    $nameBox.Text = Open-InventorAssembly $dlg.FileName
+    [void](Open-InventorAssembly $dlg.FileName)
+    Read-FromInventor
 }
 
 function Invoke-ApplyToInventor {
@@ -374,6 +422,11 @@ function Save-Drawing {
     $dlg.Filter = 'SVG drawing (*.svg)|*.svg'
     $dlg.FileName = "$($nameBox.Text.Trim()).svg"
     if ($dlg.ShowDialog($form) -ne [System.Windows.Forms.DialogResult]::OK) { return }
+    if ($State.Mode -eq 'GR') {
+        Export-TwinSvg $dlg.FileName (Get-GrSheetShapes $State.Gr) 1400 990 $(if ($State.Gr) { $State.Gr.Name } else { 'GR' })
+        Write-Log "Saved drawing $($dlg.FileName)"
+        return
+    }
     $shapes = Get-SheetShapes $State.Values $State.Layout (Get-CurrentBom) $State.Settings.thickness $chkHidden.Checked $State.HardwareHoles
     Export-TwinSvg $dlg.FileName $shapes 1400 990 $nameBox.Text.Trim()
     Write-Log "Saved drawing $($dlg.FileName)"
@@ -437,14 +490,20 @@ $split.Panel1.Controls.Add($errLabel)
 $split.Panel1.Controls.Add($settingsBox)
 
 $twinBox = New-Control 'PictureBox' @{ Dock = 'Fill'; BackColor = [System.Drawing.Color]::White; BorderStyle = 'FixedSingle' }
-$twinBar = New-Control 'Panel' @{ Dock = 'Top'; Height = 34 }
+$twinBar = New-Control 'Panel' @{ Dock = 'Top'; Height = 66 }
+$modeBox = New-Control 'ComboBox' @{ DropDownStyle = 'DropDownList'; Location = (New-Point 44 37); Width = 110 }
+$modeBox.Items.AddRange([object[]]@('Panel', 'GR (box)'))
 $viewBox = New-Control 'ComboBox' @{ DropDownStyle = 'DropDownList'; Location = (New-Point 44 5); Width = 110 }
 $viewBox.Items.AddRange([object[]]$TwinViews)
 $twinBar.Controls.AddRange(@(
     (New-Control 'Label' @{ Text = 'View:'; AutoSize = $true; Location = (New-Point 4 9) }),
     $viewBox,
     ($chkHidden = New-Control 'CheckBox' @{ Text = 'Show hidden edges'; AutoSize = $true; Location = (New-Point 170 8) }),
-    ($btnSvg = New-Control 'Button' @{ Text = 'Save drawing (SVG)...'; Location = (New-Point 310 4); Size = (New-Size 150 26) })
+    ($btnSvg = New-Control 'Button' @{ Text = 'Save drawing (SVG)...'; Location = (New-Point 310 4); Size = (New-Size 150 26) }),
+    (New-Control 'Label' @{ Text = 'Show:'; AutoSize = $true; Location = (New-Point 4 41) }),
+    $modeBox,
+    ($btnGrLoad = New-Control 'Button' @{ Text = 'Load GR export...'; Location = (New-Point 170 36); Size = (New-Size 130 26) }),
+    ($btnGrInv = New-Control 'Button' @{ Text = 'Read GR from Inventor'; Location = (New-Point 310 36); Size = (New-Size 150 26) })
 ))
 $split.Panel2.Controls.Add($twinBox)
 $split.Panel2.Controls.Add($twinBar)
@@ -509,6 +568,9 @@ $nameBox.add_TextChanged({
 
 $typeBox.add_SelectedIndexChanged({ if (-not $script:Syncing -and $typeBox.SelectedIndex -ge 0) { Set-StandardFromList } })
 $viewBox.add_SelectedIndexChanged({ Update-Drawing })
+$modeBox.add_SelectedIndexChanged({ if (-not $script:Syncing) { Set-TwinMode $(if ($modeBox.SelectedIndex -eq 1) { 'GR' } else { 'Panel' }) } })
+$btnGrLoad.add_Click({ Invoke-Step 'Load GR export' { Open-GrExport } })
+$btnGrInv.add_Click({ Invoke-Step 'Read GR from Inventor' { Set-GrModel (Build-GrModel (Read-GrFromInventor)) } })
 $twinBox.add_Paint({ param($s, $e) Invoke-TwinPaint $e.Graphics $State.Shapes })
 $twinBox.add_Resize({ Update-Drawing })
 $chkHidden.add_CheckedChanged({ Update-Drawing })
@@ -518,7 +580,7 @@ $thickBox.add_ValueChanged({ if (-not $script:Syncing) { Update-SettingsFromForm
 $splitBox.add_ValueChanged({ if (-not $script:Syncing) { Update-SettingsFromForm; Update-Preview } })
 $pitchBox.add_ValueChanged({ if (-not $script:Syncing) { Update-SettingsFromForm; Update-GridLocks; Update-Preview } })
 
-$btnMaster.add_Click({ Invoke-Step 'Open master' { $nameBox.Text = Open-InventorAssembly $State.Standard.Master } })
+$btnMaster.add_Click({ Invoke-Step 'Open master' { [void](Open-InventorAssembly $State.Standard.Master); Read-FromInventor } })
 $btnOpen.add_Click({ Invoke-Step 'Open assembly' { Open-AssemblyFile } })
 $btnRead.add_Click({ Invoke-Step 'Read from Inventor' { Read-FromInventor } })
 $btnApply.add_Click({ Invoke-Step 'Apply to Inventor' { Invoke-ApplyToInventor } })
@@ -539,6 +601,7 @@ $form.add_Shown({
         $splitBox.Value = [decimal]$State.Settings.splitWidth
         $pitchBox.Value = [decimal]$State.Settings.maxHolePitch
         $viewBox.SelectedIndex = 0
+        $modeBox.SelectedIndex = 0
     } finally { $script:Syncing = $false }
     Update-FolderControls
     Invoke-Step 'Load' {

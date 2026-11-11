@@ -151,3 +151,19 @@ saves the new size as new files.
   them per type in `standards\hardware\<id>.json` anchored to start/end/mid; the drawing shows them in orange.
 - `lib\TreeExport.ps1`: "Export assembly tree..." writes tree / parts / constraints CSV + JSON (for the box builder).
 - Waiting on the user: hardware JSON files and the GR-box tree export (docs/PANEL_RULES.md sections 6, 9, 10).
+
+## For later: move from PowerShell to C#?
+
+Raised by the user, to decide later. Not C/C++: the Inventor API is COM and is used from .NET.
+The real option is **C#**, either as an Inventor add-in (in-process, a ribbon button) or as a
+standalone .exe.
+
+- **For C#:** an add-in runs inside Inventor, so COM calls are much faster. That matters for
+  the box builder and for tree exports of large assemblies. It also gives typed Inventor
+  objects, so errors like the SubOccurrences Count/Item one surface at build time, and there
+  are no execution-policy or "Unblock" problems.
+- **Against, for now:** C# needs Visual Studio and a build/install step, while the current
+  tool runs on any PC without installing anything.
+- **Suggested moment:** when starting the box builder. The rules (`HoleRules`, `Standards`,
+  `Hardware`, the equations) are plain logic and port 1:1; the window and COM layer get
+  rewritten.

@@ -483,6 +483,7 @@ function Initialize-TwinGdi {
         hole = @('Black', 1.1); holeBad = @('DarkRed', 1.5); hiddenHole = @('Gray', 1, 'Dash'); center = @('Gray', 0.8, 'DashDot')
         dim = @('DimGray', 1); ext = @('Silver', 1); table = @('Black', 1); frame = @('Black', 1.6)
         axisX = @('Red', 1.6); axisY = @('ForestGreen', 1.6); axisZ = @('Blue', 1.6); axisRing = @('Black', 1)
+        profile = @('SteelBlue', 2.2); corner = @('Black', 1)
         hw = @('DarkOrange', 1.4); hwHidden = @('DarkOrange', 1.3, 'Dash'); hwBad = @('DarkRed', 1.5)
     }
     foreach ($k in $pens.Keys) {
@@ -491,7 +492,7 @@ function Initialize-TwinGdi {
         if ($d.Count -gt 2) { $p.DashStyle = [System.Drawing.Drawing2D.DashStyle]::($d[2]) }
         $TwinGdi["pen.$k"] = $p
     }
-    $fills = @{ face = 'White'; holeBad = 'Red'; hwBad = 'Red'; arrow = 'DimGray'; axisX = 'Red'; axisY = 'ForestGreen'; axisZ = 'Blue' }
+    $fills = @{ face = 'White'; holeBad = 'Red'; hwBad = 'Red'; corner = 'DimGray'; arrow = 'DimGray'; axisX = 'Red'; axisY = 'ForestGreen'; axisZ = 'Blue' }
     foreach ($k in $fills.Keys) { $TwinGdi["fill.$k"] = New-Object System.Drawing.SolidBrush ([System.Drawing.Color]::($fills[$k])) }
     $texts = @{
         label = @('Black', 9, 'Bold'); sub = @('DimGray', 8, 'Regular'); caption = @('DimGray', 9, 'Bold')
@@ -560,6 +561,8 @@ $TwinSvgStyle = @{
     axisY      = 'fill="#228b22" stroke="#228b22" stroke-width="1.6"'
     axisZ      = 'fill="#0000ff" stroke="#0000ff" stroke-width="1.6"'
     axisRing   = 'fill="none" stroke="#000000" stroke-width="1"'
+    profile    = 'fill="none" stroke="#4682b4" stroke-width="2.2" stroke-linecap="round"'
+    corner     = 'fill="#696969" stroke="#000000" stroke-width="1"'
     hw         = 'fill="none" stroke="#ff8c00" stroke-width="1.4"'
     hwHidden   = 'fill="none" stroke="#ff8c00" stroke-width="1.3" stroke-dasharray="2.5 1.5"'
     hwBad      = 'fill="#ff0000" stroke="#8b0000" stroke-width="1.5"'

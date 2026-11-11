@@ -243,3 +243,52 @@ Open the box (or any assembly) in Inventor and click **Export assembly tree...**
 The CSV files open directly in Excel (`;`, decimal comma on a German Windows). Repeated
 profiles show up in `-parts.csv` as one row per length with the count. Please send me the
 `.json` of the GR box. It is the information sections 8 and 9 need.
+
+## 11. GR findings from the iLogic exports (8185 GR, 6357 2035-N1-ZK750-GR)
+
+This answers most of section 9. The box is built the same way with or without panels:
+
+| Element | How it is built | In the data |
+|---|---|---|
+| **Frame** | a cuboid of 8 corners `APS Ecke Guß` and 12 profiles `P150 <len>mm`, 4 of each of its 3 lengths | 8185: 2 frames; 6357: 5 frames |
+| **Profile to corner** | Mate + 2 × Flush, offset 0 | 82 Flush + 42 Mate (8185) |
+| **Frame to frame** | corner to corner, Flush (3 per pair, plus Mates) | 6357 chain F1–F2–F3–F4–F5 |
+| **Divider** | `P350 <len>mm` (some `gefräst`) on `Joint` parts, Mate + Flush to the joints; positioned by offsets from a P150 (280, 450, 500, 525, 600, 660, 700, 730 mm) | 32 (8185), 34 (6357) |
+| **Profile set-back** | P150 to P350 offset −25 mm | 13× |
+| **Panel** | Mate to the profiles of one frame with a 2 mm gap (3 mm for some), Flush to its neighbours | 47 panels in 6357 |
+| **Damper / duct stub** | Mate to the profiles; damper centred by `<size> / 2 ul` offsets | 8185: 2 dampers, 4 stubs |
+
+Equations that hold across both units:
+
+- Frame outer size = profile length + 36 (2 corners).
+- Panel length = profile length + 36 (FP and RP). Examples: 1580 → 1616, 1160 → 1196, 860 → 896, 410 → 446, 360 → 396.
+- TP doors are 2 mm shorter: 1160 → 1194.
+- Unit width = the profile length all frames share (6357: 1580; 8185: 1330).
+- Unit height = the next most shared one (1160; 1220).
+- Neighbouring frames along the unit share width and height. Their outer lengths add up: 6357 = 396 + 896 + 1876 + 996 + 396 = 4560.
+
+### GR view in the app
+
+**Show: GR (box)** draws a GR assembly from these exports (**Load GR export...**, choose the tree
+and the constraints file) or straight from Inventor (**Read GR from Inventor**, also automatic
+when the active assembly's name ends in `GR`). The drawing shows:
+
+- each frame as a profile wireframe with its corners and number
+- the frame lengths and the overall size
+- a frame table: profile sizes, plus the panels, dividers and parts on each frame
+- the cut list: P150 and P350 lengths × count, corners, joints, panels by type and size, dampers, stubs, base frame
+
+### Still unknown from these exports
+
+The exports have no positions and no faces, so two things are inferred:
+
+- **The layout.** The orientation and order come from the shared sizes and the frame links.
+- **Which face a panel or divider sits on.** This is not shown; panels and dividers are listed per frame.
+
+To place panels and dividers exactly, add to the iLogic tree export, per occurrence:
+
+- `oOcc.Transformation.Translation` (X, Y, Z in cm)
+- the 3 axis directions (`Transformation.Cell(1..3, 1..3)`)
+
+**Export assembly tree...** in the app already writes these. With them, the GR view can draw every
+part where it really is, and the box builder can use the same layout rules.

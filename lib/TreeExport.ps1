@@ -89,10 +89,30 @@ function Get-OccurrenceRow($Occ, [int]$Level, [string]$Parent) {
     [pscustomobject]$row
 }
 
+# The occurrences of a collection. SubOccurrences of a sub-assembly can report a Count that
+# Item(i) cannot reach (suppressed, patterned or substitute members), so the collection is
+# enumerated directly, with Item(i) only as a fallback.
+function Get-OccurrenceList($Occurrences) {
+    $list = New-Object System.Collections.Generic.List[object]
+    $enum = $null
+    try { $enum = [System.Management.Automation.LanguagePrimitives]::GetEnumerable($Occurrences) } catch { }
+    if ($null -ne $enum) {
+        try { foreach ($o in $enum) { if ($null -ne $o) { $list.Add($o) } } } catch { $list.Clear() }
+    }
+    if ($list.Count -eq 0) {
+        $n = Get-Safe { $Occurrences.Count } 0
+        for ($i = 1; $i -le $n; $i++) {
+            try { $o = $Occurrences.Item($i); if ($null -ne $o) { $list.Add($o) } }
+            catch { $script:TreeSkipped++ }
+        }
+    }
+    , $list.ToArray()
+}
+
 function Get-TreeRows($Occurrences, [int]$Level, [string]$Parent, $Rows) {
-    for ($i = 1; $i -le $Occurrences.Count; $i++) {
-        $occ = $Occurrences.Item($i)
-        $row = Get-OccurrenceRow $occ $Level $Parent
+    foreach ($occ in (Get-OccurrenceList $Occurrences)) {
+        try { $row = Get-OccurrenceRow $occ $Level $Parent }
+        catch { $script:TreeSkipped++; continue }
         $Rows.Add($row)
         if (-not $row.Suppressed) {
             $subs = Get-Safe { $occ.SubOccurrences } $null
@@ -113,8 +133,7 @@ function Get-RelationRows($AsmDoc, $Rows, $Patterns) {
     $asmName = [IO.Path]::GetFileName($AsmDoc.FullFileName)
     $cons = Get-Safe { $def.Constraints } $null
     if ($cons) {
-        for ($i = 1; $i -le $cons.Count; $i++) {
-            $c = $cons.Item($i)
+        foreach ($c in (Get-OccurrenceList $cons)) {
             $Rows.Add([pscustomobject][ordered]@{
                 Assembly = $asmName; Kind = 'constraint'; Name = $c.Name; Type = ((Get-ComTypeName $c) -replace 'Constraint$', '')
                 Suppressed = [bool](Get-Safe { $c.Suppressed } $false)
@@ -126,8 +145,7 @@ function Get-RelationRows($AsmDoc, $Rows, $Patterns) {
     }
     $joints = Get-Safe { $def.Joints } $null
     if ($joints) {
-        for ($i = 1; $i -le $joints.Count; $i++) {
-            $j = $joints.Item($i)
+        foreach ($j in (Get-OccurrenceList $joints)) {
             $Rows.Add([pscustomobject][ordered]@{
                 Assembly = $asmName; Kind = 'joint'; Name = $j.Name; Type = "joint type $(Get-Safe { $j.Definition.JointType })"
                 Suppressed = [bool](Get-Safe { $j.Suppressed } $false)
@@ -139,8 +157,7 @@ function Get-RelationRows($AsmDoc, $Rows, $Patterns) {
     }
     $pats = Get-Safe { $def.OccurrencePatterns } $null
     if ($pats) {
-        for ($i = 1; $i -le $pats.Count; $i++) {
-            $p = $pats.Item($i)
+        foreach ($p in (Get-OccurrenceList $pats)) {
             $Patterns.Add([pscustomobject][ordered]@{
                 Assembly = $asmName; Name = $p.Name; Type = Get-ComTypeName $p
                 Elements = Get-Safe { $p.OccurrencePatternElements.Count }
@@ -165,7 +182,9 @@ function Export-CsvLocal($Rows, [string]$Path) {
 # $BasePath: path without extension, e.g. C:\temp\6357 2035-N1-ZK750-GR
 function Export-AssemblyTree($Asm, [string]$BasePath) {
     $rows = New-Object System.Collections.Generic.List[object]
+    $script:TreeSkipped = 0
     Get-TreeRows $Asm.ComponentDefinition.Occurrences 0 '' $rows
+    if ($script:TreeSkipped) { Write-Log "  note: $($script:TreeSkipped) component(s) Inventor could not return were skipped" }
 
     # Every assembly in the tree (the top one and each sub-assembly file once) for its relations.
     $relations = New-Object System.Collections.Generic.List[object]

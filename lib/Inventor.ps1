@@ -26,7 +26,7 @@ function Open-InventorAssembly([string]$Path) {
     $doc = $inv.Documents.Open($Path, $true)
     $doc.Activate()
     Write-Log "Opened $Path"
-    Read-ActiveAssemblyName
+    [IO.Path]::GetFileNameWithoutExtension($Path)
 }
 
 # Status for the UI; never throws.
