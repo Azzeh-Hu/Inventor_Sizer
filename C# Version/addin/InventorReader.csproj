@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Assembly Reader: an Inventor add-in (InventorSizer.Reader.dll).
+         dotnet build addin\InventorReader.csproj -c Release -p:InventorVersion=2024
+       Inventor 2024 and older run add-ins on .NET Framework 4.8, Inventor 2025 and newer on .NET 8;
+       InventorVersion picks the right one. InventorDir overrides the install folder. -->
+  <PropertyGroup>
+    <InventorVersion Condition="'$(InventorVersion)' == ''">2024</InventorVersion>
+    <InventorDir Condition="'$(InventorDir)' == ''">C:\Program Files\Autodesk\Inventor $(InventorVersion)</InventorDir>
+    <InteropDll Condition="'$(InteropDll)' == ''">$(InventorDir)\Bin\Public Assemblies\Autodesk.Inventor.Interop.dll</InteropDll>
+    <TargetFramework Condition="$(InventorVersion) &gt;= 2025">net8.0-windows</TargetFramework>
+    <TargetFramework Condition="$(InventorVersion) &lt; 2025">net48</TargetFramework>
+    <OutputType>Library</OutputType>
+    <UseWindowsForms>true</UseWindowsForms>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+    <LangVersion>10</LangVersion>
+    <Nullable>disable</Nullable>
+    <AssemblyName>InventorSizer.Reader</AssemblyName>
+    <RootNamespace>InventorSizer.AsmReader</RootNamespace>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <OutputPath>bin\</OutputPath>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Remove="tests\**" />
+    <Reference Include="Autodesk.Inventor.Interop">
+      <HintPath>$(InteropDll)</HintPath>
+      <Private>False</Private>
+      <EmbedInteropTypes>False</EmbedInteropTypes>
+    </Reference>
+    <None Include="InventorSizer.Reader.addin" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(TargetFramework)' == 'net48'">
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
+  </ItemGroup>
+</Project>

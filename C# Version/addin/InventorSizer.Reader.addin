@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Tells Inventor where the Assembly Reader add-in is. tools\install-reader.ps1 copies this
+     file and InventorSizer.Reader.dll to %APPDATA%\Autodesk\ApplicationPlugins\InventorSizerReader. -->
+<Addin Type="Standard">
+  <ClassId>{32FE73A4-DAFE-449E-91A8-2B8797BA0AFB}</ClassId>
+  <ClientId>{32FE73A4-DAFE-449E-91A8-2B8797BA0AFB}</ClientId>
+  <DisplayName>Assembly Reader (Inventor Sizer)</DisplayName>
+  <Description>Shows everything inside the active assembly or part: components, constraints, parameters, features, sketches, iProperties.</Description>
+  <Assembly>InventorSizer.Reader.dll</Assembly>
+  <LoadOnStartUp>1</LoadOnStartUp>
+  <UserUnloadable>1</UserUnloadable>
+  <Hidden>0</Hidden>
+  <DataVersion>1</DataVersion>
+  <UserInterfaceVersion>1</UserInterfaceVersion>
+</Addin>
