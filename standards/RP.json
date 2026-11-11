@@ -1,0 +1,29 @@
+{
+  "family": "RP",
+  "description": "Panel with 2 handles",
+  "variants": [
+    {
+      "id": "RP",
+      "name": "RP - panel with handles (44 mm)",
+      "enabled": true,
+      "prefix": "RP-",
+      "height": 44,
+      "master": "",
+      "notes": "Waiting for the RP parameter files: master path, HoleZ default and the setup-xml files are still to be added.",
+      "parts": [
+        {
+          "suffix": "-Au",
+          "description": "Outer tray (Au)",
+          "role": "outer",
+          "qty": 1
+        },
+        {
+          "suffix": "-In",
+          "description": "Inner panel (In)",
+          "role": "inner",
+          "qty": 1
+        }
+      ]
+    }
+  ]
+}

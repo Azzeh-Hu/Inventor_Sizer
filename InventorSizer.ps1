@@ -4,11 +4,14 @@
     rules, product standards and vector drawings of the result.
 
 .DESCRIPTION
-    File name  FP-386x656x47  <->  Parameters.xml  ->  Inventor user parameters
+    File name  [project ]FP-386x656x47  <->  Parameters.xml  ->  Inventor user parameters
     (assembly + every part that has a parameter with the same name). Model dimensions
     reference those user parameters through formulas set up in Inventor.
 
-    - Type: the product standard (standards\*.json) - name prefix, master assembly, parts.
+    - Type: the product standard (standards\*.json): FP, TP or RP - name prefix, height,
+      master assembly, parts. The type follows the name ("6357-3 TP-519x1194x42" -> TP).
+    - Panels wider than the split width get the inner panel (-In) split in 2: the part is
+      halved and a second copy is added to the assembly and mated to the first.
     - Type a new name (e.g. FP-400x700x50) or edit the values in the grid; both stay in sync.
     - HolesL / HolesW set the holes per wall; the hole rules turn them into pattern values,
       and Apply is blocked while a rule is broken (the reasons are shown in red).
@@ -22,7 +25,7 @@
     lib\ParamFile.ps1  Parameters.xml (Inventor's parameter export format)
     lib\HoleRules.ps1  hole count -> positions, pattern values and checks
     lib\Standards.ps1  product types (standards\*.json) and the bill of materials
-    lib\Inventor.ps1   COM: open, push parameters, rebuild, save as new size, Part Number
+    lib\Inventor.ps1   COM: open, push parameters, inner-panel split, rebuild, save as new size
     lib\Twin.ps1       drawings: views, bill of materials, axis, window painting, SVG sheet
 
     Needs only what ships with Windows plus Inventor (Windows PowerShell 5.1 + COM).
@@ -49,6 +52,7 @@ $FixedParams  = @('HoleDia')   # shown read-only: the hole diameter is always 4.
 $State = @{
     Settings = (Read-Settings $SettingsPath); Standards = @(); Standard = $null
     Values = @{}; Layout = $null; Shapes = $null
+    DefaultsFor = ''   # id of the type whose defaults (HoleZ, ...) were applied last
 }
 $script:Syncing = $false
 
@@ -133,43 +137,70 @@ function Select-Standard($Standard) {
     $btnMaster.Enabled = [bool]($Standard.Master -and (Test-Path $Standard.Master))
 }
 
-# Picks the type whose prefix matches the name, if there is one.
+# Puts the type's own values (e.g. HoleZ: TP 20, FP 22) into the grid, once per type change.
+# The height is only forced when the type was picked from the list; otherwise the name decides.
+function Set-TypeDefaults($Standard, [bool]$WithHeight) {
+    if ($State.DefaultsFor -eq $Standard.Id -and -not $WithHeight) { return }
+    $State.DefaultsFor = $Standard.Id
+    $wasSyncing = $script:Syncing
+    $script:Syncing = $true
+    try {
+        foreach ($k in $Standard.Defaults.Keys) {
+            $r = Find-Row $k
+            if ($r -and $r['Value'] -ne $Standard.Defaults[$k]) {
+                $r['Value'] = $Standard.Defaults[$k]
+                Write-Log "  $($Standard.Family): $k = $(Format-Number $Standard.Defaults[$k])"
+            }
+        }
+        if ($WithHeight -and $Standard.Height -gt 0) {
+            $r = Find-Row 'Height'
+            if ($r) { $r['Value'] = $Standard.Height }
+        }
+    } finally { $script:Syncing = $wasSyncing }
+}
+
+# Picks the type from the name: the prefix in front of the size, else the height.
 function Update-StandardFromName {
     $match = Find-StandardForName $State.Standards $nameBox.Text
-    if ($match -and $match -ne $State.Standard) {
+    if (-not $match) { return }
+    if ($match -ne $State.Standard) {
         Select-Standard $match
         Write-Log "Type: $($match.Name)"
     }
+    Set-TypeDefaults $match $false
 }
 
-# The user picked another type: swap the name prefix.
+# The user picked another type: swap the name prefix (the project number in front stays) and
+# take over the type's height and defaults.
 function Set-StandardFromList {
-    $old = $State.Standard
     $new = $State.Standards[$typeBox.SelectedIndex]
     Select-Standard $new
-    $name = $nameBox.Text
-    if ($old -and $name.StartsWith($old.Prefix, [StringComparison]::OrdinalIgnoreCase)) {
-        $nameBox.Text = $new.Prefix + $name.Substring($old.Prefix.Length)
-    }
+    $script:Syncing = $true
+    try { $nameBox.Text = Set-PanelNamePrefix $State.Standards $nameBox.Text $new.Prefix } finally { $script:Syncing = $false }
+    Set-TypeDefaults $new $true
+    Update-NameFromGrid
     Update-Preview
 }
 
 # ------------------------------------------------------------------ rules + drawing
 
-# Re-runs the hole rules, shows any broken rule, locks Apply, and redraws.
+# Re-runs the rules, shows any broken rule (red, locks Apply) or the notes (grey), and redraws.
 function Update-Preview {
     $State.Values = Get-GridValues
     $errors = @()
     try {
-        $State.Layout = Get-HoleLayout $State.Values $State.Settings
+        $State.Layout = Get-HoleLayout $State.Values $State.Settings $State.Standard
         $errors = @($State.Layout.Errors)
     } catch {
         $State.Layout = $null
         $errors = @($_.Exception.Message)
     }
     if (-not $SizeRegex.IsMatch($nameBox.Text)) { $errors += 'The name must contain a size like 386x656x47.' }
-    $errLabel.Text = ($errors -join [Environment]::NewLine)
-    $errLabel.Visible = $errors.Count -gt 0
+    $lines = $errors
+    if ($errors.Count -eq 0 -and $State.Layout) { $lines = @($State.Layout.Notes) }
+    $errLabel.ForeColor = $(if ($errors.Count) { [System.Drawing.Color]::DarkRed } else { [System.Drawing.Color]::DimGray })
+    $errLabel.Text = ($lines -join [Environment]::NewLine)
+    $errLabel.Visible = $lines.Count -gt 0
     $btnApply.Enabled = $errors.Count -eq 0
     Update-Drawing
 }
@@ -200,6 +231,7 @@ function Update-SettingsFromForm {
     if ($script:Syncing) { return }
     $State.Settings.minHoleGap = [double]$gapBox.Value
     $State.Settings.thickness  = [double]$thickBox.Value
+    $State.Settings.splitWidth = [double]$splitBox.Value
 }
 
 function Save-FormSettings {
@@ -269,7 +301,7 @@ function Open-AssemblyFile {
 function Invoke-ApplyToInventor {
     $settings = Get-ApplySettings
     Save-FormSettings
-    $newName = Invoke-Apply $nameBox.Text (Get-GridParams) $settings $ParamPath
+    $newName = Invoke-Apply $nameBox.Text (Get-GridParams) $settings $ParamPath $State.Standards $State.Standard
     $script:Syncing = $true
     try { $nameBox.Text = $newName } finally { $script:Syncing = $false }
 }
@@ -308,8 +340,8 @@ $errLabel = New-Control 'Label' @{ Dock = 'Bottom'; AutoSize = $false; Height = 
                                    ForeColor = [System.Drawing.Color]::DarkRed; Padding = (New-Object System.Windows.Forms.Padding(4)) }
 
 # Settings: a table layout keeps every control inside the box at any width.
-$settingsBox = New-Control 'GroupBox' @{ Dock = 'Bottom'; Height = 172; Text = 'Settings' }
-$settingsGrid = New-Control 'TableLayoutPanel' @{ Dock = 'Fill'; ColumnCount = 3; RowCount = 5 }
+$settingsBox = New-Control 'GroupBox' @{ Dock = 'Bottom'; Height = 200; Text = 'Settings' }
+$settingsGrid = New-Control 'TableLayoutPanel' @{ Dock = 'Fill'; ColumnCount = 3; RowCount = 6 }
 [void]$settingsGrid.ColumnStyles.Add((New-Object System.Windows.Forms.ColumnStyle([System.Windows.Forms.SizeType]::AutoSize)))
 [void]$settingsGrid.ColumnStyles.Add((New-Object System.Windows.Forms.ColumnStyle([System.Windows.Forms.SizeType]::Percent, 100)))
 [void]$settingsGrid.ColumnStyles.Add((New-Object System.Windows.Forms.ColumnStyle([System.Windows.Forms.SizeType]::AutoSize)))
@@ -319,6 +351,7 @@ $btnBrowse  = New-Control 'Button' @{ Text = 'Browse...'; AutoSize = $true; Anch
 $gapBox     = New-Control 'NumericUpDown' @{ Width = 80; DecimalPlaces = 1; Maximum = 1000; Increment = 0.5; Anchor = 'Left' }
 $thickBox   = New-Control 'NumericUpDown' @{ Width = 80; DecimalPlaces = 2; Maximum = 50; Increment = 0.1; Anchor = 'Left' }
 $thickBox.Minimum = 0.1
+$splitBox   = New-Control 'NumericUpDown' @{ Width = 80; DecimalPlaces = 0; Maximum = 100000; Increment = 10; Anchor = 'Left' }
 $folderInfo = New-Control 'Label' @{ AutoSize = $true; Anchor = 'Left'; ForeColor = [System.Drawing.Color]::DimGray }
 $settingsGrid.Controls.Add($chkFolder, 0, 0); $settingsGrid.SetColumnSpan($chkFolder, 3)
 $settingsGrid.Controls.Add((New-Control 'Label' @{ Text = 'Folder:'; AutoSize = $true; Anchor = 'Left' }), 0, 1)
@@ -329,6 +362,8 @@ $settingsGrid.Controls.Add((New-Control 'Label' @{ Text = 'Minimum hole gap (mm)
 $settingsGrid.Controls.Add($gapBox, 1, 3)
 $settingsGrid.Controls.Add((New-Control 'Label' @{ Text = 'Sheet thickness (mm):'; AutoSize = $true; Anchor = 'Left' }), 0, 4)
 $settingsGrid.Controls.Add($thickBox, 1, 4)
+$settingsGrid.Controls.Add((New-Control 'Label' @{ Text = 'Split inner panel above width (mm, 0 = never):'; AutoSize = $true; Anchor = 'Left' }), 0, 5)
+$settingsGrid.Controls.Add($splitBox, 1, 5)
 $settingsBox.Controls.Add($settingsGrid)
 
 $split.Panel1.Controls.Add($grid)
@@ -417,6 +452,7 @@ $chkHidden.add_CheckedChanged({ Update-Drawing })
 $chkFolder.add_CheckedChanged({ Update-FolderControls })
 $gapBox.add_ValueChanged({ if (-not $script:Syncing) { Update-SettingsFromForm; Update-Preview } })
 $thickBox.add_ValueChanged({ if (-not $script:Syncing) { Update-SettingsFromForm; Update-Preview } })
+$splitBox.add_ValueChanged({ if (-not $script:Syncing) { Update-SettingsFromForm; Update-Preview } })
 
 $btnMaster.add_Click({ Invoke-Step 'Open master' { $nameBox.Text = Open-InventorAssembly $State.Standard.Master } })
 $btnOpen.add_Click({ Invoke-Step 'Open assembly' { Open-AssemblyFile } })
@@ -434,6 +470,7 @@ $form.add_Shown({
     try {
         $gapBox.Value   = [decimal]$State.Settings.minHoleGap
         $thickBox.Value = [decimal][math]::Max(0.1, $State.Settings.thickness)
+        $splitBox.Value = [decimal]$State.Settings.splitWidth
         $viewBox.SelectedIndex = 0
     } finally { $script:Syncing = $false }
     Update-FolderControls

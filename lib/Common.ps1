@@ -2,7 +2,7 @@
 
 $Invariant = [Globalization.CultureInfo]::InvariantCulture
 
-# Parameters encoded in the file name, in order: FP-<Width>x<Length>x<Height>
+# Parameters encoded in the file name, in order: [project ]<type>-<Width>x<Length>x<Height>
 $SizeParams = @('Width', 'Length', 'Height')
 $SizeRegex  = [regex]'(\d+(?:\.\d+)?)x(\d+(?:\.\d+)?)x(\d+(?:\.\d+)?)'
 
@@ -30,6 +30,7 @@ function Format-Number([double]$v) { $v.ToString('0.###', $Invariant) }
 $DefaultSettings = [ordered]@{
     minHoleGap   = 10    # mm between hole centres before Apply is blocked
     thickness    = 1     # mm, sheet thickness (Staerke) used for the centre-pair offset
+    splitWidth   = 500   # mm, panels wider than this get the inner panel (-In) split in 2; 0 = never
 }
 
 function Read-Settings([string]$Path) {
@@ -43,6 +44,7 @@ function Read-Settings([string]$Path) {
     }
     $s.minHoleGap   = [double]$s.minHoleGap
     $s.thickness    = [double]$s.thickness
+    $s.splitWidth   = [double]$s.splitWidth
     $s
 }
 
@@ -53,9 +55,11 @@ function Save-Settings([string]$Path, $Incoming) {
     }
     $s.minHoleGap   = [double]$s.minHoleGap
     $s.thickness    = [double]$s.thickness
+    $s.splitWidth   = [double]$s.splitWidth
+    if ($s.splitWidth -lt 0) { throw 'The split width cannot be negative.' }
     if ($s.minHoleGap -lt 0) { throw 'Minimum hole gap cannot be negative.' }
     if ($s.thickness -le 0) { throw 'Sheet thickness must be greater than 0.' }
     $s | ConvertTo-Json | Set-Content $Path -Encoding UTF8
-    Write-Log "Settings saved: min hole gap $(Format-Number $s.minHoleGap) mm, thickness $(Format-Number $s.thickness) mm"
+    Write-Log "Settings saved: min hole gap $(Format-Number $s.minHoleGap) mm, thickness $(Format-Number $s.thickness) mm, split above $(Format-Number $s.splitWidth) mm"
     $s
 }

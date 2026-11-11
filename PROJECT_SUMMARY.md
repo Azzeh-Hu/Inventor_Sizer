@@ -128,3 +128,15 @@ saves the new size as new files.
    - The drawing still shows one inner panel.
 4. **Drawings (`.idw`/`.dwg`):** these aren't copied or renamed for new sizes yet.
 5. **Possible:** a better-defined place for product rules such as edge distance, thickness and gap per type (currently in settings and defaults).
+
+## Update: TP / RP types and the inner-panel split
+
+- Three panel types, recognised by prefix or height: FP 47, TP 42, RP 44 (`standards\*.json`).
+  The FP2-/FP3- placeholders are gone; the split rule replaces them.
+- Names may carry a project lead: `6357-3 TP-519x1194x42`; parts are `6357-3 519x1194x42-Au` / `-In`.
+- Split rule for all types: `W > 500` (setting) → `InSplit = 2`, the `-In` part is halved and a second
+  occurrence is added and mated by `Update-InnerSplit` (`lib\Inventor.ps1`). TP names the split part `-In-2T`.
+- `Update-PanelAssembly` resizes any panel assembly without the window (for a later box builder).
+- Equations, setup per master, open questions, hinge/handle and box plans: `docs\PANEL_RULES.md`.
+- Tested on Linux only: rules, naming, drawings, and the split script against a mocked Inventor.
+  Not yet run against Inventor.

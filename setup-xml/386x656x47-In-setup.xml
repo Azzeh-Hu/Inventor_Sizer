@@ -143,6 +143,34 @@
       <isKey>false</isKey>
     </ParamWithValue>
     <ParamWithValue>
+      <name>InSplit</name>
+      <typeCode>ul</typeCode>
+      <value>1 ul</value>
+      <comment>InventorSizer, calculated</comment>
+      <isKey>false</isKey>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>InHolePitchW</name>
+      <typeCode>mm</typeCode>
+      <value>286 mm</value>
+      <comment>InventorSizer, calculated</comment>
+      <isKey>false</isKey>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>InHoleCountW</name>
+      <typeCode>ul</typeCode>
+      <value>2 ul</value>
+      <comment>InventorSizer, calculated</comment>
+      <isKey>false</isKey>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>InHoleMidOnW</name>
+      <typeCode>ul</typeCode>
+      <value>0 ul</value>
+      <comment>InventorSizer, calculated</comment>
+      <isKey>false</isKey>
+    </ParamWithValue>
+    <ParamWithValue>
       <name>HoleMidOffsetW</name>
       <typeCode>mm</typeCode>
       <value>HoleEdge - Stärke - Clearance</value>
@@ -152,7 +180,7 @@
     <ParamWithValue>
       <name>d0</name>
       <typeCode>mm</typeCode>
-      <value>Width - 2 * Stärke - 2 * Clearance</value>
+      <value>( Width - 2 * Stärke - 2 * Clearance ) / InSplit</value>
       <comment />
       <isKey>false</isKey>
       <tolerance>Default;Nominal;Document Precision</tolerance>

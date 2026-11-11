@@ -164,6 +164,9 @@ function Add-IsoView($List, $V, $Layout, [double[]]$Rect, [bool]$ShowHidden) {
     # -In panel outline on top, inset by thickness + clearance (drawn at least a few px in)
     $i = [math]::Max($V.T + $V.C, 6 / $s)
     Add-Poly3 $List 'inner' $T @(@($i, $i, $H), @(($W - $i), $i, $H), @(($W - $i), ($L - $i), $H), @($i, ($L - $i), $H)) $true
+    if ($Layout -and $Layout.Split -ge 2) {   # seam between the 2 halves of the inner panel
+        Add-Poly3 $List 'inner' $T @(@(($W / 2), $i, $H), @(($W / 2), ($L - $i), $H)) $false
+    }
 
     $r = [math]::Max($V.D / 2, 4 / $s)
     $lenWall = $null; $widWall = $null
@@ -234,6 +237,9 @@ function Add-OrthoView($List, $V, $Layout, [string]$View, [double[]]$Rect, [bool
         if ($View -eq 'Top') {
             $i = [math]::Max($thick + $V.C, 5 / $s)
             Add-Poly3 $List 'edge' $T @(@($i, $i, $H), @(($W - $i), $i, $H), @(($W - $i), ($L - $i), $H), @($i, ($L - $i), $H)) $true
+            if ($Layout -and $Layout.Split -ge 2) {
+                Add-Poly3 $List 'edge' $T @(@(($W / 2), $i, $H), @(($W / 2), ($L - $i), $H)) $false
+            }
         }
         $tw = [math]::Max($thick, 4 / $s); $ext = 8 / $s
         foreach ($set in @(@($lenWall, 'y', 0, 1), @($lenWall, 'y', $W, -1), @($widWall, 'x', 0, 1), @($widWall, 'x', $L, -1))) {

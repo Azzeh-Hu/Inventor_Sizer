@@ -1,0 +1,34 @@
+{
+  "family": "TP",
+  "description": "Door panel: 2 hinges (Scharnier) + 2 lockable handles (Türgriff abschließbar)",
+  "variants": [
+    {
+      "id": "TP",
+      "name": "TP - door panel (42 mm)",
+      "enabled": true,
+      "prefix": "TP-",
+      "height": 42,
+      "master": "",
+      "defaults": {
+        "HoleZ": 20
+      },
+      "minHolesL": 2,
+      "notes": "master: path of the master assembly, e.g. the 519x1194x42 one. minHolesL 2: the model has a fixed hole at each end of the length wall plus a pattern of HoleCountL - 1.",
+      "parts": [
+        {
+          "suffix": "-Au",
+          "description": "Outer tray (Au)",
+          "role": "outer",
+          "qty": 1
+        },
+        {
+          "suffix": "-In",
+          "splitSuffix": "-In-2T",
+          "description": "Inner panel (In)",
+          "role": "inner",
+          "qty": 1
+        }
+      ]
+    }
+  ]
+}

@@ -1,7 +1,9 @@
 # Inventor Sizer
 
 Change the size in the assembly name, for example `FP-386x656x47` → `FP-800x1200x47`, set the
-number of holes per wall, and the assembly and all its parts resize. A vector drawing of the
+number of holes per wall, and the assembly and all its parts resize. It handles the three panel
+types FP (47 mm), TP (42 mm) and RP (44 mm), and splits the inner panel in two above 500 mm
+width. The equations and the setup per master are in [docs/PANEL_RULES.md](docs/PANEL_RULES.md). A vector drawing of the
 panel (any view, with bill of materials and reference axis) updates as you type, before
 anything touches Inventor.
 
@@ -28,11 +30,12 @@ Nothing to install. The tool uses:
 | `lib\ParamFile.ps1` | `Parameters.xml` in Inventor's parameter-export format. |
 | `lib\HoleRules.ps1` | Hole count → positions, pattern values and the blocking checks. |
 | `lib\Standards.ps1` | Product types from `standards\` and the bill of materials. |
-| `lib\Inventor.ps1` | Inventor COM: open, push parameters, rebuild, save as new size, Part Number. |
+| `lib\Inventor.ps1` | Inventor COM: open, push parameters, inner-panel split, rebuild, save as new size, Part Number. |
 | `lib\Twin.ps1` | Drawings: views, bill of materials, axis, painting in the window, SVG sheet. |
-| `standards\FP.json` | The FP standard: one entry per FP type. |
+| `standards\FP.json`, `TP.json`, `RP.json` | One file per panel type. |
+| `docs\PANEL_RULES.md` | Equations, the split rule, setup per master, open points. |
 | `Parameters.xml`, `settings.json` | Created on first run, next to the script. |
-| `setup-xml\` | One-time setup files for the 386 master documents. |
+| `setup-xml\` | One-time setup files for the FP (386) and TP (519, 724) master documents. |
 | `InventorSizer_excel.ps1` + `Launch_excel.bat` | The older Excel version (no hole rules, no drawing). |
 
 ## Using it
@@ -43,7 +46,9 @@ Nothing to install. The tool uses:
    - **Open assembly...**: browse for any `.iam`. Inventor is started if it isn't running.
    - **Read from Inventor**: uses the assembly that is already active in Inventor.
 3. Edit the **name** or the values in the **grid** (they stay in sync). `HolesL` and `HolesW`
-   set the holes per length wall and per width wall.
+   set the holes per length wall and per width wall. The name may start with a project number
+   (`6357-3 TP-519x1194x42`); the **Type** follows the prefix in front of the size, or the
+   height if there is none, and brings its own `HoleZ`.
 4. The drawing on the right updates as you type:
    - **View**: Isometric, Front, Back, Left, Right, Top or Bottom.
    - **Show hidden edges**: back edges, back-wall holes, floor and wall thickness as dashed lines.
@@ -53,7 +58,8 @@ Nothing to install. The tool uses:
    - **Save drawing (SVG)...** writes a drawing sheet: the isometric view top left, the front
      and top views in the middle area, hole notes, and the bill of materials.
 5. If a rule is broken, the reasons appear in red under the grid, the bad holes are red in the
-   drawing, and **Apply to Inventor** is greyed out.
+   drawing, and **Apply to Inventor** is greyed out. Grey text there is a note only (for
+   example that the inner panel will be split).
 6. Click **Apply to Inventor**:
    - **Name unchanged:** values go into Inventor, the model rebuilds, and the files are saved in place.
    - **Name changed:** the model is saved as **new files** (`FP-800x1200x47.iam`,
@@ -79,31 +85,41 @@ Under the grid, saved to `settings.json`:
 
 - **Minimum hole gap**: smallest distance between hole centres before Apply is blocked (default 10 mm).
 - **Sheet thickness** (Stärke): used for the centre-pair offset and the inner-panel size (default 1 mm).
+- **Split inner panel above width**: wider panels get 2 inner panels (default 500 mm, 0 = never).
+
+## Inner-panel split
+
+Above the split width the `-In` part is made half as wide and used twice. On Apply the app
+sets `InSplit = 2`, adds a second copy of the `-In` part to the assembly next to the first, and
+mates the two with three flush constraints on their origin planes. Going back below the split
+width deletes the second copy. A split panel always gets 4 holes on the width wall (2 edge
+holes + the centre pair), because each half has a hole at both of its ends. The `-In` part
+needs the `InSplit` parameter from its setup file; see [docs/PANEL_RULES.md](docs/PANEL_RULES.md).
 
 ## Product standards: `standards\`
 
-Each `*.json` file in `standards\` is one product family; each entry in `variants` is one type
-shown in the **Type** list. `FP.json` contains:
+Each `*.json` file in `standards\` is one panel type shown in the **Type** list.
 
-| Type | State |
-|---|---|
-| FP with 1 inner panel (`FP-`) | active; master `FP-386x656x47.iam` next to the app |
-| FP with 2 inner panels (`FP2-`) | prepared, `enabled: false` |
-| FP with 3 inner panels (`FP3-`) | prepared, `enabled: false` |
+| Type | Height | State |
+|---|---|---|
+| FP (`FP-`) | 47 | active; master `FP-386x656x47.iam` next to the app |
+| TP (`TP-`) | 42 | active; put the master path into `TP.json` |
+| RP (`RP-`) | 44 | prepared; waits for its parameter files and master path |
 
 Fields of a type:
 
 | Field | Meaning |
 |---|---|
 | `id`, `name` | Identifier and the text shown in the Type list. |
-| `enabled` | `false` hides the type until it's ready. |
-| `prefix` | Start of the assembly name, e.g. `FP-`. The type is picked automatically from the name. |
+| `enabled` | `false` hides the type. |
+| `prefix` | Text directly in front of the size, e.g. `TP-`. |
+| `height` | Panel height of the type. Used to recognise the type when the name has no prefix; another height only gives a note. |
+| `defaults` | Values set when the type is selected, e.g. `{ "HoleZ": 20 }`. |
+| `minHolesL` | Smallest hole count per length wall (TP: 2). |
+| `splitAxis` | `auto`, or `X`, `Y`, `Z`: the axis of the `-In` part its width runs along, if the app cannot tell. |
 | `master` | Master assembly for **Open master**. A relative path is relative to the app folder. |
-| `parts` | Bill of materials: `suffix` (added to the size, e.g. `-Au` → `386x656x47-Au`), `description`, `qty`, and `role`: `outer` (size W × L × H), `inner` (size reduced by 2 × thickness + 2 × clearance, height − thickness) or `other` (no size shown). |
+| `parts` | Bill of materials: `suffix`, optional `splitSuffix` (file ending of a split inner panel, e.g. `-In-2T`), `description`, `qty`, and `role`: `outer`, `inner` or `other`. |
 | `notes` | Free text, ignored by the app. |
-
-To add the 2-panel type later: build its master assembly, put its path in `master`, check the
-prefix and parts, and set `enabled` to `true`.
 
 ## Hole rules
 
@@ -118,6 +134,8 @@ always match). Diameter is fixed at 4.1 mm (read-only in the grid). `E` = HoleEd
 | 3, 4, 5, … | E from each end, the rest evenly spaced: (L − 2E) / (n − 1) | odd counts are refused |
 | 4 | (as above) | E from each end + a centre pair at W/2 ± 48.5 mm |
 | 6, 8, … | (as above) | evenly spaced, like the length wall |
+
+With a split inner panel the width wall takes 0 or 4 holes only; 2 is raised to 4.
 
 48.5 mm = HoleEdge − thickness − Clearance, so the -Au and -In holes line up.
 
@@ -139,6 +157,8 @@ always match). Diameter is fixed at 4.1 mm (read-only in the grid). `E` = HoleEd
 | `HoleOnL` / `HoleOnW` | Hole + pattern: *Feature Properties → Suppress if* `HoleOnL = 0`. |
 | `HoleMidOnW` | Centre-pair hole + pattern: *Suppress if* `HoleMidOnW = 0`. |
 | `HoleMidOffsetW` | Formula in the part: centre pair at `Width / 2 - HoleMidOffsetW`, pattern count 2, spacing `2 * HoleMidOffsetW`. |
+| `InSplit` | 1 or 2. `-In` width: `( Width - 2 * Stärke - 2 * Clearance ) / InSplit`. |
+| `InHolePitchW`, `InHoleCountW`, `InHoleMidOnW` | Width-wall hole pattern of the `-In` part (differs from the tray's when split). |
 
 Values are written as numbers in Inventor's internal units, so the Windows decimal setting
 (4,1 or 4.1) doesn't matter, and unchanged values are left alone.
@@ -153,8 +173,10 @@ correct import changes no geometry. Then build the hole patterns as described in
 | File | Import into |
 |---|---|
 | `386x656x47-Au-setup.xml` | `386x656x47-Au.ipt` |
-| `386x656x47-In-setup.xml` | `386x656x47-In.ipt` |
+| `386x656x47-In-setup.xml` | `386x656x47-In.ipt` (import again: it now adds `InSplit`) |
 | `FP-386x656x47-setup.xml` | `FP-386x656x47.iam` |
+| `6357-3 519x1194x42-Au-setup.xml`, `…-In-setup.xml`, `6357-3 TP-519x1194x42-setup.xml` | the TP 519 master |
+| `6357-3 724x1194x42-Au-setup.xml`, `…-In-2T-setup.xml` | the TP 724 parts |
 
 ## `Parameters.xml`
 
@@ -176,5 +198,7 @@ Inventor. Older files without `HolesL` / `HolesW` are upgraded automatically.
 ## Not done yet
 
 - Drawings (`.idw` / `.dwg`) aren't copied or renamed for new sizes.
-- The drawing shows one inner panel; for the 2- and 3-panel types only the bill of materials changes.
+- RP has no setup files yet.
+- Hinge and handle counts are fixed by the master (see docs/PANEL_RULES.md, section 8).
+- Building a whole box (profiles, corner joints, panels) is planned (section 9 there).
 - Read-only files (library, Content Center, Vault checked-in) are skipped. With Vault, check out first.
