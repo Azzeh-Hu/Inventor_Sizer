@@ -8,7 +8,10 @@
       "enabled": true,
       "prefix": "FP-",
       "height": 47,
-      "masters": {},
+      "masters": {
+        "2T": "masters\\FP\\2T\\6357-3 FP-726x1616x47.iam",
+        "1T": "masters\\FP\\1T\\6357-3 FP-276x1196x47.iam"
+      },
       "defaults": {
         "HoleZ": 22
       },
