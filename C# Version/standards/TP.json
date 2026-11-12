@@ -9,7 +9,7 @@
       "prefix": "TP-",
       "height": 42,
       "masters": {
-        "2T": "masters\\TP\\2T\\TP-400x1194x42.iam"
+        "2T": "masters\\TP\\2T\\1111 TP-400x1194x42.iam"
       },
       "defaults": {
         "HoleZ": 20
@@ -126,11 +126,6 @@
               "name": "HoleMidOnW",
               "value": "1 ul",
               "unit": "ul"
-            },
-            {
-              "name": "HoleMidOffsetW",
-              "value": "HoleEdge - Stärke - Clearance",
-              "unit": "mm"
             },
             {
               "name": "HingeEdge",

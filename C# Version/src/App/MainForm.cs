@@ -26,7 +26,9 @@ namespace InventorSizer
         string mode = "Panel", defaultsFor = "";
         GrModel gr;
         bool syncing;
-        static readonly string[] AutoParams = { "HolesL", "HolesW" }, FixedParams = { "HoleDia" }, CountParams = { "HingeCount", "HandleCount" };
+        static readonly string[] CountParams = { "HolesL", "HolesW" }, FixedParams = { "HoleDia_sides", "HoleDia_handle",
+        "HoleDia_hinge_small", "HoleDia_hinge_large" };
+        static readonly string[] AutoParams = { "HolesL", "HolesW" }, HardwareCountParams = { "HingeCount", "HandleCount" };
 
         // controls
         ComboBox typeBox, subBox, viewBox, presetBox;
@@ -602,7 +604,7 @@ namespace InventorSizer
             foreach (DataGridViewRow gr in grid.Rows)
             {
                 string name = Convert.ToString(gr.Cells["Name"].Value);
-                bool locked = FixedParams.Contains(name) || (settings.MaxHolePitch > 0 && AutoParams.Contains(name)) || (CountParams.Contains(name) && (std == null || std.HardwareCounts.Count == 0));
+                bool locked = FixedParams.Contains(name) || (settings.MaxHolePitch > 0 && AutoParams.Contains(name)) || (HardwareCountParams.Contains(name) && (std == null || std.HardwareCounts.Count == 0));
                 gr.ReadOnly = locked;
                 gr.DefaultCellStyle.ForeColor = locked ? Theme.Muted : Theme.Ink;
                 gr.Cells["Value"].Style.BackColor = locked ? Theme.Card : Theme.Paper;

@@ -24,7 +24,7 @@ namespace InventorSizer.Core
 
     public static class ParamFile
     {
-        public static readonly string[][] Defaults =
+        public static string[][] Defaults =
         {
             new[] { "Width", "386", "mm", "1st number in the file name" },
             new[] { "Length", "656", "mm", "2nd number in the file name" },
@@ -32,8 +32,12 @@ namespace InventorSizer.Core
             new[] { "HolesL", "3", "ul", "Holes per length wall (0, 1, 2, 3, ...)" },
             new[] { "HolesW", "2", "ul", "Holes per width wall (0, 1, 2, 4, 6, ...)" },
             new[] { "HoleEdge", "50", "mm", "Hole centre distance from the panel edge (-Au)" },
+            new[] { "HolePitchL", "200", "mm", "distance between each hole for (-In) and (-Au), (length - (2 * HoleEdge))/(HolesL - 1)" },
             new[] { "HoleZ", "22", "mm", "Hole centre height" },
-            new[] { "HoleDia", "4.1", "mm", "Hole diameter (fixed)" },
+            new[] { "HoleDia_sides", "4.1", "mm", "Hole diameter (fixed)" },
+            new[] { "HoleDia_handle", "9.0", "mm", "Hole diameter (fixed)" },
+            new[] { "HoleDia_hinge_small", "4.1", "mm", "Hole diameter (fixed)" },
+            new[] { "HoleDia_hinge_large", "11", "mm", "Hole diameter (fixed)" },
             new[] { "Clearance", "0.5", "mm", "Gap between -In and the -Au wall (assembly offsets)" },
             new[] { "HingeCount", "2", "ul", "TP: hinges per door, evenly spaced (other types: not used)" },
             new[] { "HandleCount", "2", "ul", "TP: handles per door, evenly spaced (other types: not used)" },

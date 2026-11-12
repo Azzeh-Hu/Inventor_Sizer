@@ -9,7 +9,7 @@
       "prefix": "FP-",
       "height": 47,
       "masters": {
-        "2T": "masters\\FP\\2T\\6357-3 FP-726x1616x47.iam",
+        "2T": "masters\\FP\\2T\\1111 FP-555x1500x47.iam",
         "1T": "masters\\FP\\1T\\6357-3 FP-276x1196x47.iam"
       },
       "defaults": {
@@ -42,7 +42,7 @@
             },
             {
               "name": "Length",
-              "value": "656 mm",
+              "value": "656 mm ",
               "unit": "mm"
             },
             {
@@ -61,7 +61,12 @@
               "unit": "mm"
             },
             {
-              "name": "HoleDia",
+              "name": "HoleDia_sides",
+              "value": "4.1 mm",
+              "unit": "mm"
+            },
+            {
+              "name": "HoleDia_handle",
               "value": "4.1 mm",
               "unit": "mm"
             },

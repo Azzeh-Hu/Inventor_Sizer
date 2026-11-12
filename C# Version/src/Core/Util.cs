@@ -14,6 +14,14 @@ namespace InventorSizer.Core
     {
         public static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
 
+        static U()
+        {
+            CultureInfo.DefaultThreadCurrentCulture = Inv;
+            CultureInfo.DefaultThreadCurrentUICulture = Inv;
+            CultureInfo.CurrentCulture = Inv;
+            CultureInfo.CurrentUICulture = Inv;
+        }
+
         // Parameters encoded in the file name, in order: [project ]<type>-<Width>x<Length>x<Height>
         public static readonly string[] SizeParams = { "Width", "Length", "Height" };
         public static readonly Regex SizeRegex = new Regex(@"(\d+(?:\.\d+)?)x(\d+(?:\.\d+)?)x(\d+(?:\.\d+)?)", RegexOptions.Compiled);
