@@ -6,3 +6,8 @@
 /src/obj/
 /src/bin/
 devlog.txt
+# Assembly Reader add-in build output
+/addin/bin/
+/addin/obj/
+/addin/tests/bin/
+/addin/tests/obj/

@@ -45,6 +45,13 @@ fallback until the C# version has been checked in daily use. Both read the same 
 - **Windows may warn** about a downloaded, unsigned exe. Right-click → *Properties* → *Unblock*, or
   build it yourself.
 
+## Assembly Reader: an add-in inside Inventor
+
+`addin\` holds a small Inventor add-in: a button on the **Tools** tab that opens a window with
+everything in the active assembly or part (components, constraints, parameters, features,
+sketches, iProperties, and every API property of the selected item). It only reads. Build and
+install steps are in [addin/README.md](addin/README.md).
+
 ## Requirements
 
 Nothing to install. The tool uses:

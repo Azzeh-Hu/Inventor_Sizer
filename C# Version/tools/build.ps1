@@ -12,9 +12,13 @@
     -Test     also compile src/Core + tests against the running .NET and run the tests
     -TestData folder with the GR export files used by the tests (optional)
 
+    -InventorDir  also build the Assembly Reader add-in (addin\bin\InventorSizer.Reader.dll) against
+              this Inventor install, e.g. "C:\Program Files\Autodesk\Inventor 2024". For Inventor
+              2024 and older; for 2025 and newer build addin\InventorReader.csproj with dotnet.
+
     Visual Studio / dotnet users can build src\InventorSizer.csproj instead.
 #>
-param([string]$RefDir = '', [switch]$Test, [string]$TestData = '', [switch]$NoApp)
+param([string]$RefDir = '', [switch]$Test, [string]$TestData = '', [switch]$NoApp, [string]$InventorDir = '')
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot
 $src = Join-Path $root 'src'
@@ -50,12 +54,29 @@ if ($Test) {
     if ($code -ne 0) { throw "$code test(s) failed" }
 }
 
-if (-not $NoApp) {
+function Get-Net48Refs {
     if (-not $RefDir -or -not (Test-Path (Join-Path $RefDir 'mscorlib.dll'))) { throw 'Give -RefDir: the folder with the .NET Framework 4.8 reference assemblies.' }
     $names = 'mscorlib', 'System', 'System.Core', 'System.Drawing', 'System.Windows.Forms', 'System.Xml', 'System.Data', 'Microsoft.CSharp', 'Microsoft.VisualBasic', 'System.Numerics'
     $refs = @(foreach ($n in $names) { [Microsoft.CodeAnalysis.MetadataReference]::CreateFromFile((Join-Path $RefDir "$n.dll")) })
     $facades = Join-Path $RefDir 'Facades'
     if (Test-Path $facades) { $refs += @(Get-ChildItem $facades -Filter *.dll | ForEach-Object { [Microsoft.CodeAnalysis.MetadataReference]::CreateFromFile($_.FullName) }) }
+    $refs
+}
+
+if (-not $NoApp) {
+    $refs = @(Get-Net48Refs)
     $app = @(Get-ChildItem (Join-Path $src 'App') -Recurse -Filter *.cs | ForEach-Object FullName)
     [void](Invoke-Compile 'InventorSizer' ($core + $app) $refs ([Microsoft.CodeAnalysis.OutputKind]::WindowsApplication) (Join-Path $root 'InventorSizer.exe'))
+}
+
+if ($InventorDir) {
+    $interop = Join-Path $InventorDir 'Bin\Public Assemblies\Autodesk.Inventor.Interop.dll'
+    if (-not (Test-Path $interop)) { throw "Autodesk.Inventor.Interop.dll was not found under $InventorDir" }
+    $refs = @(Get-Net48Refs) + [Microsoft.CodeAnalysis.MetadataReference]::CreateFromFile($interop)
+    $addin = Join-Path $root 'addin'
+    $files = @(Get-ChildItem $addin -Filter *.cs | ForEach-Object FullName)
+    $bin = Join-Path $addin 'bin'
+    [void](New-Item -ItemType Directory -Force $bin)
+    [void](Invoke-Compile 'InventorSizer.Reader' $files $refs ([Microsoft.CodeAnalysis.OutputKind]::DynamicallyLinkedLibrary) (Join-Path $bin 'InventorSizer.Reader.dll'))
+    Copy-Item (Join-Path $addin 'InventorSizer.Reader.addin') $bin -Force
 }
