@@ -405,7 +405,7 @@ namespace InventorSizer
             }
             var lay = HoleRules.Layout(values, set, s);
             if (lay.Errors.Count > 0) throw new SizerException("Not applied - fix these first:\n" + string.Join("\n", lay.Errors));
-            if (string.IsNullOrEmpty(s.Master) || !File.Exists(s.Master)) throw new SizerException($"There is no master for {s.Name}. Click 'Set up master...' and pick its assembly (or put it in masters\\{s.Id}\\ next to the app).");
+            if (string.IsNullOrEmpty(s.Master) || !File.Exists(s.Master)) throw new SizerException($"There is no master for {s.Name} in masters\\{s.Id}\\ next to the app. Start the dev run (Dev run.cmd), click 'Set up master...' and save the master into Inventor Sizer.");
             if (newName == Path.GetFileNameWithoutExtension(s.Master)) throw new SizerException("The new panel needs another name than the master; the master is never changed.");
             if (string.IsNullOrEmpty(set.OutputFolder)) throw new SizerException("Choose the folder for the new panel files first.");
             string target = Path.Combine(set.OutputFolder, newName + ".iam");
@@ -431,6 +431,50 @@ namespace InventorSizer
         }
 
         // ------------------------------------------------------------------ master setup
+
+        // Saves the open master as copies into the app's masters\<type>\ folder: the assembly and
+        // its sized parts (-Au, -In). Library parts (hinges, handles) stay where they are and
+        // the copy keeps pointing at them. The opened files on disk are not changed; in Inventor
+        // the open documents become the copies. Returns the copy's assembly path.
+        public static string SaveMasterIntoApp(Standard s, string dir)
+        {
+            dynamic asm = ActiveAssembly();
+            string asmPath = (string)asm.FullFileName;
+            var suffixes = s.PartSuffixes("inner").Concat(s.PartSuffixes("outer")).ToList();
+            var plan = new List<(dynamic Doc, string From, string To)>();
+            foreach (var doc in ModelDocuments(asm))
+            {
+                string from = (string)doc.FullFileName;
+                string b = Path.GetFileNameWithoutExtension(from);
+                if (from == asmPath || !suffixes.Any(x => b.EndsWith(x, StringComparison.OrdinalIgnoreCase))) continue;
+                plan.Add((doc, from, Path.Combine(dir, Path.GetFileName(from))));
+            }
+            plan.Add((asm, asmPath, Path.Combine(dir, Path.GetFileName(asmPath))));
+            plan = plan.Where(p => !string.Equals(p.From, p.To, StringComparison.OrdinalIgnoreCase)).ToList();   // already the app's copy
+            dynamic inv = asm.Parent;
+            var open = new List<string>();
+            foreach (var d in Items(inv.Documents))
+            {
+                string f; try { f = (string)d.FullFileName; } catch { continue; }
+                if (plan.Any(p => string.Equals(p.To, f, StringComparison.OrdinalIgnoreCase))) open.Add(f);
+            }
+            if (open.Count > 0) throw new SizerException("An older copy of the master is open in Inventor. Close these, then set up the master again:\n" + string.Join("\n", open));
+            Directory.CreateDirectory(dir);
+            inv.SilentOperation = true;
+            try
+            {
+                foreach (var item in plan)
+                {
+                    if (File.Exists(item.To)) File.Delete(item.To);
+                    item.Doc.SaveAs(item.To, false);
+                    Log.Write($"  saved {item.To}");
+                }
+                asm.Save2(true);
+            }
+            finally { inv.SilentOperation = false; }
+            Log.Write($"The master of {s.Name} is now stored in Inventor Sizer: {(string)asm.FullFileName}");
+            return (string)asm.FullFileName;
+        }
 
         public static void SaveActiveAssembly()
         {
@@ -466,7 +510,7 @@ namespace InventorSizer
             string mark = ReadSetupMark(asm);
             if (mark == SetupMark(s)) return;
             string has = mark == "" ? "it has never been set up with this version of the app" : $"it was set up as \"{mark}\"";
-            throw new SizerException($"The master {Path.GetFileName((string)asm.FullFileName)} is not set up for the {s.Id} standard (setup version {s.SetupVersion}): {has}.\n\nClick \"Set up master...\", choose this master, check that nothing moved and save it, then Apply again.");
+            throw new SizerException($"The master {Path.GetFileName((string)asm.FullFileName)} is not set up for the {s.Id} standard (setup version {s.SetupVersion}): {has}.\n\nStart the dev run (Dev run.cmd), click \"Set up master...\", choose this master, check that nothing moved and save it, then Apply again.");
         }
 
         // Applies the type's "setup" (standards\<type>.json) to the open master: per role the

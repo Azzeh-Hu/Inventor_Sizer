@@ -11,3 +11,6 @@ devlog.txt
 /addin/obj/
 /addin/tests/bin/
 /addin/tests/obj/
+# Inventor leftovers next to the stored masters
+OldVersions/
+lockfile.lck

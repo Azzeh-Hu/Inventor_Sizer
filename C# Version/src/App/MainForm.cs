@@ -15,6 +15,7 @@ namespace InventorSizer
     public class MainForm : Form
     {
         readonly string Root, ParamPath, SettingsPath, StandardsDir, GrPresetDir;
+        string titleTail = "";
         Settings settings;
         List<Standard> standards = new List<Standard>();
         Standard std;
@@ -297,7 +298,8 @@ namespace InventorSizer
             Step("Load", () =>
             {
                 // The build time shows at once whether this is the exe you just built.
-                try { string built = File.GetLastWriteTime(Application.ExecutablePath).ToString("yyyy-MM-dd HH:mm"); Log.Write($"Inventor Sizer, built {built}"); Text += $"  (built {built})"; } catch { }
+                try { string built = File.GetLastWriteTime(Application.ExecutablePath).ToString("yyyy-MM-dd HH:mm"); Log.Write($"Inventor Sizer, built {built} - {(Program.Dev ? "dev run" : "user run")}"); titleTail = $"  (built {built})" + (Program.Dev ? "  -  DEV RUN" : ""); Text += titleTail; } catch { }
+                foreach (Control c in new Control[] { btnMaster, btnSetMaster, btnLearn }) c.Visible = Program.Dev;
                 standards = Standards.Read(StandardsDir, Root);
                 typeBox.Items.Clear();
                 foreach (var s in standards) typeBox.Items.Add(s.ToString());
@@ -535,9 +537,18 @@ namespace InventorSizer
             Inv.MasterSetup(std);
             Standards.SetMaster(std, file, Root);
             SelectStandard(std);
-            string save = Choose("Save the master?", "The setup is done. Look at the model in Inventor: nothing should have moved.\n\nSave master: saves the assembly and its parts, so Apply can use it.\nNot now: leaves it open and unsaved; save it yourself in Inventor, or close it without saving to undo the setup.",
-                "Save master", "Not now");
-            if (save == "Save master") Inv.SaveActiveAssembly();
+            string store = Path.Combine(Root, "masters", std.Id);
+            string save = Choose("Save the master?", "The setup is done. Look at the model in Inventor: nothing should have moved.\n\n" +
+                $"Save into Inventor Sizer: saves the assembly and its {string.Join(" / ", std.Parts.Select(p => p.Suffix))} parts as copies in\n{store}\nand uses that copy as the master. Users then need no setup. The files you opened stay as they were on disk.\n\n" +
+                "Save where it is: saves the opened files themselves.\n\nNot now: leaves it open and unsaved; close it without saving to undo the setup.",
+                "Save into Inventor Sizer", "Save where it is", "Not now");
+            if (save == "Save into Inventor Sizer")
+            {
+                string copy = Inv.SaveMasterIntoApp(std, store);
+                Standards.SetMaster(std, copy, Root);
+                SelectStandard(std);
+            }
+            else if (save == "Save where it is") Inv.SaveActiveAssembly();
             else Log.Write("The master is not saved yet. Apply uses it only after it is saved.");
         }
 
@@ -609,8 +620,9 @@ namespace InventorSizer
             bool g = m == "GR";
             btnMode.Text = g ? "Switch to panel editing" : "Switch to GR editing";
             modeLabel.Text = g ? "Mode: GR editing (unit frame)" : "Mode: panel editing (FP / RP / TP)";
-            Text = "Inventor Sizer - " + (g ? "GR editing" : "panel editing");
-            foreach (Control c in new Control[] { typeBox, btnMaster, btnSetMaster, nameBox, btnApply, btnReload, btnLearn, chkHidden, grid, settingsBox }) c.Visible = !g;
+            Text = "Inventor Sizer - " + (g ? "GR editing" : "panel editing") + titleTail;
+            foreach (Control c in new Control[] { typeBox, nameBox, btnApply, btnReload, chkHidden, grid, settingsBox }) c.Visible = !g;
+            foreach (Control c in new Control[] { btnMaster, btnSetMaster, btnLearn }) c.Visible = !g && Program.Dev;   // dev run only
             foreach (Control c in new Control[] { btnGrLoad, btnGrInv, btnOpenGr, presetBox, presetLabel, grPanel }) c.Visible = g;
             if (g) { errLabel.Visible = false; UpdatePresets(); UpdateGrGrid(); UpdateDrawing(); } else UpdatePreview();
         }
