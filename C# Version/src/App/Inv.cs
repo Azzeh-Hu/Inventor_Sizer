@@ -553,9 +553,15 @@ namespace InventorSizer
             var t = Hardware.FromCircles(circles, min, size, W, L, H, ruleDia, ruleZ);
             t.Source = (string)asm.FullFileName; t.Learned = DateTime.Now.ToString("yyyy-MM-dd HH:mm");
             t.Notes = "U / V: hole position. from = start, end or mid of the span: width (U) and length (V) on the face; along the wall (U) and height (V) on a wall.";
+            int grouped = Hardware.KeepGroups(s.Hardware, t);
+            if (s.HardwareCounts.Count > 0)
+            {
+                var without = s.HardwareCounts.Keys.Where(g => !t.Holes.Any(h => h.Group == g)).ToList();
+                if (without.Count > 0) throw new SizerException($"The learned holes could not be sorted into {string.Join(" / ", without)} holes, so {string.Join(" / ", s.HardwareCounts.Values.Select(c => c.Param))} would stop working. Nothing was saved; the hardware holes in {s.File} stay as they are.");
+            }
             Standards.UpdateVariant(s, v => v["hardware"] = t.ToJson());
             s.Hardware = t;
-            Log.Write($"Learned {t.Holes.Count} hardware hole(s) from {name}; skipped {t.RuleHolesSkipped} wall hole(s) made by the hole rules. Saved in {s.File}.");
+            Log.Write($"Learned {t.Holes.Count} hardware hole(s) from {name}; skipped {t.RuleHolesSkipped} wall hole(s) made by the hole rules; {grouped} sorted into hinge / handle groups. Saved in {s.File}.");
             foreach (var h in t.Holes) Log.Write($"  {h.Wall} {h.Side}: dia {U.F(h.Dia)}, {h.U.From} {U.F(h.U.Value)} / {h.V.From} {U.F(h.V.Value)}");
             return t;
         }

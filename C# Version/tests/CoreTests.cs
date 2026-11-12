@@ -168,6 +168,12 @@ namespace InventorSizer.Tests
             Check("template", string.Join(" ; ", tpl.Holes.Select(x => $"{x.Wall}/{x.Side}/{U.F(x.Dia)}/{x.U.From}:{U.F(x.U.Value)}/{x.V.From}:{U.F(x.V.Value)}")),
                   "face/bottom/9/start:22/start:161 ; face/bottom/9/start:22/end:161 ; face/bottom/4.1/end:11/start:98 ; face/bottom/4.1/end:11/end:98 ; face/bottom/6/mid:58.5/start:300 ; length/x0/6/start:300/start:30");
             Check("rule skipped", tpl.RuleHolesSkipped, 1);
+            // as read from the TP master in test run 1: range box 0.002 mm larger per side, wall holes 20 from the rim
+            var real = new[] { C(161.002, 22.002, 0, up, 9), C(98.002, 716.002, 0, up, 4.1), C(98.002, 704.502, 0, up, 11), C(50.002, 0, 22.002, side, 4.1) };
+            var learned = Hardware.FromCircles(real, new double[] { 0, 0, 0 }, new double[] { 1194.004, 724.004, 42.004 }, 724, 1194, 42, 4.1, 20);
+            Check("learned without box padding", string.Join(" ; ", learned.Holes.Select(x => $"{U.F(x.Dia)}/{x.U.From}:{U.F(x.U.Value)}/{x.V.From}:{U.F(x.V.Value)}")), "9/start:22/start:161 ; 4.1/end:8/start:98 ; 11/end:19.5/start:98");
+            Check("rule hole measured from the rim skipped", learned.RuleHolesSkipped, 1);
+            Check("groups kept", $"{Hardware.KeepGroups(Stds().First(s => s.Id == "TP").Hardware, learned)} {string.Join(",", learned.Holes.Select(x => x.Group))}", "3 handle,hinge,hinge");
             Throws("size mismatch", () => Hardware.FromCircles(circles, new double[] { 0, 0, 0 }, new double[] { 1194, 519, 42 }, 724, 1194, 42, 4.1, 20));
             var placed = Hardware.Place(tpl, 724, 1300, 42);
             Check("placed", string.Join(" ", placed.Select(x => $"{U.F(x.X)},{U.F(x.Y)},{U.F(x.Z)},{x.Axis}")), "22,161,0,z 22,1139,0,z 713,98,0,z 713,1202,0,z 420.5,300,0,z 0,300,30,x");
