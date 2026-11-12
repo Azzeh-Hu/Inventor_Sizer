@@ -119,6 +119,7 @@ namespace InventorSizer.Core
         public double SplitWidth = 500;    // mm, wider panels get the inner panel split in 2; 0 = never
         public double MaxHolePitch = 400;  // mm, automatic hole counts; 0 = by hand
         public string OutputFolder = "";   // this session only
+        public int ForceSplit;             // sub type chosen in the window: 1 = 1T, 2 = 2T, 0 = by SplitWidth (not saved)
 
         public static Settings Read(string path)
         {

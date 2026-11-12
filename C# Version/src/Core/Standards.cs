@@ -21,7 +21,11 @@ namespace InventorSizer.Core
 
     public class Standard
     {
-        public string Id, Name, Family, Prefix, Master = "", File = "", FilePath = "";
+        public string Id, Name, Family, Prefix, File = "", FilePath = "";
+        // One master per sub type: "1T" (one inner panel) and "2T" (inner panel in 2 parts).
+        public Dictionary<string, string> Masters = new Dictionary<string, string>();
+        public string MasterFor(string sub) => Masters.TryGetValue(sub, out var m) ? m : "";
+        public bool HasMaster(string sub) => MasterFor(sub) != "" && System.IO.File.Exists(MasterFor(sub));
         public List<StandardPart> Parts = new List<StandardPart>();
         public double Height;
         public Dictionary<string, double> Defaults = new Dictionary<string, double>();
@@ -98,7 +102,7 @@ namespace InventorSizer.Core
                         if (v.Obj("hardware") != null) s.Hardware = HoleTemplate.FromJson(v.Obj("hardware"));
                         var counts = v.Obj("hardwareCounts");
                         if (counts != null) foreach (var k in counts.OrderedKeys) { var c = counts.Obj(k); s.HardwareCounts[k] = (c.Str("param"), c.Str("pitchParam")); }
-                        s.Master = ResolveMaster(v.Str("master"), s.Id, root);
+                        foreach (var sub in SubTypes) s.Masters[sub] = ResolveMaster(v.Obj("masters")?.Str(sub), s.Id, sub, root);
                         list.Add(s);
                     }
                 }
@@ -114,15 +118,19 @@ namespace InventorSizer.Core
             return list;
         }
 
+        public static readonly string[] SubTypes = { "1T", "2T" };
+        public static string SubOf(int split) => split >= 2 ? "2T" : "1T";
+
         // The path in the file (relative = to the app folder), else the first assembly in
-        // masters\<type id>\ next to the app.
-        public static string ResolveMaster(string stored, string id, string root)
+        // masters\<type id>\<sub type>\ next to the app.
+
+        public static string ResolveMaster(string stored, string id, string sub, string root)
         {
-            string master = stored ?? "";
+            string master = (stored ?? "").Replace('\\', Path.DirectorySeparatorChar);
             if (master != "" && !Path.IsPathRooted(master)) master = Path.Combine(root, master);
             if (master == "" || !System.IO.File.Exists(master))
             {
-                var dir = Path.Combine(root, "masters", id);
+                var dir = Path.Combine(root, "masters", id, sub);
                 if (Directory.Exists(dir))
                 {
                     var found = Directory.GetFiles(dir, "*.iam").OrderBy(f => f, StringComparer.OrdinalIgnoreCase).FirstOrDefault();
@@ -141,13 +149,18 @@ namespace InventorSizer.Core
             System.IO.File.WriteAllText(s.FilePath, Json.Write(json), new UTF8Encoding(false));
         }
 
-        public static void SetMaster(Standard s, string path, string root)
+        public static void SetMaster(Standard s, string sub, string path, string root)
         {
             var r = root.TrimEnd('\\', '/') + Path.DirectorySeparatorChar;
             var store = path.StartsWith(r, StringComparison.OrdinalIgnoreCase) ? path.Substring(r.Length) : path;
-            UpdateVariant(s, v => v["master"] = store);
-            s.Master = path;
-            Log.Write($"Master of {s.Name}: {path} (saved in {s.File})");
+            UpdateVariant(s, v =>
+            {
+                if (v.Obj("masters") == null) v["masters"] = new JsonObject();
+                v.Obj("masters")[sub] = store;
+                v.Remove("master");   // the single master of older versions
+            });
+            s.Masters[sub] = path;
+            Log.Write($"Master of {s.Name}, sub type {sub}: {path} (saved in {s.File})");
         }
 
         // Splits an assembly name around its size. The type is the one whose prefix sits directly

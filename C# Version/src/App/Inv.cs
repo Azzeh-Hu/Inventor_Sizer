@@ -405,8 +405,9 @@ namespace InventorSizer
             }
             var lay = HoleRules.Layout(values, set, s);
             if (lay.Errors.Count > 0) throw new SizerException("Not applied - fix these first:\n" + string.Join("\n", lay.Errors));
-            if (string.IsNullOrEmpty(s.Master) || !File.Exists(s.Master)) throw new SizerException($"There is no master for {s.Name} in masters\\{s.Id}\\ next to the app. Start the dev run (Dev run.cmd), click 'Set up master...' and save the master into Inventor Sizer.");
-            if (newName == Path.GetFileNameWithoutExtension(s.Master)) throw new SizerException("The new panel needs another name than the master; the master is never changed.");
+            string sub = Standards.SubOf(lay.Split), master = s.MasterFor(sub);
+            if (!s.HasMaster(sub)) throw new SizerException($"There is no {sub} master for {s.Name} (masters\\{s.Id}\\{sub}\\ next to the app is empty). Start the dev run (Dev run.cmd), click 'Set up master...', choose a {s.Id} assembly with {(sub == "2T" ? "2 inner panels" : "1 inner panel")} and save it into Inventor Sizer.");
+            if (newName == Path.GetFileNameWithoutExtension(master)) throw new SizerException("The new panel needs another name than the master; the master is never changed.");
             if (string.IsNullOrEmpty(set.OutputFolder)) throw new SizerException("Choose the folder for the new panel files first.");
             string target = Path.Combine(set.OutputFolder, newName + ".iam");
             if (File.Exists(target) && !overwrite) throw new SizerException($"{target} already exists.");
@@ -418,7 +419,8 @@ namespace InventorSizer
             Log.Write($"  inner panel: {lay.Split} x {U.F(lay.InnerWidth)}");
             foreach (var n in lay.Notes) Log.Write("  note: " + n);
 
-            var src = Open(s.Master);
+            Log.Write($"  master: {s.Id} {sub}  {master}");
+            var src = Open(master);
             try
             {
                 TestMasterSetup(src.Doc, s);
@@ -474,6 +476,21 @@ namespace InventorSizer
             finally { inv.SilentOperation = false; }
             Log.Write($"The master of {s.Name} is now stored in Inventor Sizer: {(string)asm.FullFileName}");
             return (string)asm.FullFileName;
+        }
+
+        // The sub type of the open master: 2T when it has 2 inner panels or a split inner part.
+        public static string MasterSubType(Standard s)
+        {
+            dynamic asm = ActiveAssembly();
+            List<dynamic> inner = OccurrencesBySuffix(asm, s.PartSuffixes("inner"));
+            var splitSuffixes = s.Parts.Where(p => p.Role == "inner" && !string.IsNullOrEmpty(p.SplitSuffix)).Select(p => p.SplitSuffix).ToList();
+            bool splitFile = false;
+            foreach (object o in inner)
+            {
+                string b; try { b = Path.GetFileNameWithoutExtension((string)((dynamic)o).Definition.Document.FullFileName); } catch { continue; }
+                if (splitSuffixes.Any(x => b.EndsWith(x, StringComparison.OrdinalIgnoreCase))) splitFile = true;
+            }
+            return inner.Count >= 2 || splitFile ? "2T" : "1T";
         }
 
         public static void SaveActiveAssembly()

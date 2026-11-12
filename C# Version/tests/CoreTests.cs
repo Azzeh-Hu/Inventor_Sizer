@@ -65,14 +65,19 @@ namespace InventorSizer.Tests
             Check("tp hardware", tp.Hardware.Holes.Count, 20);
             // master lookup and saving, in a temporary app folder
             var tmp = Path.Combine(Path.GetTempPath(), "isz-" + Guid.NewGuid().ToString("N"));
-            Directory.CreateDirectory(Path.Combine(tmp, "standards")); Directory.CreateDirectory(Path.Combine(tmp, "masters", "TP"));
+            Directory.CreateDirectory(Path.Combine(tmp, "standards")); Directory.CreateDirectory(Path.Combine(tmp, "masters", "TP", "1T")); Directory.CreateDirectory(Path.Combine(tmp, "masters", "TP", "2T"));
             File.Copy(Path.Combine(Root, "standards", "TP.json"), Path.Combine(tmp, "standards", "TP.json"));
-            File.WriteAllText(Path.Combine(tmp, "masters", "TP", "6357-3 TP-724x1194x42.iam"), "x");
+            File.WriteAllText(Path.Combine(tmp, "masters", "TP", "2T", "6357-3 TP-724x1194x42.iam"), "x");
+            File.WriteAllText(Path.Combine(tmp, "masters", "TP", "1T", "TP-400x600x42.iam"), "x");
             var ms = Standards.Read(Path.Combine(tmp, "standards"), tmp);
-            Check("master from masters folder", Path.GetFileName(ms[0].Master), "6357-3 TP-724x1194x42.iam");
-            Standards.SetMaster(ms[0], Path.Combine(tmp, "masters", "TP", "6357-3 TP-724x1194x42.iam"), tmp);
+            Check("2T master from the file's path", Path.GetFileName(ms[0].MasterFor("2T")), "6357-3 TP-724x1194x42.iam");
+            Check("1T master from its folder", $"{Path.GetFileName(ms[0].MasterFor("1T"))} {ms[0].HasMaster("1T")}", "TP-400x600x42.iam True");
+            Standards.SetMaster(ms[0], "1T", Path.Combine(tmp, "masters", "TP", "1T", "TP-400x600x42.iam"), tmp);
             var again = Standards.Read(Path.Combine(tmp, "standards"), tmp)[0];
-            Check("master stored relative, rest kept", $"{Path.GetFileName(again.Master)} holes {again.Hardware.Holes.Count} setup {again.Setup != null}", "6357-3 TP-724x1194x42.iam holes 20 setup True");
+            Check("masters stored per sub type, rest kept", $"{Path.GetFileName(again.MasterFor("1T"))} {Path.GetFileName(again.MasterFor("2T"))} holes {again.Hardware.Holes.Count} setup {again.Setup != null}", "TP-400x600x42.iam 6357-3 TP-724x1194x42.iam holes 20 setup True");
+            Check("no master", $"[{Stds().First(s => s.Id == "RP").MasterFor("1T")}] {Stds().First(s => s.Id == "RP").HasMaster("1T")}", "[] False");
+            Check("sub type forced", $"{HoleRules.InnerSplit(300, new Settings { ForceSplit = 2 })} {HoleRules.InnerSplit(900, new Settings { ForceSplit = 1 })} {HoleRules.InnerSplit(900, new Settings())} {Standards.SubOf(2)} {Standards.SubOf(1)}", "2 1 2 2T 1T");
+            Check("the repo's TP 2T master is found", File.Exists(Stds().First(s => s.Id == "TP").MasterFor("2T")), true);
             Directory.Delete(tmp, true);
         }
 

@@ -29,10 +29,10 @@ namespace InventorSizer
         static readonly string[] AutoParams = { "HolesL", "HolesW" }, FixedParams = { "HoleDia" }, CountParams = { "HingeCount", "HandleCount" };
 
         // controls
-        ComboBox typeBox, viewBox, presetBox;
+        ComboBox typeBox, subBox, viewBox, presetBox;
         TextBox nameBox, folderBox, logBox, devBox, grNewName, grPrefix;
         Button btnMaster, btnSetMaster, btnMode, btnOpenGr, btnApply, btnReload, btnLearn, btnDevSave, btnSvg, btnGrLoad, btnGrInv, btnBrowse;
-        Label statusLabel, modeLabel, errLabel, folderInfo, grInfo, presetLabel;
+        Label statusLabel, masterLabel, modeLabel, errLabel, folderInfo, grInfo, presetLabel;
         CheckBox chkFolder, chkHidden, chkShared;
         NumericUpDown gapBox, thickBox, splitBox, pitchBox;
         DataTable table, grTable, grDivTable;
@@ -137,15 +137,20 @@ namespace InventorSizer
 
             // top
             var top = new Panel { Dock = DockStyle.Top, Height = 78 };
-            typeBox = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Location = new Point(110, 9), Width = 330 };
+            typeBox = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Location = new Point(110, 9), Width = 215 };
+            // Sub type: which master is used. Auto follows the split width in Settings.
+            subBox = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Location = new Point(330, 9), Width = 110 };
+            subBox.Items.AddRange(new object[] { "Auto (width)", "1T", "2T" });
+            subBox.SelectedIndex = 0;
             btnMaster = new Button { Text = "Open master", Location = new Point(450, 7), Size = new Size(120, 27) };
             btnSetMaster = new Button { Text = "Set up master...", Location = new Point(576, 7), Size = new Size(140, 27) };
             btnMode = new Button { Text = "Switch to GR editing", Location = new Point(730, 7), Size = new Size(190, 28), Font = new Font("Segoe UI", 9, FontStyle.Bold) };
             modeLabel = new Label { Text = "Mode: panel editing (FP / RP / TP)", AutoSize = true, Location = new Point(730, 48), ForeColor = Color.DarkBlue };
             statusLabel = new Label { AutoSize = true, Location = new Point(930, 12), ForeColor = Color.DimGray };
+            masterLabel = new Label { AutoSize = false, AutoEllipsis = true, Location = new Point(450, 48), Size = new Size(275, 18), ForeColor = Color.DimGray };
             nameBox = new TextBox { Location = new Point(110, 43), Width = 330, Font = new Font("Segoe UI", 11) };
             btnOpenGr = new Button { Text = "Open GR...", Location = new Point(450, 42), Size = new Size(120, 28), Visible = false };
-            top.Controls.AddRange(new Control[] { new Label { Text = "Type:", AutoSize = true, Location = new Point(10, 12) }, typeBox, btnMaster, btnSetMaster, btnMode, modeLabel, statusLabel,
+            top.Controls.AddRange(new Control[] { new Label { Text = "Type:", AutoSize = true, Location = new Point(10, 12) }, typeBox, subBox, masterLabel, btnMaster, btnSetMaster, btnMode, modeLabel, statusLabel,
                 new Label { Text = "Name:", AutoSize = true, Location = new Point(10, 47) }, nameBox, btnOpenGr });
             Controls.Add(top);
 
@@ -177,6 +182,7 @@ namespace InventorSizer
             };
             nameBox.TextChanged += (s, e) => { if (syncing) return; StandardFromName(); GridFromName(); UpdatePreview(); };
             typeBox.SelectedIndexChanged += (s, e) => { if (!syncing && typeBox.SelectedIndex >= 0) StandardFromList(); };
+            subBox.SelectedIndexChanged += (s, e) => { if (syncing || std == null) return; SettingsFromForm(); UpdateGridLocks(); UpdatePreview(); ShowMaster(); };
             viewBox.SelectedIndexChanged += (s, e) => UpdateDrawing();
             twin.Paint += (s, e) => Painter.Paint(e.Graphics, shapes);
             twin.Resize += (s, e) => { redraw.Stop(); redraw.Start(); };
@@ -185,7 +191,7 @@ namespace InventorSizer
             foreach (var nb in new[] { gapBox, thickBox, splitBox, pitchBox }) nb.ValueChanged += (s, e) => { if (!syncing) { SettingsFromForm(); UpdateGridLocks(); UpdatePreview(); } };
             btnBrowse.Click += (s, e) => { using (var d = new FolderBrowserDialog { Description = "Folder for new panels (this session only)" }) if (d.ShowDialog(this) == DialogResult.OK) folderBox.Text = d.SelectedPath; };
 
-            btnMaster.Click += (s, e) => Step("Open master", () => { Inv.OpenVisible(std.Master); Log.Write("Master open; the name is unchanged."); }, true);
+            btnMaster.Click += (s, e) => Step("Open master", () => { Inv.OpenVisible(std.MasterFor(CurrentSub())); Log.Write($"Master {std.Id} {CurrentSub()} open; the name is unchanged."); }, true);
             btnSetMaster.Click += (s, e) => Step("Set up master", SetUpMaster, true);
             btnMode.Click += (s, e) => Step("Switch mode", () => SetMode(mode == "GR" ? "Panel" : "GR"));
             btnApply.Click += (s, e) => Step("Apply to Inventor", ApplyPanel, true);
@@ -396,8 +402,26 @@ namespace InventorSizer
             std = s;
             syncing = true;
             try { typeBox.SelectedIndex = standards.IndexOf(s); } finally { syncing = false; }
-            btnMaster.Enabled = !string.IsNullOrEmpty(s.Master) && File.Exists(s.Master);
             if (grid.Rows.Count > 0) UpdateGridLocks();
+            ShowMaster();
+        }
+
+        // The sub type in use: the one chosen, or with Auto the one the width asks for.
+        string CurrentSub()
+        {
+            if (subBox.SelectedIndex > 0) return Standards.SubTypes[subBox.SelectedIndex - 1];
+            try { return Standards.SubOf(HoleRules.InnerSplit(Standards.Get(GridValues(), "Width"), settings)); } catch { return "1T"; }
+        }
+
+        // Shows which master the current type and sub type lead to.
+        void ShowMaster()
+        {
+            if (std == null || mode == "GR") return;
+            string sub = CurrentSub();
+            bool has = std.HasMaster(sub);
+            btnMaster.Enabled = has;
+            masterLabel.ForeColor = has ? Color.DimGray : Color.Firebrick;
+            masterLabel.Text = has ? $"Master {std.Id} {sub}: {Path.GetFileName(std.MasterFor(sub))}" : $"No {std.Id} {sub} master in masters\\{std.Id}\\{sub}";
         }
 
         // The type's own values (e.g. HoleZ), once per type change; the height only when picked from the list.
@@ -459,6 +483,7 @@ namespace InventorSizer
 
         void UpdatePreview()
         {
+            ShowMaster();
             if (mode == "GR") { UpdateDrawing(); return; }
             AutoHoles();
             values = GridValues();
@@ -509,6 +534,7 @@ namespace InventorSizer
             if (syncing) return;
             settings.MinHoleGap = (double)gapBox.Value; settings.Thickness = (double)thickBox.Value;
             settings.SplitWidth = (double)splitBox.Value; settings.MaxHolePitch = (double)pitchBox.Value;
+            settings.ForceSplit = subBox.SelectedIndex;   // 0 = Auto, 1 = 1T, 2 = 2T
         }
 
         void SaveFormSettings() { SettingsFromForm(); settings.Save(SettingsPath); }
@@ -526,7 +552,8 @@ namespace InventorSizer
             string file;
             using (var d = new OpenFileDialog { Filter = "Inventor assembly (*.iam)|*.iam", Title = $"Choose the master assembly for {std.Name}" })
             {
-                if (!string.IsNullOrEmpty(std.Master) && File.Exists(std.Master)) { d.InitialDirectory = Path.GetDirectoryName(std.Master); d.FileName = Path.GetFileName(std.Master); }
+                string cur = std.MasterFor(CurrentSub());
+                if (std.HasMaster(CurrentSub())) { d.InitialDirectory = Path.GetDirectoryName(cur); d.FileName = Path.GetFileName(cur); }
                 if (d.ShowDialog(this) != DialogResult.OK) { Log.Write("Cancelled: no master chosen."); return; }
                 file = d.FileName;
             }
@@ -535,17 +562,19 @@ namespace InventorSizer
             if (go != "Set up") { Log.Write("Cancelled: nothing was changed."); return; }
             Inv.OpenVisible(file);
             Inv.MasterSetup(std);
-            Standards.SetMaster(std, file, Root);
+            string sub = Inv.MasterSubType(std);   // 1 inner panel = 1T, 2 = 2T
+            Log.Write($"  this master is {std.Id} {sub}");
+            Standards.SetMaster(std, sub, file, Root);
             SelectStandard(std);
-            string store = Path.Combine(Root, "masters", std.Id);
-            string save = Choose("Save the master?", "The setup is done. Look at the model in Inventor: nothing should have moved.\n\n" +
+            string store = Path.Combine(Root, "masters", std.Id, sub);
+            string save = Choose($"Save the {std.Id} {sub} master?", $"The setup is done, and this is the {std.Id} {sub} master ({(sub == "2T" ? "2 inner panels" : "1 inner panel")}). Look at the model in Inventor: nothing should have moved.\n\n" +
                 $"Save into Inventor Sizer: saves the assembly and its {string.Join(" / ", std.Parts.Select(p => p.Suffix))} parts as copies in\n{store}\nand uses that copy as the master. Users then need no setup. The files you opened stay as they were on disk.\n\n" +
                 "Save where it is: saves the opened files themselves.\n\nNot now: leaves it open and unsaved; close it without saving to undo the setup.",
                 "Save into Inventor Sizer", "Save where it is", "Not now");
             if (save == "Save into Inventor Sizer")
             {
                 string copy = Inv.SaveMasterIntoApp(std, store);
-                Standards.SetMaster(std, copy, Root);
+                Standards.SetMaster(std, sub, copy, Root);
                 SelectStandard(std);
             }
             else if (save == "Save where it is") Inv.SaveActiveAssembly();
@@ -621,7 +650,7 @@ namespace InventorSizer
             btnMode.Text = g ? "Switch to panel editing" : "Switch to GR editing";
             modeLabel.Text = g ? "Mode: GR editing (unit frame)" : "Mode: panel editing (FP / RP / TP)";
             Text = "Inventor Sizer - " + (g ? "GR editing" : "panel editing") + titleTail;
-            foreach (Control c in new Control[] { typeBox, nameBox, btnApply, btnReload, chkHidden, grid, settingsBox }) c.Visible = !g;
+            foreach (Control c in new Control[] { typeBox, subBox, masterLabel, nameBox, btnApply, btnReload, chkHidden, grid, settingsBox }) c.Visible = !g;
             foreach (Control c in new Control[] { btnMaster, btnSetMaster, btnLearn }) c.Visible = !g && Program.Dev;   // dev run only
             foreach (Control c in new Control[] { btnGrLoad, btnGrInv, btnOpenGr, presetBox, presetLabel, grPanel }) c.Visible = g;
             if (g) { errLabel.Visible = false; UpdatePresets(); UpdateGrGrid(); UpdateDrawing(); } else UpdatePreview();

@@ -8,7 +8,7 @@
       "enabled": true,
       "prefix": "FP-",
       "height": 47,
-      "master": "K:\\2. GS-H\\GS-H-3500\\2. Projekte\\6357 Hotelneubau Huttenstraße\\Bleche\\6357-3 TP-724x1194x42.iam",
+      "masters": {},
       "defaults": {
         "HoleZ": 22
       },
