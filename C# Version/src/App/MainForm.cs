@@ -524,6 +524,32 @@ namespace InventorSizer
             folderInfo.Text = chkFolder.Checked ? "This session only: new panels go into the folder above." : "New panels are made from the type's master; you choose their folder on Apply.";
         }
 
+        // A question with named buttons; the first is the default, the last answers Esc and
+        // closing the box. Returns the text of the clicked button.
+        string Choose(string title, string text, params string[] buttons)
+        {
+            using (var f = new Form { Text = title, FormBorderStyle = FormBorderStyle.FixedDialog, StartPosition = FormStartPosition.CenterParent, MinimizeBox = false, MaximizeBox = false, ShowInTaskbar = false, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Padding = new Padding(12), Font = Font })
+            {
+                var label = new Label { Text = text, AutoSize = true, MaximumSize = new Size(560, 0), Margin = new Padding(0, 0, 0, 12) };
+                var row = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight, Anchor = AnchorStyles.Right, Margin = new Padding(0) };
+                string answer = buttons[buttons.Length - 1];
+                foreach (string b in buttons)
+                {
+                    var btn = new Button { Text = b, AutoSize = true, MinimumSize = new Size(100, 0) };
+                    btn.Click += (s, e) => { answer = b; f.Close(); };
+                    row.Controls.Add(btn);
+                    if (b == buttons[0]) f.AcceptButton = btn;
+                    if (b == buttons[buttons.Length - 1]) f.CancelButton = btn;
+                }
+                var stack = new TableLayoutPanel { AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, ColumnCount = 1, Dock = DockStyle.Fill };
+                stack.Controls.Add(label);
+                stack.Controls.Add(row);
+                f.Controls.Add(stack);
+                f.ShowDialog(this);
+                return answer;
+            }
+        }
+
         void ApplyPanel()
         {
             if (!chkFolder.Checked || folderBox.Text.Trim() == "")
@@ -536,7 +562,23 @@ namespace InventorSizer
             }
             SaveFormSettings();
             var set = settings.Clone(); set.OutputFolder = folderBox.Text.Trim();
-            var newName = Inv.ApplyPanel(nameBox.Text, GridParams(), set, ParamPath, standards, std);
+            // A panel of this name is there already: use it, replace it, or stop.
+            bool overwrite = false;
+            string target = Path.Combine(set.OutputFolder, nameBox.Text.Trim() + ".iam");
+            if (File.Exists(target))
+            {
+                string choice = Choose("Panel already exists", $"{Path.GetFileName(target)} already exists in\n{set.OutputFolder}\n\n" +
+                    "Use existing: opens that panel, nothing is written.\n" +
+                    "Overwrite: replaces the assembly and its parts with the values from this window. Every assembly that uses these files changes with them.",
+                    "Use existing", "Overwrite", "Cancel");
+                if (choice == "Use existing") { Inv.OpenVisible(target); return; }
+                if (choice != "Overwrite") { Log.Write("Cancelled: nothing was written."); return; }
+                overwrite = true;
+            }
+            Func<List<string>, bool> confirm = files => Choose("Part files already exist",
+                "These files already exist:\n" + string.Join("\n", files) + "\n\nOverwrite: replaces them. Every assembly that uses these files changes with them.",
+                "Overwrite", "Cancel") == "Overwrite";
+            var newName = Inv.ApplyPanel(nameBox.Text, GridParams(), set, ParamPath, standards, std, overwrite, confirm);
             syncing = true;
             try { nameBox.Text = newName; } finally { syncing = false; }
         }

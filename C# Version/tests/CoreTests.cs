@@ -76,6 +76,72 @@ namespace InventorSizer.Tests
             Directory.Delete(tmp, true);
         }
 
+        // The TP setup against the reader export of its master: every formula must name a
+        // dimension the master has, and a formula that is one user parameter must give the
+        // value the master has today (so "Set up master" moves nothing).
+        const string TpExport = "InventorReader _TP 2parts -In.xml";
+
+        static Dictionary<string, string> ExportParams(System.Xml.Linq.XElement doc)
+        {
+            var o = new Dictionary<string, string>();
+            var pars = doc.Elements("Node").FirstOrDefault(n => ((string)n.Attribute("Text")).StartsWith("Parameters ("));
+            if (pars == null) return o;
+            foreach (var p in pars.Elements("Node").SelectMany(g => g.Elements("Node")))
+            {
+                string text = (string)p.Attribute("Text"); int i = text.IndexOf(" = ");
+                if (i > 0) o[text.Substring(0, i)] = text.Substring(i + 3);
+            }
+            return o;
+        }
+
+        // "1094 mm / 3 ul", "361,000 mm - 0,5 mm", "4,1 mm" -> number; NaN for anything else.
+        static double PlainValue(string expr)
+        {
+            var tok = expr.Replace(',', '.').Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries).Where(x => x != "mm" && x != "ul" && x != "deg").ToArray();
+            if (tok.Length % 2 == 0 || !double.TryParse(tok[0], System.Globalization.NumberStyles.Float, U.Inv, out double v)) return double.NaN;
+            for (int i = 1; i < tok.Length; i += 2)
+            {
+                if (!double.TryParse(tok[i + 1], System.Globalization.NumberStyles.Float, U.Inv, out double b)) return double.NaN;
+                switch (tok[i]) { case "+": v += b; break; case "-": v -= b; break; case "*": v *= b; break; case "/": v /= b; break; default: return double.NaN; }
+            }
+            return v;
+        }
+
+        static void TestTpMaster()
+        {
+            string file = Path.Combine(Root, TpExport);
+            if (!File.Exists(file)) { Console.WriteLine($"skip (no {TpExport})"); return; }
+            var tp = Stds().First(s => s.Id == "TP");
+            var root = System.Xml.Linq.XDocument.Load(file).Root.Element("Node");
+            Check("tp master export is the setup's master", ((string)root.Attribute("Text")).StartsWith(tp.Setup.Str("master")), true);
+            var docs = root.Descendants("Node").Where(n => ((string)n.Attribute("Text")).StartsWith("File: ") && n.Attribute("ContentWrittenAbove") == null).ToList();
+            System.Xml.Linq.XElement Doc(string suffix) => docs.First(n => ((string)n.Attribute("Text")).EndsWith(suffix + ".ipt"));
+            var roles = new Dictionary<string, Dictionary<string, string>> { ["assembly"] = ExportParams(root), ["outer"] = ExportParams(Doc("-Au")), ["inner"] = ExportParams(Doc("-In-2T")) };
+            Check("tp setup version", tp.SetupVersion, 2);
+            foreach (var role in roles)
+            {
+                var setup = tp.Setup.Obj(role.Key);
+                var user = setup.Arr("user").OfType<JsonObject>().ToDictionary(u => u.Str("name"), u => u.Str("value"));
+                var missing = new List<string>(); var moved = new List<string>(); int same = 0;
+                foreach (var f in setup.Arr("formulas").OfType<JsonObject>())
+                {
+                    if (!role.Value.TryGetValue(f.Str("name"), out string now)) { missing.Add(f.Str("name")); continue; }
+                    if (!user.TryGetValue(f.Str("formula"), out string value)) continue;
+                    double a = PlainValue(value), b = PlainValue(now);
+                    if (double.IsNaN(a) || double.IsNaN(b)) continue;
+                    if (Math.Abs(a - b) < 1e-6) same++; else moved.Add($"{f.Str("name")} = {f.Str("formula")} gives {U.F(a)}, master has {U.F(b)}");
+                }
+                Check($"tp {role.Key}: formulas on dimensions the master does not have", string.Join(",", missing), "");
+                Check($"tp {role.Key}: formulas that would move the master", string.Join("; ", moved), "");
+                Check($"tp {role.Key}: formulas checked by value", same > 0, true);
+                Check($"tp {role.Key}: user parameters that clash with the master's own", string.Join(",", user.Keys.Where(role.Value.ContainsKey)), "");
+            }
+            // the app sends what the master's patterns need
+            var lay = HoleRules.Layout(V(724, 1194, 42, 4, 4), Set, tp);
+            Check("tp InWidth sent", lay.Params.First(p => p.Name == "InWidth").Value, 360.5);
+            Check("tp one hinge sends no pitch", Hardware.PitchParams(tp, 1194, new Dictionary<string, double> { ["hinge"] = 1, ["handle"] = 2 }).Select(p => p.Name).Single(), "HandlePitch");
+        }
+
         static void TestHardware()
         {
             var tp = Stds().First(s => s.Id == "TP");

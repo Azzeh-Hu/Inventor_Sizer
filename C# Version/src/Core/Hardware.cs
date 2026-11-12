@@ -195,13 +195,14 @@ namespace InventorSizer.Core
             return o;
         }
 
-        // HingePitch / HandlePitch for the master's linear patterns.
+        // HingePitch / HandlePitch for the master's patterns. With a count of 1 there is no pitch:
+        // the master keeps its own (a pattern spacing of 0 is not allowed in Inventor).
         public static List<Param> PitchParams(Standard s, double L, Dictionary<string, double> counts)
         {
             var o = new List<Param>();
             if (s == null || s.Hardware == null) return o;
             var p = Pitches(s.Hardware, L, counts);
-            foreach (var kv in s.HardwareCounts) if (p.TryGetValue(kv.Key, out var g)) o.Add(new Param(kv.Value.PitchParam, g.Pitch, "mm"));
+            foreach (var kv in s.HardwareCounts) if (p.TryGetValue(kv.Key, out var g) && g.Count > 1) o.Add(new Param(kv.Value.PitchParam, g.Pitch, "mm"));
             return o;
         }
     }

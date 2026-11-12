@@ -28,6 +28,7 @@ namespace InventorSizer.Core
         public int MinHolesL;
         public string SplitAxis = "auto";
         public JsonObject Setup;            // per role: { user: [{name,value,unit}], formulas: [{name,formula}] }
+        public int SetupVersion => Setup == null ? 0 : (int)Setup.Num("version");   // 0 = the master is not checked
         public HoleTemplate Hardware;       // hinge / handle holes
         public Dictionary<string, (string Param, string PitchParam)> HardwareCounts = new Dictionary<string, (string, string)>();
 
