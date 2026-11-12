@@ -30,7 +30,7 @@ namespace InventorSizer
         // controls
         ComboBox typeBox, viewBox, presetBox;
         TextBox nameBox, folderBox, logBox, devBox, grNewName, grPrefix;
-        Button btnMaster, btnSetMaster, btnMode, btnOpenGr, btnApply, btnReload, btnLearn, btnSetup, btnDevSave, btnSvg, btnGrLoad, btnGrInv, btnBrowse;
+        Button btnMaster, btnSetMaster, btnMode, btnOpenGr, btnApply, btnReload, btnLearn, btnDevSave, btnSvg, btnGrLoad, btnGrInv, btnBrowse;
         Label statusLabel, modeLabel, errLabel, folderInfo, grInfo, presetLabel;
         CheckBox chkFolder, chkHidden, chkShared;
         NumericUpDown gapBox, thickBox, splitBox, pitchBox;
@@ -138,7 +138,7 @@ namespace InventorSizer
             var top = new Panel { Dock = DockStyle.Top, Height = 78 };
             typeBox = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Location = new Point(110, 9), Width = 330 };
             btnMaster = new Button { Text = "Open master", Location = new Point(450, 7), Size = new Size(120, 27) };
-            btnSetMaster = new Button { Text = "Set master...", Location = new Point(576, 7), Size = new Size(140, 27) };
+            btnSetMaster = new Button { Text = "Set up master...", Location = new Point(576, 7), Size = new Size(140, 27) };
             btnMode = new Button { Text = "Switch to GR editing", Location = new Point(730, 7), Size = new Size(190, 28), Font = new Font("Segoe UI", 9, FontStyle.Bold) };
             modeLabel = new Label { Text = "Mode: panel editing (FP / RP / TP)", AutoSize = true, Location = new Point(730, 48), ForeColor = Color.DarkBlue };
             statusLabel = new Label { AutoSize = true, Location = new Point(930, 12), ForeColor = Color.DimGray };
@@ -152,8 +152,8 @@ namespace InventorSizer
             var bottom = new Panel { Dock = DockStyle.Bottom, Height = 170 };
             var buttons = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 40, Padding = new Padding(6, 6, 6, 0) };
             btnApply = new Button { Text = "Apply to Inventor", Size = new Size(160, 30), Font = new Font("Segoe UI", 9, FontStyle.Bold) };
-            btnReload = Btn("Reload file", 110, 30); btnLearn = Btn("Learn hardware holes", 160, 30); btnSetup = Btn("Set up master...", 130, 30); btnDevSave = Btn("Save dev log...", 120, 30);
-            buttons.Controls.AddRange(new Control[] { btnApply, btnReload, btnLearn, btnSetup, btnDevSave });
+            btnReload = Btn("Reload file", 110, 30); btnLearn = Btn("Learn hardware holes", 160, 30); btnDevSave = Btn("Save dev log...", 120, 30);
+            buttons.Controls.AddRange(new Control[] { btnApply, btnReload, btnLearn, btnDevSave });
             logBox = new TextBox { Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Vertical, Dock = DockStyle.Fill, Font = new Font("Consolas", 9) };
             devBox = new TextBox { Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Both, WordWrap = false, Dock = DockStyle.Fill, Font = new Font("Consolas", 8) };
             var tabs = new TabControl { Dock = DockStyle.Fill };
@@ -184,21 +184,12 @@ namespace InventorSizer
             foreach (var nb in new[] { gapBox, thickBox, splitBox, pitchBox }) nb.ValueChanged += (s, e) => { if (!syncing) { SettingsFromForm(); UpdateGridLocks(); UpdatePreview(); } };
             btnBrowse.Click += (s, e) => { using (var d = new FolderBrowserDialog { Description = "Folder for new panels (this session only)" }) if (d.ShowDialog(this) == DialogResult.OK) folderBox.Text = d.SelectedPath; };
 
-            btnMaster.Click += (s, e) => Step("Open master", () => { Inv.OpenVisible(std.Master); Log.Write("Master open (for Set up master / Learn hardware holes); the name is unchanged."); }, true);
-            btnSetMaster.Click += (s, e) => Step("Set master", () =>
-            {
-                using (var d = new OpenFileDialog { Filter = "Inventor assembly (*.iam)|*.iam", Title = $"Master assembly for {std.Name}" })
-                    if (d.ShowDialog(this) == DialogResult.OK) { Standards.SetMaster(std, d.FileName, Root); SelectStandard(std); }
-            });
+            btnMaster.Click += (s, e) => Step("Open master", () => { Inv.OpenVisible(std.Master); Log.Write("Master open; the name is unchanged."); }, true);
+            btnSetMaster.Click += (s, e) => Step("Set up master", SetUpMaster, true);
             btnMode.Click += (s, e) => Step("Switch mode", () => SetMode(mode == "GR" ? "Panel" : "GR"));
             btnApply.Click += (s, e) => Step("Apply to Inventor", ApplyPanel, true);
             btnReload.Click += (s, e) => Step("Reload file", () => { SetGrid(ParamFile.Read(ParamPath)); NameFromGrid(); UpdatePreview(); });
             btnLearn.Click += (s, e) => Step("Learn hardware holes", () => { Inv.LearnHardware(standards, std, Standards.Get(GridValues(), "HoleDia"), Standards.Get(GridValues(), "HoleZ")); UpdatePreview(); }, true);
-            btnSetup.Click += (s, e) => Step("Set up master", () =>
-            {
-                var msg = $"Set up the open master as type {std.Name}?\n\nThis creates the user parameters and writes the formulas from {std.File} into the master's parts. Do it on a copy first.";
-                if (MessageBox.Show(this, msg, "Set up master", MessageBoxButtons.OKCancel, MessageBoxIcon.Question) == DialogResult.OK) Inv.MasterSetup(std);
-            }, true);
             btnDevSave.Click += (s, e) => Step("Save dev log", () =>
             {
                 using (var d = new SaveFileDialog { Filter = "Text (*.txt)|*.txt", FileName = "devlog.txt" })
@@ -305,6 +296,8 @@ namespace InventorSizer
             FolderControls();
             Step("Load", () =>
             {
+                // The build time shows at once whether this is the exe you just built.
+                try { string built = File.GetLastWriteTime(Application.ExecutablePath).ToString("yyyy-MM-dd HH:mm"); Log.Write($"Inventor Sizer, built {built}"); Text += $"  (built {built})"; } catch { }
                 standards = Standards.Read(StandardsDir, Root);
                 typeBox.Items.Clear();
                 foreach (var s in standards) typeBox.Items.Add(s.ToString());
@@ -524,6 +517,30 @@ namespace InventorSizer
             folderInfo.Text = chkFolder.Checked ? "This session only: new panels go into the folder above." : "New panels are made from the type's master; you choose their folder on Apply.";
         }
 
+        // One button for the whole master job: choose the file, open it, write the type's
+        // parameters and formulas into it, make it the master of the type, and offer to save it.
+        void SetUpMaster()
+        {
+            string file;
+            using (var d = new OpenFileDialog { Filter = "Inventor assembly (*.iam)|*.iam", Title = $"Choose the master assembly for {std.Name}" })
+            {
+                if (!string.IsNullOrEmpty(std.Master) && File.Exists(std.Master)) { d.InitialDirectory = Path.GetDirectoryName(std.Master); d.FileName = Path.GetFileName(std.Master); }
+                if (d.ShowDialog(this) != DialogResult.OK) { Log.Write("Cancelled: no master chosen."); return; }
+                file = d.FileName;
+            }
+            string go = Choose("Set up master", $"{Path.GetFileName(file)}\n\nThe app opens this assembly, creates the user parameters and writes the formulas from {std.File} into it and its parts, and uses it as the master for {std.Name} from now on.\n\nNothing is saved until you say so. Use a copy the first time.",
+                "Set up", "Cancel");
+            if (go != "Set up") { Log.Write("Cancelled: nothing was changed."); return; }
+            Inv.OpenVisible(file);
+            Inv.MasterSetup(std);
+            Standards.SetMaster(std, file, Root);
+            SelectStandard(std);
+            string save = Choose("Save the master?", "The setup is done. Look at the model in Inventor: nothing should have moved.\n\nSave master: saves the assembly and its parts, so Apply can use it.\nNot now: leaves it open and unsaved; save it yourself in Inventor, or close it without saving to undo the setup.",
+                "Save master", "Not now");
+            if (save == "Save master") Inv.SaveActiveAssembly();
+            else Log.Write("The master is not saved yet. Apply uses it only after it is saved.");
+        }
+
         // A question with named buttons; the first is the default, the last answers Esc and
         // closing the box. Returns the text of the clicked button.
         string Choose(string title, string text, params string[] buttons)
@@ -593,7 +610,7 @@ namespace InventorSizer
             btnMode.Text = g ? "Switch to panel editing" : "Switch to GR editing";
             modeLabel.Text = g ? "Mode: GR editing (unit frame)" : "Mode: panel editing (FP / RP / TP)";
             Text = "Inventor Sizer - " + (g ? "GR editing" : "panel editing");
-            foreach (Control c in new Control[] { typeBox, btnMaster, btnSetMaster, nameBox, btnApply, btnReload, btnLearn, btnSetup, chkHidden, grid, settingsBox }) c.Visible = !g;
+            foreach (Control c in new Control[] { typeBox, btnMaster, btnSetMaster, nameBox, btnApply, btnReload, btnLearn, chkHidden, grid, settingsBox }) c.Visible = !g;
             foreach (Control c in new Control[] { btnGrLoad, btnGrInv, btnOpenGr, presetBox, presetLabel, grPanel }) c.Visible = g;
             if (g) { errLabel.Visible = false; UpdatePresets(); UpdateGrGrid(); UpdateDrawing(); } else UpdatePreview();
         }

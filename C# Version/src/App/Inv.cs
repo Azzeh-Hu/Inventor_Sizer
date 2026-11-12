@@ -405,7 +405,7 @@ namespace InventorSizer
             }
             var lay = HoleRules.Layout(values, set, s);
             if (lay.Errors.Count > 0) throw new SizerException("Not applied - fix these first:\n" + string.Join("\n", lay.Errors));
-            if (string.IsNullOrEmpty(s.Master) || !File.Exists(s.Master)) throw new SizerException($"There is no master for {s.Name}. Click 'Set master...' and pick its assembly (or put it in masters\\{s.Id}\\ next to the app).");
+            if (string.IsNullOrEmpty(s.Master) || !File.Exists(s.Master)) throw new SizerException($"There is no master for {s.Name}. Click 'Set up master...' and pick its assembly (or put it in masters\\{s.Id}\\ next to the app).");
             if (newName == Path.GetFileNameWithoutExtension(s.Master)) throw new SizerException("The new panel needs another name than the master; the master is never changed.");
             if (string.IsNullOrEmpty(set.OutputFolder)) throw new SizerException("Choose the folder for the new panel files first.");
             string target = Path.Combine(set.OutputFolder, newName + ".iam");
@@ -431,6 +431,13 @@ namespace InventorSizer
         }
 
         // ------------------------------------------------------------------ master setup
+
+        public static void SaveActiveAssembly()
+        {
+            dynamic asm = ActiveAssembly();
+            asm.Save2(true);
+            Log.Write($"Saved {asm.FullFileName} and its changed parts");
+        }
 
         // The marker "Set up master" leaves in the master assembly: a custom iProperty with the
         // type and the setup version, so Apply can tell a master that was never set up, or was
@@ -459,7 +466,7 @@ namespace InventorSizer
             string mark = ReadSetupMark(asm);
             if (mark == SetupMark(s)) return;
             string has = mark == "" ? "it has never been set up with this version of the app" : $"it was set up as \"{mark}\"";
-            throw new SizerException($"The master {Path.GetFileName((string)asm.FullFileName)} is not set up for the {s.Id} standard (setup version {s.SetupVersion}): {has}.\n\nOpen the master in Inventor, click \"Set up master...\", check that nothing moved, save the master, then Apply again.");
+            throw new SizerException($"The master {Path.GetFileName((string)asm.FullFileName)} is not set up for the {s.Id} standard (setup version {s.SetupVersion}): {has}.\n\nClick \"Set up master...\", choose this master, check that nothing moved and save it, then Apply again.");
         }
 
         // Applies the type's "setup" (standards\<type>.json) to the open master: per role the
@@ -505,7 +512,7 @@ namespace InventorSizer
                 try { WriteSetupMark(asm, s); Log.Write($"  marked the master: {SetupMarker} = {SetupMark(s)} (custom iProperty)"); }
                 catch (Exception e) { Log.Write($"  warning: could not mark the master ({e.Message}) - Apply will refuse it"); }
             }
-            Log.Write("Setup done. Check that nothing moved, then save the master.");
+            Log.Write("Setup done.");
         }
 
         // ------------------------------------------------------------------ hardware holes
