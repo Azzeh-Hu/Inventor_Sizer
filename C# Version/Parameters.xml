@@ -19,21 +19,21 @@
     <ParamWithValue>
       <name>Width</name>
       <typeCode>mm</typeCode>
-      <value>386 mm</value>
+      <value>500 mm</value>
       <comment>1st number in the file name</comment>
       <isKey>false</isKey>
     </ParamWithValue>
     <ParamWithValue>
       <name>Length</name>
       <typeCode>mm</typeCode>
-      <value>656 mm</value>
+      <value>600 mm</value>
       <comment>2nd number in the file name</comment>
       <isKey>false</isKey>
     </ParamWithValue>
     <ParamWithValue>
       <name>Height</name>
       <typeCode>mm</typeCode>
-      <value>47 mm</value>
+      <value>42 mm</value>
       <comment>3rd number in the file name</comment>
       <isKey>false</isKey>
     </ParamWithValue>
@@ -61,7 +61,7 @@
     <ParamWithValue>
       <name>HoleZ</name>
       <typeCode>mm</typeCode>
-      <value>22 mm</value>
+      <value>20 mm</value>
       <comment>Hole centre height</comment>
       <isKey>false</isKey>
     </ParamWithValue>
@@ -82,7 +82,7 @@
     <ParamWithValue>
       <name>HingeCount</name>
       <typeCode>ul</typeCode>
-      <value>2 ul</value>
+      <value>3 ul</value>
       <comment>TP: hinges per door, evenly spaced (other types: not used)</comment>
       <isKey>false</isKey>
     </ParamWithValue>

@@ -1,0 +1,92 @@
+07:48:43  == Load
+07:48:43  Done.
+07:48:43  Ready. Inventor is not read at start: it is used when you make a new version (Apply / Write) or open / read something.
+07:48:51    TP: HoleZ = 20
+07:49:00  == Set master
+07:49:49  Master of TP - door panel (42 mm): K:\2. GS-H\GS-H-3500\2. Projekte\6357 Hotelneubau Huttenstraße\Bleche\6357-3 TP-724x1194x42.iam (saved in TP.json)
+07:49:49  Done.
+07:50:41  == Open master
+07:50:45  Opened K:\2. GS-H\GS-H-3500\2. Projekte\6357 Hotelneubau Huttenstraße\Bleche\6357-3 TP-724x1194x42.iam
+07:50:45  Master open (for Set up master / Learn hardware holes); the name is unchanged.
+07:50:45  Done.
+07:52:10  == Set up master
+07:52:35    6357-3 TP-724x1194x42 (assembly): 7 user parameters, 8 formulas
+07:52:40    6357-3 724x1194x42-In-2T (inner): 23 user parameters, 13 formulas
+07:52:43    6357-3 724x1194x42-Au (outer): 25 user parameters, 25 formulas
+07:52:43  Setup done. Check that nothing moved, then save the master.
+07:52:43  Done.
+07:52:49  == Save dev log
+07:53:06  Saved dev log C:\Users\la\Documents\GitHub\Inventor_Sizer\devlog.txt
+07:53:06  Done.
+07:53:10  == Learn hardware holes
+07:54:55  Learned 36 hardware hole(s) from 6357-3 TP-724x1194x42; skipped 0 wall hole(s) made by the hole rules. Saved in TP.json.
+07:54:55    face bottom: dia 9, start 22.002 / start 161.002
+07:54:55    face bottom: dia 9, start 22.002 / end 238.998
+07:54:55    face bottom: dia 9, start 22.002 / end 160.998
+07:54:55    face bottom: dia 9, start 22.002 / start 239.002
+07:54:55    face bottom: dia 11, end 19.498 / start 98.002
+07:54:55    face bottom: dia 11, end 52.498 / start 118.002
+07:54:55    face bottom: dia 11, end 52.498 / end 117.998
+07:54:55    face bottom: dia 11, end 19.498 / end 121.998
+07:54:55    face bottom: dia 11, end 19.498 / end 97.998
+07:54:55    face bottom: dia 11, end 52.498 / end 101.998
+07:54:55    face bottom: dia 11, end 52.498 / start 102.002
+07:54:55    face bottom: dia 11, end 19.498 / start 122.002
+07:54:55    face bottom: dia 4.1, end 7.998 / start 98.002
+07:54:55    face bottom: dia 4.1, end 35.998 / start 122.002
+07:54:55    face bottom: dia 4.1, end 35.998 / end 121.998
+07:54:55    face bottom: dia 4.1, end 7.998 / end 97.998
+07:54:55    face bottom: dia 4.1, end 7.998 / end 121.998
+07:54:55    face bottom: dia 4.1, end 35.998 / end 97.998
+07:54:55    face bottom: dia 4.1, end 7.998 / start 122.002
+07:54:55    face bottom: dia 4.1, end 35.998 / start 98.002
+07:54:55    length xW: dia 4.1, mid -182.331 / start 22.002
+07:54:55    length x0: dia 4.1, mid -182.331 / start 22.002
+07:54:55    length xW: dia 4.1, start 50.002 / start 22.002
+07:54:55    length x0: dia 4.1, start 50.002 / start 22.002
+07:54:55    length xW: dia 4.1, end 49.998 / start 22.002
+07:54:55    length x0: dia 4.1, end 49.998 / start 22.002
+07:54:55    length xW: dia 4.1, mid 182.335 / start 22.002
+07:54:55    length x0: dia 4.1, mid 182.335 / start 22.002
+07:54:55    width yL: dia 4.1, mid -48.498 / start 22.002
+07:54:55    width y0: dia 4.1, mid -48.498 / start 22.002
+07:54:55    width yL: dia 4.1, start 50.002 / start 22.002
+07:54:55    width y0: dia 4.1, start 50.002 / start 22.002
+07:54:55    width yL: dia 4.1, end 49.998 / start 22.002
+07:54:55    width y0: dia 4.1, end 49.998 / start 22.002
+07:54:55    width yL: dia 4.1, mid 48.502 / start 22.002
+07:54:55    width y0: dia 4.1, mid 48.502 / start 22.002
+07:54:55  Done.
+07:56:12  == Save dev log
+07:56:16  Saved dev log C:\Users\la\Documents\GitHub\Inventor_Sizer\devlog.txt
+07:56:16  Done.
+07:56:24  == Apply to Inventor
+07:56:24  Saved values to C:\Users\la\Documents\GitHub\Inventor_Sizer\C# Version\Parameters.xml
+07:56:24    Width = 500 mm
+07:56:24    Length = 600 mm
+07:56:24    Height = 42 mm
+07:56:24    HolesL = 3 ul
+07:56:24    HolesW = 2 ul
+07:56:24    HoleEdge = 50 mm
+07:56:24    HoleZ = 20 mm
+07:56:24    HoleDia = 4.1 mm
+07:56:24    Clearance = 0.5 mm
+07:56:24    HingeCount = 3 ul
+07:56:24    HandleCount = 2 ul
+07:56:24    holes: length wall 3 (pitch 250 mm), width wall 2
+07:56:24    inner panel: 1 x 497
+07:56:31  Updating 6357-3 TP-724x1194x42 ...
+07:56:32  ERROR: System.ArgumentException: Value does not fall within the expected range.
+   at System.Dynamic.ComRuntimeHelpers.CheckThrowException(Int32 hresult, ExcepInfo& excepInfo, UInt32 argErr, String message)
+   at CallSite.Target(Closure , CallSite , ComObject )
+   at System.Dynamic.UpdateDelegates.UpdateAndExecute1[T0,TRet](CallSite site, T0 arg0)
+   at System.Dynamic.UpdateDelegates.UpdateAndExecuteVoid1[T0](CallSite site, T0 arg0)
+   at InventorSizer.Inv.RemoveExtraInnerPanels(Object asm, Standard s, Int32 split)
+   at System.Dynamic.UpdateDelegates.UpdateAndExecuteVoid4[T0,T1,T2,T3](CallSite site, T0 arg0, T1 arg1, T2 arg2, T3 arg3)
+   at InventorSizer.Inv.UpdatePanelAssembly(Object asm, List`1 standards, Standard s, String newName, List`1 ps, HoleLayout lay, String outDir)
+   at System.Dynamic.UpdateDelegates.UpdateAndExecuteVoid8[T0,T1,T2,T3,T4,T5,T6,T7](CallSite site, T0 arg0, T1 arg1, T2 arg2, T3 arg3, T4 arg4, T5 arg5, T6 arg6, T7 arg7)
+   at InventorSizer.Inv.ApplyPanel(String name, List`1 ps, Settings set, String paramPath, List`1 standards, Standard s)
+   at InventorSizer.MainForm.ApplyPanel()
+   at InventorSizer.Core.Log.<>c__DisplayClass12_0.<Measure>b__0()
+   at InventorSizer.Core.Log.Measure[T](String label, Func`1 body)
+   at InventorSizer.MainForm.Step(String title, Action body, Boolean inventor)

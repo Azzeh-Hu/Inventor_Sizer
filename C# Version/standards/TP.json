@@ -8,7 +8,7 @@
       "enabled": true,
       "prefix": "TP-",
       "height": 42,
-      "master": "",
+      "master": "K:\\2. GS-H\\GS-H-3500\\2. Projekte\\6357 Hotelneubau Huttenstraße\\Bleche\\6357-3 TP-724x1194x42.iam",
       "defaults": {
         "HoleZ": 20
       },
@@ -512,289 +512,477 @@
         }
       },
       "hardware": {
-        "source": "6357-3 TP-724x1194x42 deep export (Hole4, Hole5, Cut1 / Sketch8) and the dimensioned screenshots",
-        "learned": "2026-11-11",
-        "notes": "U = across the panel (start = hinge edge, end = handle edge), V = along the length (start / end = distance from that end). Hinge: d81 = 98, d48 = 24, d50/d51 = 8, d55 = 28 (Ø4.1); d66/d67 = 19.5, d68 = 24, d70 = 33, d71 = 16, d73 = 4 (Ø11). Handle: d102 = 161, d95 = 78, d104 = 22, Ø9 (d93). Replace this file with 'Learn hardware holes' to read the holes straight from Inventor.",
+        "source": "K:\\2. GS-H\\GS-H-3500\\2. Projekte\\6357 Hotelneubau Huttenstraße\\Bleche\\6357-3 TP-724x1194x42.iam",
+        "learned": "2026-11-12 07:54",
+        "notes": "U / V: hole position. from = start, end or mid of the span: width (U) and length (V) on the face; along the wall (U) and height (V) on a wall.",
         "holes": [
           {
             "Wall": "face",
             "Side": "bottom",
-            "Dia": 4.1,
+            "Dia": 9,
             "U": {
               "From": "start",
-              "Value": 8
+              "Value": 22.002
             },
             "V": {
               "From": "start",
-              "Value": 98
-            },
-            "Group": "hinge"
-          },
-          {
-            "Wall": "face",
-            "Side": "bottom",
-            "Dia": 4.1,
-            "U": {
-              "From": "start",
-              "Value": 8
-            },
-            "V": {
-              "From": "start",
-              "Value": 122
-            },
-            "Group": "hinge"
-          },
-          {
-            "Wall": "face",
-            "Side": "bottom",
-            "Dia": 4.1,
-            "U": {
-              "From": "start",
-              "Value": 36
-            },
-            "V": {
-              "From": "start",
-              "Value": 98
-            },
-            "Group": "hinge"
-          },
-          {
-            "Wall": "face",
-            "Side": "bottom",
-            "Dia": 4.1,
-            "U": {
-              "From": "start",
-              "Value": 36
-            },
-            "V": {
-              "From": "start",
-              "Value": 122
-            },
-            "Group": "hinge"
-          },
-          {
-            "Wall": "face",
-            "Side": "bottom",
-            "Dia": 11,
-            "U": {
-              "From": "start",
-              "Value": 19.5
-            },
-            "V": {
-              "From": "start",
-              "Value": 98
-            },
-            "Group": "hinge"
-          },
-          {
-            "Wall": "face",
-            "Side": "bottom",
-            "Dia": 11,
-            "U": {
-              "From": "start",
-              "Value": 19.5
-            },
-            "V": {
-              "From": "start",
-              "Value": 122
-            },
-            "Group": "hinge"
-          },
-          {
-            "Wall": "face",
-            "Side": "bottom",
-            "Dia": 11,
-            "U": {
-              "From": "start",
-              "Value": 52.5
-            },
-            "V": {
-              "From": "start",
-              "Value": 102
-            },
-            "Group": "hinge"
-          },
-          {
-            "Wall": "face",
-            "Side": "bottom",
-            "Dia": 11,
-            "U": {
-              "From": "start",
-              "Value": 52.5
-            },
-            "V": {
-              "From": "start",
-              "Value": 118
-            },
-            "Group": "hinge"
+              "Value": 161.002
+            }
           },
           {
             "Wall": "face",
             "Side": "bottom",
             "Dia": 9,
             "U": {
-              "From": "end",
-              "Value": 22
+              "From": "start",
+              "Value": 22.002
             },
             "V": {
-              "From": "start",
-              "Value": 161
-            },
-            "Group": "handle"
+              "From": "end",
+              "Value": 238.998
+            }
           },
           {
             "Wall": "face",
             "Side": "bottom",
             "Dia": 9,
             "U": {
-              "From": "end",
-              "Value": 22
-            },
-            "V": {
               "From": "start",
-              "Value": 239
-            },
-            "Group": "handle"
-          },
-          {
-            "Wall": "face",
-            "Side": "bottom",
-            "Dia": 4.1,
-            "U": {
-              "From": "start",
-              "Value": 8
+              "Value": 22.002
             },
             "V": {
               "From": "end",
-              "Value": 98
-            },
-            "Group": "hinge"
-          },
-          {
-            "Wall": "face",
-            "Side": "bottom",
-            "Dia": 4.1,
-            "U": {
-              "From": "start",
-              "Value": 8
-            },
-            "V": {
-              "From": "end",
-              "Value": 122
-            },
-            "Group": "hinge"
-          },
-          {
-            "Wall": "face",
-            "Side": "bottom",
-            "Dia": 4.1,
-            "U": {
-              "From": "start",
-              "Value": 36
-            },
-            "V": {
-              "From": "end",
-              "Value": 98
-            },
-            "Group": "hinge"
-          },
-          {
-            "Wall": "face",
-            "Side": "bottom",
-            "Dia": 4.1,
-            "U": {
-              "From": "start",
-              "Value": 36
-            },
-            "V": {
-              "From": "end",
-              "Value": 122
-            },
-            "Group": "hinge"
-          },
-          {
-            "Wall": "face",
-            "Side": "bottom",
-            "Dia": 11,
-            "U": {
-              "From": "start",
-              "Value": 19.5
-            },
-            "V": {
-              "From": "end",
-              "Value": 98
-            },
-            "Group": "hinge"
-          },
-          {
-            "Wall": "face",
-            "Side": "bottom",
-            "Dia": 11,
-            "U": {
-              "From": "start",
-              "Value": 19.5
-            },
-            "V": {
-              "From": "end",
-              "Value": 122
-            },
-            "Group": "hinge"
-          },
-          {
-            "Wall": "face",
-            "Side": "bottom",
-            "Dia": 11,
-            "U": {
-              "From": "start",
-              "Value": 52.5
-            },
-            "V": {
-              "From": "end",
-              "Value": 102
-            },
-            "Group": "hinge"
-          },
-          {
-            "Wall": "face",
-            "Side": "bottom",
-            "Dia": 11,
-            "U": {
-              "From": "start",
-              "Value": 52.5
-            },
-            "V": {
-              "From": "end",
-              "Value": 118
-            },
-            "Group": "hinge"
+              "Value": 160.998
+            }
           },
           {
             "Wall": "face",
             "Side": "bottom",
             "Dia": 9,
             "U": {
-              "From": "end",
-              "Value": 22
+              "From": "start",
+              "Value": 22.002
             },
             "V": {
-              "From": "end",
-              "Value": 161
-            },
-            "Group": "handle"
+              "From": "start",
+              "Value": 239.002
+            }
           },
           {
             "Wall": "face",
             "Side": "bottom",
-            "Dia": 9,
+            "Dia": 11,
             "U": {
               "From": "end",
-              "Value": 22
+              "Value": 19.498
+            },
+            "V": {
+              "From": "start",
+              "Value": 98.002
+            }
+          },
+          {
+            "Wall": "face",
+            "Side": "bottom",
+            "Dia": 11,
+            "U": {
+              "From": "end",
+              "Value": 52.498
+            },
+            "V": {
+              "From": "start",
+              "Value": 118.002
+            }
+          },
+          {
+            "Wall": "face",
+            "Side": "bottom",
+            "Dia": 11,
+            "U": {
+              "From": "end",
+              "Value": 52.498
             },
             "V": {
               "From": "end",
-              "Value": 239
+              "Value": 117.998
+            }
+          },
+          {
+            "Wall": "face",
+            "Side": "bottom",
+            "Dia": 11,
+            "U": {
+              "From": "end",
+              "Value": 19.498
             },
-            "Group": "handle"
+            "V": {
+              "From": "end",
+              "Value": 121.998
+            }
+          },
+          {
+            "Wall": "face",
+            "Side": "bottom",
+            "Dia": 11,
+            "U": {
+              "From": "end",
+              "Value": 19.498
+            },
+            "V": {
+              "From": "end",
+              "Value": 97.998
+            }
+          },
+          {
+            "Wall": "face",
+            "Side": "bottom",
+            "Dia": 11,
+            "U": {
+              "From": "end",
+              "Value": 52.498
+            },
+            "V": {
+              "From": "end",
+              "Value": 101.998
+            }
+          },
+          {
+            "Wall": "face",
+            "Side": "bottom",
+            "Dia": 11,
+            "U": {
+              "From": "end",
+              "Value": 52.498
+            },
+            "V": {
+              "From": "start",
+              "Value": 102.002
+            }
+          },
+          {
+            "Wall": "face",
+            "Side": "bottom",
+            "Dia": 11,
+            "U": {
+              "From": "end",
+              "Value": 19.498
+            },
+            "V": {
+              "From": "start",
+              "Value": 122.002
+            }
+          },
+          {
+            "Wall": "face",
+            "Side": "bottom",
+            "Dia": 4.1,
+            "U": {
+              "From": "end",
+              "Value": 7.998
+            },
+            "V": {
+              "From": "start",
+              "Value": 98.002
+            }
+          },
+          {
+            "Wall": "face",
+            "Side": "bottom",
+            "Dia": 4.1,
+            "U": {
+              "From": "end",
+              "Value": 35.998
+            },
+            "V": {
+              "From": "start",
+              "Value": 122.002
+            }
+          },
+          {
+            "Wall": "face",
+            "Side": "bottom",
+            "Dia": 4.1,
+            "U": {
+              "From": "end",
+              "Value": 35.998
+            },
+            "V": {
+              "From": "end",
+              "Value": 121.998
+            }
+          },
+          {
+            "Wall": "face",
+            "Side": "bottom",
+            "Dia": 4.1,
+            "U": {
+              "From": "end",
+              "Value": 7.998
+            },
+            "V": {
+              "From": "end",
+              "Value": 97.998
+            }
+          },
+          {
+            "Wall": "face",
+            "Side": "bottom",
+            "Dia": 4.1,
+            "U": {
+              "From": "end",
+              "Value": 7.998
+            },
+            "V": {
+              "From": "end",
+              "Value": 121.998
+            }
+          },
+          {
+            "Wall": "face",
+            "Side": "bottom",
+            "Dia": 4.1,
+            "U": {
+              "From": "end",
+              "Value": 35.998
+            },
+            "V": {
+              "From": "end",
+              "Value": 97.998
+            }
+          },
+          {
+            "Wall": "face",
+            "Side": "bottom",
+            "Dia": 4.1,
+            "U": {
+              "From": "end",
+              "Value": 7.998
+            },
+            "V": {
+              "From": "start",
+              "Value": 122.002
+            }
+          },
+          {
+            "Wall": "face",
+            "Side": "bottom",
+            "Dia": 4.1,
+            "U": {
+              "From": "end",
+              "Value": 35.998
+            },
+            "V": {
+              "From": "start",
+              "Value": 98.002
+            }
+          },
+          {
+            "Wall": "length",
+            "Side": "xW",
+            "Dia": 4.1,
+            "U": {
+              "From": "mid",
+              "Value": -182.331
+            },
+            "V": {
+              "From": "start",
+              "Value": 22.002
+            }
+          },
+          {
+            "Wall": "length",
+            "Side": "x0",
+            "Dia": 4.1,
+            "U": {
+              "From": "mid",
+              "Value": -182.331
+            },
+            "V": {
+              "From": "start",
+              "Value": 22.002
+            }
+          },
+          {
+            "Wall": "length",
+            "Side": "xW",
+            "Dia": 4.1,
+            "U": {
+              "From": "start",
+              "Value": 50.002
+            },
+            "V": {
+              "From": "start",
+              "Value": 22.002
+            }
+          },
+          {
+            "Wall": "length",
+            "Side": "x0",
+            "Dia": 4.1,
+            "U": {
+              "From": "start",
+              "Value": 50.002
+            },
+            "V": {
+              "From": "start",
+              "Value": 22.002
+            }
+          },
+          {
+            "Wall": "length",
+            "Side": "xW",
+            "Dia": 4.1,
+            "U": {
+              "From": "end",
+              "Value": 49.998
+            },
+            "V": {
+              "From": "start",
+              "Value": 22.002
+            }
+          },
+          {
+            "Wall": "length",
+            "Side": "x0",
+            "Dia": 4.1,
+            "U": {
+              "From": "end",
+              "Value": 49.998
+            },
+            "V": {
+              "From": "start",
+              "Value": 22.002
+            }
+          },
+          {
+            "Wall": "length",
+            "Side": "xW",
+            "Dia": 4.1,
+            "U": {
+              "From": "mid",
+              "Value": 182.335
+            },
+            "V": {
+              "From": "start",
+              "Value": 22.002
+            }
+          },
+          {
+            "Wall": "length",
+            "Side": "x0",
+            "Dia": 4.1,
+            "U": {
+              "From": "mid",
+              "Value": 182.335
+            },
+            "V": {
+              "From": "start",
+              "Value": 22.002
+            }
+          },
+          {
+            "Wall": "width",
+            "Side": "yL",
+            "Dia": 4.1,
+            "U": {
+              "From": "mid",
+              "Value": -48.498
+            },
+            "V": {
+              "From": "start",
+              "Value": 22.002
+            }
+          },
+          {
+            "Wall": "width",
+            "Side": "y0",
+            "Dia": 4.1,
+            "U": {
+              "From": "mid",
+              "Value": -48.498
+            },
+            "V": {
+              "From": "start",
+              "Value": 22.002
+            }
+          },
+          {
+            "Wall": "width",
+            "Side": "yL",
+            "Dia": 4.1,
+            "U": {
+              "From": "start",
+              "Value": 50.002
+            },
+            "V": {
+              "From": "start",
+              "Value": 22.002
+            }
+          },
+          {
+            "Wall": "width",
+            "Side": "y0",
+            "Dia": 4.1,
+            "U": {
+              "From": "start",
+              "Value": 50.002
+            },
+            "V": {
+              "From": "start",
+              "Value": 22.002
+            }
+          },
+          {
+            "Wall": "width",
+            "Side": "yL",
+            "Dia": 4.1,
+            "U": {
+              "From": "end",
+              "Value": 49.998
+            },
+            "V": {
+              "From": "start",
+              "Value": 22.002
+            }
+          },
+          {
+            "Wall": "width",
+            "Side": "y0",
+            "Dia": 4.1,
+            "U": {
+              "From": "end",
+              "Value": 49.998
+            },
+            "V": {
+              "From": "start",
+              "Value": 22.002
+            }
+          },
+          {
+            "Wall": "width",
+            "Side": "yL",
+            "Dia": 4.1,
+            "U": {
+              "From": "mid",
+              "Value": 48.502
+            },
+            "V": {
+              "From": "start",
+              "Value": 22.002
+            }
+          },
+          {
+            "Wall": "width",
+            "Side": "y0",
+            "Dia": 4.1,
+            "U": {
+              "From": "mid",
+              "Value": 48.502
+            },
+            "V": {
+              "From": "start",
+              "Value": 22.002
+            }
           }
         ]
       },

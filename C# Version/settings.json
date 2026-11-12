@@ -1,5 +1,6 @@
-﻿{
-    "outputFolder":  "",
-    "minHoleGap":  70,
-    "thickness":  2
+{
+  "minHoleGap": 70,
+  "thickness": 1,
+  "splitWidth": 500,
+  "maxHolePitch": 400
 }

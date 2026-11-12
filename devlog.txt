@@ -1,0 +1,145 @@
+       75 ms  > Draw
+       85 ms  < Draw  10 ms
+      222 ms  log: == Load
+      224 ms  > Load
+      258 ms  < Load  34 ms
+      260 ms  log: Done.
+      416 ms  log: Ready. Inventor is not read at start: it is used when you make a new version (Apply / Write) or open / read something.
+      437 ms  > Draw
+      450 ms  < Draw  12 ms
+    7.913 ms  log:   TP: HoleZ = 20
+    7.918 ms  > Draw
+    7.919 ms  < Draw  1 ms
+   17.879 ms  log: == Set master
+   17.879 ms  > Set master
+   66.175 ms    log: Master of TP - door panel (42 mm): K:\2. GS-H\GS-H-3500\2. Projekte\6357 Hotelneubau Huttenstraße\Bleche\6357-3 TP-724x1194x42.iam (saved in TP.json)
+   66.181 ms  < Set master  48302 ms
+   66.183 ms  log: Done.
+   72.888 ms  > Draw
+   72.888 ms  < Draw  0 ms
+   73.147 ms  > Draw
+   73.148 ms  < Draw  0 ms
+   78.615 ms  > Draw
+   78.615 ms  < Draw  0 ms
+   79.921 ms  > Draw
+   79.921 ms  < Draw  0 ms
+   81.982 ms  > Draw
+   81.983 ms  < Draw  0 ms
+   82.890 ms  > Draw
+   82.890 ms  < Draw  0 ms
+   83.463 ms  > Draw
+   83.464 ms  < Draw  0 ms
+   83.703 ms  > Draw
+   83.704 ms  < Draw  0 ms
+   84.100 ms  > Draw
+   84.101 ms  < Draw  0 ms
+   84.318 ms  > Draw
+   84.318 ms  < Draw  0 ms
+   84.490 ms  > Draw
+   84.491 ms  < Draw  0 ms
+   85.914 ms  > Draw
+   85.914 ms  < Draw  0 ms
+   86.101 ms  > Draw
+   86.101 ms  < Draw  0 ms
+   86.421 ms  > Draw
+   86.422 ms  < Draw  0 ms
+   86.607 ms  > Draw
+   86.608 ms  < Draw  0 ms
+   86.826 ms  > Draw
+   86.826 ms  < Draw  0 ms
+   87.062 ms  > Draw
+   87.063 ms  < Draw  1 ms
+   87.250 ms  > Draw
+   87.250 ms  < Draw  0 ms
+   87.461 ms  > Draw
+   87.462 ms  < Draw  0 ms
+   87.693 ms  > Draw
+   87.693 ms  < Draw  0 ms
+   88.127 ms  > Draw
+   88.128 ms  < Draw  0 ms
+   88.330 ms  > Draw
+   88.331 ms  < Draw  0 ms
+   88.527 ms  > Draw
+   88.528 ms  < Draw  0 ms
+   96.036 ms  > Draw
+   96.036 ms  < Draw  0 ms
+  118.474 ms  log: == Open master
+  118.474 ms  > Open master
+  122.842 ms    log: Opened K:\2. GS-H\GS-H-3500\2. Projekte\6357 Hotelneubau Huttenstraße\Bleche\6357-3 TP-724x1194x42.iam
+  122.843 ms    log: Master open (for Set up master / Learn hardware holes); the name is unchanged.
+  122.843 ms  < Open master  4369 ms
+  122.844 ms  log: Done.
+  137.008 ms  > Draw
+  137.008 ms  < Draw  0 ms
+  144.875 ms  > Draw
+  144.875 ms  < Draw  0 ms
+  154.867 ms  > Draw
+  154.867 ms  < Draw  0 ms
+  168.939 ms  > Draw
+  168.939 ms  < Draw  0 ms
+  207.374 ms  log: == Set up master
+  207.374 ms  > Set up master
+  229.675 ms    > Setup assembly : 6357-3 TP-724x1194x42
+  232.805 ms      log:   6357-3 TP-724x1194x42 (assembly): 7 user parameters, 8 formulas
+  232.805 ms    < Setup assembly : 6357-3 TP-724x1194x42  3130 ms
+  232.981 ms    > Setup inner : 6357-3 724x1194x42-In-2T
+  236.976 ms      log:   6357-3 724x1194x42-In-2T (inner): 23 user parameters, 13 formulas
+  236.976 ms    < Setup inner : 6357-3 724x1194x42-In-2T  3994 ms
+  237.107 ms    > Setup outer : 6357-3 724x1194x42-Au
+  240.625 ms      log:   6357-3 724x1194x42-Au (outer): 25 user parameters, 25 formulas
+  240.626 ms    < Setup outer : 6357-3 724x1194x42-Au  3519 ms
+  240.658 ms    log: Setup done. Check that nothing moved, then save the master.
+  240.658 ms  < Set up master  33284 ms
+  240.660 ms  log: Done.
+  246.700 ms  log: == Save dev log
+  246.700 ms  > Save dev log
+  263.277 ms    log: Saved dev log C:\Users\la\Documents\GitHub\Inventor_Sizer\devlog.txt
+  263.279 ms  < Save dev log  16578 ms
+  263.281 ms  log: Done.
+  267.481 ms  log: == Learn hardware holes
+  267.482 ms  > Learn hardware holes
+  272.337 ms    > Read the circles
+  371.861 ms    < Read the circles  99524 ms
+  371.892 ms    log: Learned 36 hardware hole(s) from 6357-3 TP-724x1194x42; skipped 0 wall hole(s) made by the hole rules. Saved in TP.json.
+  371.893 ms    log:   face bottom: dia 9, start 22.002 / start 161.002
+  371.894 ms    log:   face bottom: dia 9, start 22.002 / end 238.998
+  371.896 ms    log:   face bottom: dia 9, start 22.002 / end 160.998
+  371.898 ms    log:   face bottom: dia 9, start 22.002 / start 239.002
+  371.899 ms    log:   face bottom: dia 11, end 19.498 / start 98.002
+  371.900 ms    log:   face bottom: dia 11, end 52.498 / start 118.002
+  371.901 ms    log:   face bottom: dia 11, end 52.498 / end 117.998
+  371.903 ms    log:   face bottom: dia 11, end 19.498 / end 121.998
+  371.904 ms    log:   face bottom: dia 11, end 19.498 / end 97.998
+  371.906 ms    log:   face bottom: dia 11, end 52.498 / end 101.998
+  371.907 ms    log:   face bottom: dia 11, end 52.498 / start 102.002
+  371.909 ms    log:   face bottom: dia 11, end 19.498 / start 122.002
+  371.910 ms    log:   face bottom: dia 4.1, end 7.998 / start 98.002
+  371.911 ms    log:   face bottom: dia 4.1, end 35.998 / start 122.002
+  371.912 ms    log:   face bottom: dia 4.1, end 35.998 / end 121.998
+  371.914 ms    log:   face bottom: dia 4.1, end 7.998 / end 97.998
+  371.916 ms    log:   face bottom: dia 4.1, end 7.998 / end 121.998
+  371.917 ms    log:   face bottom: dia 4.1, end 35.998 / end 97.998
+  371.918 ms    log:   face bottom: dia 4.1, end 7.998 / start 122.002
+  371.920 ms    log:   face bottom: dia 4.1, end 35.998 / start 98.002
+  371.922 ms    log:   length xW: dia 4.1, mid -182.331 / start 22.002
+  371.923 ms    log:   length x0: dia 4.1, mid -182.331 / start 22.002
+  371.924 ms    log:   length xW: dia 4.1, start 50.002 / start 22.002
+  371.925 ms    log:   length x0: dia 4.1, start 50.002 / start 22.002
+  371.927 ms    log:   length xW: dia 4.1, end 49.998 / start 22.002
+  371.928 ms    log:   length x0: dia 4.1, end 49.998 / start 22.002
+  371.930 ms    log:   length xW: dia 4.1, mid 182.335 / start 22.002
+  371.932 ms    log:   length x0: dia 4.1, mid 182.335 / start 22.002
+  371.933 ms    log:   width yL: dia 4.1, mid -48.498 / start 22.002
+  371.935 ms    log:   width y0: dia 4.1, mid -48.498 / start 22.002
+  371.936 ms    log:   width yL: dia 4.1, start 50.002 / start 22.002
+  371.936 ms    log:   width y0: dia 4.1, start 50.002 / start 22.002
+  371.937 ms    log:   width yL: dia 4.1, end 49.998 / start 22.002
+  371.938 ms    log:   width y0: dia 4.1, end 49.998 / start 22.002
+  371.939 ms    log:   width yL: dia 4.1, mid 48.502 / start 22.002
+  371.939 ms    log:   width y0: dia 4.1, mid 48.502 / start 22.002
+  371.940 ms    > Draw
+  371.940 ms    < Draw  0 ms
+  371.940 ms  < Learn hardware holes  104458 ms
+  371.941 ms  log: Done.
+  449.434 ms  log: == Save dev log
+  449.434 ms  > Save dev log
