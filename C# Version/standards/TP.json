@@ -13,7 +13,7 @@
         "HoleZ": 20
       },
       "minHolesL": 2,
-      "notes": "master: path of the 6357-3 TP-724x1194x42 assembly (split, with the centre-pair holes d91/d92). minHolesL 2: fixed hole at each end of the length wall + a pattern of HoleCountL - 1. HingeCount / HandleCount: hinges and handles per door, evenly spaced (linear patterns in the master, see docs section 14).",
+      "notes": "master: path of the 6357-3 TP-724x1194x42 assembly. The second inner panel, the hinges and the handles are component patterns in the master: InSplit / InWidth set the inner panels, HingeCount / HingePitch and HandleCount / HandlePitch the hardware. minHolesL 2: fixed hole at each end of the length wall + a pattern of HoleCountL - 1.",
       "parts": [
         {
           "suffix": "-Au",
@@ -31,7 +31,8 @@
       ],
       "setup": {
         "master": "6357-3 TP-724x1194x42",
-        "notes": "Applied to the open master by 'Set up master' (Inventor parameters): per role the user parameters are created or set, then the model dimensions get these formulas. The d-numbers belong to this master.",
+        "version": 2,
+        "notes": "Applied to the open master by 'Set up master' (Inventor parameters): per role the user parameters are created or set, then the model dimensions get these formulas. The d-numbers belong to this master and were checked against its reader export (InventorReader _TP 2parts -In.xml). version: written into the master by 'Set up master'; Apply refuses a master with another version.",
         "outer": {
           "user": [
             {
@@ -138,6 +139,26 @@
               "name": "HandleEdge",
               "value": "161 mm",
               "unit": "mm"
+            },
+            {
+              "name": "HingeCount",
+              "value": "2 ul",
+              "unit": "ul"
+            },
+            {
+              "name": "HingePitch",
+              "value": "974 mm",
+              "unit": "mm"
+            },
+            {
+              "name": "HandleCount",
+              "value": "2 ul",
+              "unit": "ul"
+            },
+            {
+              "name": "HandlePitch",
+              "value": "794 mm",
+              "unit": "mm"
             }
           ],
           "formulas": [
@@ -215,11 +236,11 @@
             },
             {
               "name": "d114",
-              "formula": "Length - 2 * d81 - d48"
+              "formula": "HingePitch"
             },
             {
               "name": "d121",
-              "formula": "d114"
+              "formula": "HingePitch"
             },
             {
               "name": "d102",
@@ -227,7 +248,19 @@
             },
             {
               "name": "d107",
-              "formula": "Length - 2 * d102 - d95"
+              "formula": "HandlePitch"
+            },
+            {
+              "name": "d112",
+              "formula": "HingeCount"
+            },
+            {
+              "name": "d119",
+              "formula": "HingeCount"
+            },
+            {
+              "name": "d105",
+              "formula": "HandleCount"
             }
           ]
         },
@@ -410,6 +443,36 @@
               "name": "Clearance",
               "value": "0.5 mm",
               "unit": "mm"
+            },
+            {
+              "name": "InSplit",
+              "value": "2 ul",
+              "unit": "ul"
+            },
+            {
+              "name": "InWidth",
+              "value": "360.5 mm",
+              "unit": "mm"
+            },
+            {
+              "name": "HingeCount",
+              "value": "2 ul",
+              "unit": "ul"
+            },
+            {
+              "name": "HingePitch",
+              "value": "974 mm",
+              "unit": "mm"
+            },
+            {
+              "name": "HandleCount",
+              "value": "2 ul",
+              "unit": "ul"
+            },
+            {
+              "name": "HandlePitch",
+              "value": "794 mm",
+              "unit": "mm"
             }
           ],
           "formulas": [
@@ -422,12 +485,28 @@
               "formula": "Clearance"
             },
             {
-              "name": "d26",
-              "formula": "Clearance"
+              "name": "d37",
+              "formula": "InWidth"
             },
             {
-              "name": "d27",
-              "formula": "Clearance"
+              "name": "d39",
+              "formula": "InSplit"
+            },
+            {
+              "name": "d29",
+              "formula": "HandlePitch"
+            },
+            {
+              "name": "d31",
+              "formula": "HandleCount"
+            },
+            {
+              "name": "d33",
+              "formula": "HingePitch"
+            },
+            {
+              "name": "d35",
+              "formula": "HingeCount"
             }
           ]
         }

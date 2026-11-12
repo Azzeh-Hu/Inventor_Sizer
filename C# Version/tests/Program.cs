@@ -28,7 +28,7 @@ namespace InventorSizer.Tests
         public static int Run(string[] args)
         {
             Root = args[0]; Data = args.Length > 1 ? args[1] : "";
-            foreach (var t in new Action[] { TestRules, TestStandards, TestHardware, TestDrawings, TestJson, TestGrModel, TestGrEdits, TestGrReal })
+            foreach (var t in new Action[] { TestRules, TestStandards, TestTpMaster, TestHardware, TestDrawings, TestJson, TestGrModel, TestGrEdits, TestGrReal })
             {
                 try { t(); } catch (Exception e) { fail++; Console.WriteLine($"FAIL {t.Method.Name}: {e}"); }
             }

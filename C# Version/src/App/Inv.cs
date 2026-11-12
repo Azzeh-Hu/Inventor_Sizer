@@ -199,10 +199,35 @@ namespace InventorSizer
 
         static double Distance(dynamic v, double[] t) => Math.Sqrt(Math.Pow((double)v.X - t[0], 2) + Math.Pow((double)v.Y - t[1], 2) + Math.Pow((double)v.Z - t[2], 2));
 
+        // True when the master places the component with a component pattern (the pattern's
+        // count and spacing then follow InSplit and InWidth by formula; see the type's setup).
+        static bool InPattern(dynamic occ)
+        {
+            try { return (bool)occ.IsPatternElement; } catch { return false; }
+        }
+
+        static bool AnyInPattern(List<dynamic> occs)
+        {
+            foreach (object o in occs) if (InPattern(o)) return true;
+            return false;
+        }
+
         static void RemoveExtraInnerPanels(dynamic asm, Standard s, int split)
         {
-            var inner = OccurrencesBySuffix(asm, s.PartSuffixes("inner"));
+            List<dynamic> inner = OccurrencesBySuffix(asm, s.PartSuffixes("inner"));
+            if (AnyInPattern(inner)) return;   // the pattern count (InSplit) removes it
             for (int i = inner.Count - 1; i >= Math.Max(split, 1); i--) { string n = inner[i].Name; inner[i].Delete(); Log.Write($"  removed inner panel {n} (not split at this width)"); }
+        }
+
+        // Inner panels placed by a component pattern: nothing to add or move, only a check.
+        static bool InnerPanelsPatterned(dynamic asm, Standard s, int split)
+        {
+            List<dynamic> inner = OccurrencesBySuffix(asm, s.PartSuffixes("inner"));
+            if (!AnyInPattern(inner)) return false;
+            int want = Math.Max(split, 1);
+            if (inner.Count == want) Log.Write($"  inner panels: {inner.Count} (component pattern in the master)");
+            else Log.Write($"  warning: the master's component pattern gives {inner.Count} inner panel(s), this width needs {want}. Run \"Set up master...\" on the master (pattern count = InSplit, spacing = InWidth).");
+            return true;
         }
 
         static void TestInnerSplitReady(dynamic asm, Standard s, int split)
@@ -293,7 +318,9 @@ namespace InventorSizer
         // Every file whose name contains the old size gets the new size (and project lead); the
         // inner panel's file always matches the split state (-In / -In-2T). With an output
         // folder all new files go there.
-        static void SaveAsNewSize(dynamic asm, PanelName oldN, PanelName newN, string newAsmName, string outDir, Standard s, int split)
+        // Existing files are only replaced when the user said so: overwrite, or confirm (asked
+        // with the list of files) returns true.
+        static void SaveAsNewSize(dynamic asm, PanelName oldN, PanelName newN, string newAsmName, string outDir, Standard s, int split, bool overwrite = false, Func<List<string>, bool> confirm = null)
         {
             var plan = new List<(dynamic Doc, string Name, string Path)>();
             foreach (var doc in ModelDocuments(asm))
@@ -313,9 +340,21 @@ namespace InventorSizer
                 plan.Add((asm, newAsmName, Path.Combine(dir, newAsmName + Path.GetExtension((string)asm.FullFileName))));
             }
             var existing = plan.Where(p => File.Exists(p.Path)).Select(p => p.Path).ToList();
-            if (existing.Count > 0) throw new SizerException("These files already exist, nothing was saved:\n" + string.Join("\n", existing));
+            if (existing.Count > 0 && !overwrite && (confirm == null || !confirm(existing)))
+                throw new SizerException("These files already exist, nothing was saved:\n" + string.Join("\n", existing));
             if (!string.IsNullOrEmpty(outDir) && !Directory.Exists(outDir)) { Directory.CreateDirectory(outDir); Log.Write($"  created folder {outDir}"); }
             dynamic inv = asm.Parent;
+            if (existing.Count > 0)
+            {
+                var open = new List<string>();
+                foreach (var d in Items(inv.Documents))
+                {
+                    string f; try { f = (string)d.FullFileName; } catch { continue; }
+                    if (existing.Any(x => string.Equals(x, f, StringComparison.OrdinalIgnoreCase))) open.Add(f);
+                }
+                if (open.Count > 0) throw new SizerException("These files are open in Inventor and cannot be overwritten. Close them, then Apply again:\n" + string.Join("\n", open));
+                foreach (var f in existing) Log.Write($"  overwriting {f}");
+            }
             inv.SilentOperation = true;
             try
             {
@@ -330,7 +369,7 @@ namespace InventorSizer
             finally { inv.SilentOperation = false; }
         }
 
-        static void UpdatePanelAssembly(dynamic asm, List<Standard> standards, Standard s, string newName, List<Param> ps, HoleLayout lay, string outDir)
+        static void UpdatePanelAssembly(dynamic asm, List<Standard> standards, Standard s, string newName, List<Param> ps, HoleLayout lay, string outDir, bool overwrite = false, Func<List<string>, bool> confirm = null)
         {
             string cur = Path.GetFileNameWithoutExtension((string)asm.FullFileName);
             var oldN = Standards.Split(standards, cur);
@@ -343,15 +382,16 @@ namespace InventorSizer
             var all = new List<Param>(ps); all.AddRange(lay.Params);
             all.AddRange(Hardware.PitchParams(s, Standards.Get(values, "Length"), Hardware.Counts(s, values)));
             Log.Measure("Push parameters and rebuild", () => { PushParameters(asm, all); });
-            Log.Measure("Inner-panel split", () => { UpdateInnerSplit(asm, s, lay.Split, lay.InnerWidth); });
+            Log.Measure("Inner-panel split", () => { if (!InnerPanelsPatterned(asm, s, lay.Split)) UpdateInnerSplit(asm, s, lay.Split, lay.InnerWidth); });
             asm.Update2(true);
-            Log.Measure("Save the new files", () => { SaveAsNewSize(asm, oldN, newN, newName, outDir, s, lay.Split); });
+            Log.Measure("Save the new files", () => { SaveAsNewSize(asm, oldN, newN, newName, outDir, s, lay.Split, overwrite, confirm); });
         }
 
         // A new panel from the type's master: the master is opened in the background, changed,
         // saved under the new name into outDir, and the new panel is opened. The master on disk
-        // is never changed; what is open in Inventor is not used.
-        public static string ApplyPanel(string name, List<Param> ps, Settings set, string paramPath, List<Standard> standards, Standard s)
+        // is never changed; what is open in Inventor is not used. An existing panel of that name
+        // is only replaced with overwrite; confirm is asked when only part files exist already.
+        public static string ApplyPanel(string name, List<Param> ps, Settings set, string paramPath, List<Standard> standards, Standard s, bool overwrite = false, Func<List<string>, bool> confirm = null)
         {
             string newName = name.Trim();
             var m = U.SizeRegex.Match(newName);
@@ -369,7 +409,7 @@ namespace InventorSizer
             if (newName == Path.GetFileNameWithoutExtension(s.Master)) throw new SizerException("The new panel needs another name than the master; the master is never changed.");
             if (string.IsNullOrEmpty(set.OutputFolder)) throw new SizerException("Choose the folder for the new panel files first.");
             string target = Path.Combine(set.OutputFolder, newName + ".iam");
-            if (File.Exists(target)) throw new SizerException($"{target} already exists.");
+            if (File.Exists(target) && !overwrite) throw new SizerException($"{target} already exists.");
 
             ParamFile.Save(paramPath, ps);
             Log.Write($"Saved values to {paramPath}");
@@ -379,7 +419,11 @@ namespace InventorSizer
             foreach (var n in lay.Notes) Log.Write("  note: " + n);
 
             var src = Open(s.Master);
-            try { UpdatePanelAssembly(src.Doc, standards, s, newName, ps, lay, set.OutputFolder); }
+            try
+            {
+                TestMasterSetup(src.Doc, s);
+                UpdatePanelAssembly(src.Doc, standards, s, newName, ps, lay, set.OutputFolder, overwrite, confirm);
+            }
             catch { if (src.Opened) { try { src.Doc.Close(true); } catch { } } throw; }
             Show(src);
             Log.Write($"New panel: {target} (the master is unchanged)");
@@ -387,6 +431,36 @@ namespace InventorSizer
         }
 
         // ------------------------------------------------------------------ master setup
+
+        // The marker "Set up master" leaves in the master assembly: a custom iProperty with the
+        // type and the setup version, so Apply can tell a master that was never set up, or was
+        // set up for an older version of the standard.
+        const string CustomProps = "{D5CDD505-2E9C-101B-9397-08002B2CF9AE}";
+        const string SetupMarker = "InventorSizerSetup";
+
+        static string SetupMark(Standard s) => $"{s.Id} {s.SetupVersion}";
+
+        static string ReadSetupMark(dynamic asm)
+        {
+            try { return Convert.ToString(asm.PropertySets.Item(CustomProps).Item(SetupMarker).Value) ?? ""; } catch { return ""; }
+        }
+
+        static void WriteSetupMark(dynamic asm, Standard s)
+        {
+            dynamic set = asm.PropertySets.Item(CustomProps);
+            try { set.Item(SetupMarker).Value = SetupMark(s); }
+            catch { set.Add(SetupMark(s), SetupMarker); }
+        }
+
+        // Types whose setup has a version need a master that "Set up master" has marked with it.
+        static void TestMasterSetup(dynamic asm, Standard s)
+        {
+            if (s.SetupVersion <= 0) return;
+            string mark = ReadSetupMark(asm);
+            if (mark == SetupMark(s)) return;
+            string has = mark == "" ? "it has never been set up with this version of the app" : $"it was set up as \"{mark}\"";
+            throw new SizerException($"The master {Path.GetFileName((string)asm.FullFileName)} is not set up for the {s.Id} standard (setup version {s.SetupVersion}): {has}.\n\nOpen the master in Inventor, click \"Set up master...\", check that nothing moved, save the master, then Apply again.");
+        }
 
         // Applies the type's "setup" (standards\<type>.json) to the open master: per role the
         // user parameters are created or set, then the model dimensions get their formulas.
@@ -426,6 +500,11 @@ namespace InventorSizer
             }
             if (done == 0) throw new SizerException("No part of the open assembly matched the type (outer / inner suffix) - nothing was set up.");
             asm.Update2(true);
+            if (s.SetupVersion > 0)
+            {
+                try { WriteSetupMark(asm, s); Log.Write($"  marked the master: {SetupMarker} = {SetupMark(s)} (custom iProperty)"); }
+                catch (Exception e) { Log.Write($"  warning: could not mark the master ({e.Message}) - Apply will refuse it"); }
+            }
             Log.Write("Setup done. Check that nothing moved, then save the master.");
         }
 

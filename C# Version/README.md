@@ -105,7 +105,10 @@ Nothing to install. The tool uses:
    - **Name unchanged:** values go into Inventor, the model rebuilds, and the files are saved in place.
    - **Name changed:** the model is saved as **new files** (`FP-800x1200x47.iam`,
      `800x1200x47-Au.ipt`, `800x1200x47-In.ipt`). The Part Number iProperty gets the new size
-     too. The original files on disk are not touched. Existing files are never overwritten.
+     too. The original files on disk are not touched.
+   - **A panel of that name already exists:** the app asks. **Use existing** opens it and writes
+     nothing; **Overwrite** replaces the assembly and its parts (every assembly that uses those
+     files changes with them; files open in Inventor must be closed first); **Cancel** stops.
 7. The log at the bottom lists every parameter that changed and in which file. Errors include
    the script line number.
 8. **Learn hardware holes** (once per type, with its master open): reads the hinge and handle
@@ -225,6 +228,17 @@ To set up a master:
 2. Pick its type.
 3. Click **Set up master...**. The app creates or sets the user parameters, then writes the
    formulas into the `-Au` part, the `-In` part and the assembly.
+
+A setup with a `version` (TP has one) also marks the master: the custom iProperty
+`InventorSizerSetup` gets the type and version, e.g. `TP 2`. **Apply to Inventor** refuses a
+master of such a type without the matching mark, so a master that was never set up, or was set
+up for an older standard, cannot be used by mistake. Save the master after the setup.
+
+**TP master:** the second inner panel, the hinges and the handles are component patterns in
+the assembly. The setup ties them to `InSplit` / `InWidth`, `HingeCount` / `HingePitch` and
+`HandleCount` / `HandlePitch`, so the app no longer adds or deletes the second inner panel
+itself for this master. `tests\` checks the TP setup against the reader export of the master
+(`InventorReader _TP 2parts -In.xml`).
 
 Do it on a copy first. Every formula gives the number the model has today, so a correct
 setup changes no geometry. The d-numbers belong to the master named in `setup.master`:
