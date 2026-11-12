@@ -18,7 +18,7 @@ namespace InventorSizer.Tests
         static string P(HoleLayout l, string n) => U.F(l.Params.First(p => p.Name == n).Value);
 
         static List<Standard> Stds() => Standards.Read(Path.Combine(Root, "standards"), Root);
-
+//
         static void TestRules()
         {
             foreach (var c in new[] { (656.0, false, 3), (386, true, 2), (1616, false, 5), (726, true, 4), (1194, false, 4), (519, true, 4), (444, true, 2), (1197, false, 4), (100, false, 1), (500, false, 2), (900, true, 4), (1301, true, 6) })
@@ -48,6 +48,7 @@ namespace InventorSizer.Tests
         {
             var stds = Stds();
             Check("types", string.Join(",", stds.Select(s => s.Id)), "FP,RP,TP");
+            Check("no hard-coded starting dimensions", ParamFile.Defaults.Any(d => U.SizeParams.Contains(d[0])), false);
             var p = Standards.Split(stds, "6357-3 TP-519x1194x42");
             Check("lead", $"[{p.Lead}][{p.Prefix}][{p.Token}][{p.Tail}] {p.Standard.Id}", "[6357-3 ][TP-][519x1194x42][] TP");
             Check("by height", Standards.ForName(stds, "6357-3 571x996x44").Id, "RP");
@@ -70,6 +71,19 @@ namespace InventorSizer.Tests
             File.WriteAllText(Path.Combine(tmp, "masters", "TP", "2T", "6357-3 TP-724x1194x42.iam"), "x");
             File.WriteAllText(Path.Combine(tmp, "masters", "TP", "1T", "TP-400x600x42.iam"), "x");
             var ms = Standards.Read(Path.Combine(tmp, "standards"), tmp);
+            Standards.UpsertSetupAssignment(ms[0], new SetupAssignment
+            {
+                Role = "outer", Target = "NewCodeParam", Expression = "12 mm", Unit = "mm",
+                Purpose = "Test setup value", PurposeDeclared = true
+            });
+            Standards.UpsertSetupAssignment(ms[0], new SetupAssignment
+            {
+                Role = "outer", Target = "d0", Expression = "Width + 1 mm", Purpose = "Corrected width",
+                PurposeDeclared = true, IsFormula = true
+            });
+            var edited = Standards.Read(Path.Combine(tmp, "standards"), tmp)[0].Setup.Obj("outer");
+            Check("new setup parameter persisted", edited.Arr("user").OfType<JsonObject>().Any(x => x.Str("name") == "NewCodeParam" && x.Str("value") == "12 mm" && x.Str("label") == "Test setup value"), true);
+            Check("edited setup formula persisted", edited.Arr("formulas").OfType<JsonObject>().Any(x => x.Str("name") == "d0" && x.Str("formula") == "Width + 1 mm" && x.Str("label") == "Corrected width"), true);
             Check("2T master from the file's path", Path.GetFileName(ms[0].MasterFor("2T")), "6357-3 TP-724x1194x42.iam");
             Check("1T master from its folder", $"{Path.GetFileName(ms[0].MasterFor("1T"))} {ms[0].HasMaster("1T")}", "TP-400x600x42.iam True");
             Standards.SetMaster(ms[0], "1T", Path.Combine(tmp, "masters", "TP", "1T", "TP-400x600x42.iam"), tmp);
@@ -212,6 +226,47 @@ namespace InventorSizer.Tests
             Check("json round trip", J.Write(again) == J.Write(j), true);
             foreach (var f in Directory.GetFiles(Path.Combine(Root, "standards"), "*.json"))
                 Check($"standards file {Path.GetFileName(f)} reads and writes", J.Parse(J.Write(J.Parse(File.ReadAllText(f)))) is JsonObject, true);
+        }
+
+        static void TestMasterSetupReport()
+        {
+            var user = SetupAssignment.FromJson("outer", @"C:\master-Au.ipt",
+                (JsonObject)J.Parse("{\"name\":\"Width\",\"value\":\"386 mm\",\"unit\":\"mm\"}"), false);
+            user.Status = SetupAssignmentStatus.Applied;
+            Check("setup user assignment context", $"{user.Role} {Path.GetFileName(user.File)} {user.Target} {user.Expression} {user.Purpose}",
+                "outer master-Au.ipt Width 386 mm Overall panel width input");
+
+            var formula = SetupAssignment.FromJson("outer", @"C:\master-Au.ipt",
+                (JsonObject)J.Parse("{\"name\":\"d0\",\"formula\":\"Width\",\"label\":\"Verified outer width dimension\"}"), true);
+            formula.Status = SetupAssignmentStatus.Failed;
+            formula.Error = "parameter not found";
+            Check("setup formula label metadata", $"{formula.Target} {formula.Expression} {formula.Purpose} {formula.PurposeDeclared}",
+                "d0 Width Verified outer width dimension True");
+            var inferred = SetupAssignment.FromJson("inner", @"C:\master-In.ipt",
+                (JsonObject)J.Parse("{\"name\":\"d97\",\"formula\":\"HoleEdge - Stärke - Clearance\"}"), true);
+            Check("setup inferred purpose does not claim a sketch", $"{inferred.Purpose} {inferred.PurposeDeclared}",
+                "Inner-panel hole setback from the panel edge False");
+            var inputPurpose = SetupAssignment.FromJson("outer", @"C:\master-Au.ipt",
+                (JsonObject)J.Parse("{\"name\":\"HoleMidOffsetW\",\"value\":\"HoleEdge - Stärke - Clearance\",\"unit\":\"mm\"}"), false);
+            Check("setup user input purpose", inputPurpose.Purpose, "Width-wall center-pair offset input");
+
+            var report = new MasterSetupReport();
+            report.Assignments.Add(user);
+            report.Assignments.Add(formula);
+            report.Assignments.Add(new SetupAssignment
+            {
+                Role = "inner", File = @"C:\master-In.ipt", Target = "d1", Expression = "Length",
+                Purpose = "Overall panel length", Status = SetupAssignmentStatus.Skipped,
+                Error = "Skipped at your request."
+            });
+            Check("setup report completeness", report.Complete, false);
+            Check("setup report checklist statuses", report.Format().Contains("APPLIED | outer | C:\\master-Au.ipt | Width = 386 mm") &&
+                report.Format().Contains("FAILED | outer | C:\\master-Au.ipt | d0 = Width") &&
+                report.Format().Contains("Error: parameter not found") &&
+                report.Format().Contains("SKIPPED | inner | C:\\master-In.ipt | d1 = Length"), true);
+            report.Cancelled = true;
+            Check("setup report cancellation is explicit", report.Format().Contains("remaining setup cancelled") &&
+                report.Format().Contains("Changes are unsaved"), true);
         }
     }
 }

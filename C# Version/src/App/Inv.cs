@@ -90,6 +90,18 @@ namespace InventorSizer
             Log.Write($"Opened {path}");
         }
 
+        public static void ActivateAssembly(string path)
+        {
+            foreach (var doc in Items(App().Documents))
+                if ((int)doc.DocumentType == kAssemblyDocumentObject &&
+                    string.Equals((string)doc.FullFileName, path, StringComparison.OrdinalIgnoreCase))
+                {
+                    doc.Activate();
+                    return;
+                }
+            throw new SizerException($"The setup assembly is no longer open in Inventor: {path}");
+        }
+
         // The assembly plus every part / sub-assembly it uses, at any depth.
         public static List<dynamic> ModelDocuments(dynamic asm)
         {
@@ -530,50 +542,196 @@ namespace InventorSizer
             throw new SizerException($"The master {Path.GetFileName((string)asm.FullFileName)} is not set up for the {s.Id} standard (setup version {s.SetupVersion}): {has}.\n\nStart the dev run (Dev run.cmd), click \"Set up master...\", choose this master, check that nothing moved and save it, then Apply again.");
         }
 
-        // Applies the type's "setup" (standards\<type>.json) to the open master: per role the
-        // user parameters are created or set, then the model dimensions get their formulas.
-        public static void MasterSetup(Standard s)
+        // Applies the type's setup one assignment at a time. When review is null, all
+        // assignments run non-interactively; otherwise the callback can skip the next item or
+        // cancel the remaining work after inspecting each result.
+        public static MasterSetupReport MasterSetup(Standard s, Func<SetupAssignment, bool, SetupStepDecision> review = null)
         {
             if (s.Setup == null) throw new SizerException($"The type {s.Name} has no setup section in {s.File}.");
             dynamic asm = ActiveAssembly();
-            int done = 0;
+            var report = new MasterSetupReport();
+            var work = new List<SetupWorkItem>();
+            var rolesFound = new HashSet<string>();
             foreach (var doc in ModelDocuments(asm))
             {
-                string b = Path.GetFileNameWithoutExtension((string)doc.FullFileName);
-                string role = (string)doc.FullFileName == (string)asm.FullFileName ? "assembly"
+                string path = (string)doc.FullFileName;
+                string b = Path.GetFileNameWithoutExtension(path);
+                string role = path == (string)asm.FullFileName ? "assembly"
                             : s.PartSuffixes("inner").Any(x => b.EndsWith(x, StringComparison.OrdinalIgnoreCase)) ? "inner"
                             : s.PartSuffixes("outer").Any(x => b.EndsWith(x, StringComparison.OrdinalIgnoreCase)) ? "outer" : "";
                 var setup = role == "" ? null : s.Setup.Obj(role);
                 if (setup == null) continue;
-                if (!(bool)doc.IsModifiable) { Log.Write($"  {b} : read-only - skipped"); continue; }
-                Log.Measure($"Setup {role} : {b}", () =>
-                {
-                    dynamic ps = doc.ComponentDefinition.Parameters;
-                    foreach (var u in setup.Arr("user").OfType<JsonObject>())
-                    {
-                        dynamic existing = null;
-                        try { existing = ps.Item(u.Str("name")); } catch { }
-                        if (existing != null) existing.Expression = u.Str("value");
-                        else ps.UserParameters.AddByExpression(u.Str("name"), u.Str("value"), u.Str("unit"));
-                    }
-                    foreach (var f in setup.Arr("formulas").OfType<JsonObject>())
-                    {
-                        try { ps.Item(f.Str("name")).Expression = f.Str("formula"); }
-                        catch (Exception e) { Log.Write($"  {b} : {f.Str("name")} = {f.Str("formula")} failed ({e.Message})"); }
-                    }
-                    doc.Update2(true);
-                    Log.Write($"  {b} ({role}): {setup.Arr("user").Count} user parameters, {setup.Arr("formulas").Count} formulas");
-                });
-                done++;
+                rolesFound.Add(role);
+                bool modifiable = (bool)doc.IsModifiable;
+                dynamic ps = modifiable ? doc.ComponentDefinition.Parameters : null;
+                foreach (var u in setup.Arr("user").OfType<JsonObject>())
+                    work.Add(new SetupWorkItem { Doc = doc, Parameters = ps, Assignment = SetupAssignment.FromJson(role, path, u, false), Modifiable = modifiable });
+                foreach (var f in setup.Arr("formulas").OfType<JsonObject>())
+                    work.Add(new SetupWorkItem { Doc = doc, Parameters = ps, Assignment = SetupAssignment.FromJson(role, path, f, true), Modifiable = modifiable });
             }
-            if (done == 0) throw new SizerException("No part of the open assembly matched the type (outer / inner suffix) - nothing was set up.");
-            asm.Update2(true);
-            if (s.SetupVersion > 0)
+            foreach (string role in new[] { "assembly", "outer", "inner" })
             {
-                try { WriteSetupMark(asm, s); Log.Write($"  marked the master: {SetupMarker} = {SetupMark(s)} (custom iProperty)"); }
-                catch (Exception e) { Log.Write($"  warning: could not mark the master ({e.Message}) - Apply will refuse it"); }
+                var setup = s.Setup.Obj(role);
+                if (setup == null || rolesFound.Contains(role)) continue;
+                string missing = $"No matching {role} document was found in the open assembly.";
+                string file = $"(no matching {role} document)";
+                foreach (var u in setup.Arr("user").OfType<JsonObject>())
+                    work.Add(new SetupWorkItem { Assignment = SetupAssignment.FromJson(role, file, u, false), PreflightError = missing });
+                foreach (var f in setup.Arr("formulas").OfType<JsonObject>())
+                    work.Add(new SetupWorkItem { Assignment = SetupAssignment.FromJson(role, file, f, true), PreflightError = missing });
             }
-            Log.Write("Setup done.");
+            if (work.Count == 0) throw new SizerException("No part of the open assembly matched the type (assembly / outer / inner role) - nothing was set up.");
+
+            bool skipNext = false;
+            for (int i = 0; i < work.Count; i++)
+            {
+                var step = work[i];
+                if (report.Cancelled)
+                {
+                    step.Assignment.Status = SetupAssignmentStatus.Skipped;
+                    step.Assignment.Error = "Not attempted: remaining setup was cancelled.";
+                    report.Assignments.Add(step.Assignment);
+                    Log.Write(step.Assignment.ChecklistLine());
+                    continue;
+                }
+                bool skip = skipNext;
+                skipNext = false;
+                ApplySetupAssignment(step, skip, report);
+                if (review != null)
+                {
+                    var decision = ReviewSetupAssignment(step.Assignment, i + 1 < work.Count, review);
+                    if (decision.Error != "")
+                    {
+                        step.Assignment.Status = SetupAssignmentStatus.Failed;
+                        step.Assignment.Error = decision.Error;
+                        report.FinalizationError = decision.Error;
+                    }
+                    else if (decision.Expression != null && decision.Expression != step.Assignment.Expression)
+                        ApplySetupCorrection(step, decision.Expression);
+                    if (decision.AddedAssignment != null)
+                        work.Insert(i + 1, new SetupWorkItem
+                        {
+                            Doc = step.Doc, Parameters = step.Parameters, Modifiable = step.Modifiable,
+                            Assignment = decision.AddedAssignment
+                        });
+                    skipNext = decision.Action == SetupStepAction.SkipNext;
+                    if (decision.Action == SetupStepAction.CancelRemaining) report.Cancelled = true;
+                }
+            }
+
+            if (report.Complete)
+            {
+                try
+                {
+                    if (!(bool)asm.Update2(true)) throw new SizerException("Inventor could not update the assembly after applying the assignments.");
+                    if (s.SetupVersion > 0)
+                    {
+                        WriteSetupMark(asm, s);
+                        Log.Write($"  marked the master: {SetupMarker} = {SetupMark(s)} (custom iProperty)");
+                    }
+                }
+                catch (Exception e) { report.FinalizationError = e.Message; }
+            }
+            Log.Write(report.Complete ? "Setup assignments complete; changes are not saved yet." : "Setup incomplete; changes are not saved.");
+            return report;
+        }
+
+        sealed class SetupWorkItem
+        {
+            public dynamic Doc, Parameters;
+            public SetupAssignment Assignment;
+            public bool Modifiable;
+            public string PreflightError = "";
+        }
+
+        static void ApplySetupAssignment(SetupWorkItem step, bool skip, MasterSetupReport report)
+        {
+            var item = step.Assignment;
+            if (skip)
+            {
+                item.Status = SetupAssignmentStatus.Skipped;
+                item.Error = "Skipped at your request.";
+                report.Assignments.Add(item);
+                Log.Write(item.ChecklistLine());
+                return;
+            }
+            if (step.PreflightError != "")
+            {
+                item.Status = SetupAssignmentStatus.Failed;
+                item.Error = step.PreflightError;
+                report.Assignments.Add(item);
+                Log.Write(item.ChecklistLine());
+                return;
+            }
+            if (!step.Modifiable)
+            {
+                item.Status = SetupAssignmentStatus.Failed;
+                item.Error = "The document is read-only.";
+                report.Assignments.Add(item);
+                Log.Write(item.ChecklistLine());
+                return;
+            }
+            try
+            {
+                Log.Measure($"Set {item.Role} {item.Target} in {Path.GetFileName(item.File)}", () =>
+                {
+                    if (item.IsFormula) step.Parameters.Item(item.Target).Expression = item.Expression;
+                    else
+                    {
+                        object userParameters = step.Parameters.UserParameters;
+                        dynamic existing = Items(userParameters)
+                            .FirstOrDefault(p => string.Equals((string)p.Name, item.Target, StringComparison.OrdinalIgnoreCase));
+                        if (existing != null) existing.Expression = item.Expression;
+                        else step.Parameters.UserParameters.AddByExpression(item.Target, item.Expression, item.Unit);
+                    }
+                    if (!(bool)step.Doc.Update2(true))
+                        throw new SizerException($"Inventor could not update {Path.GetFileName(item.File)} after assigning {item.Target}.");
+                });
+                item.Status = SetupAssignmentStatus.Applied;
+            }
+            catch (Exception e)
+            {
+                item.Status = SetupAssignmentStatus.Failed;
+                item.Error = e.Message;
+            }
+            report.Assignments.Add(item);
+            Log.Write(item.ChecklistLine());
+        }
+
+        static void ApplySetupCorrection(SetupWorkItem step, string expression)
+        {
+            var item = step.Assignment;
+            item.Expression = expression;
+            try
+            {
+                Log.Measure($"Correct {item.Role} {item.Target} in {Path.GetFileName(item.File)}", () =>
+                {
+                    if (item.IsFormula) step.Parameters.Item(item.Target).Expression = expression;
+                    else
+                    {
+                        object userParameters = step.Parameters.UserParameters;
+                        dynamic existing = Items(userParameters)
+                            .FirstOrDefault(p => string.Equals((string)p.Name, item.Target, StringComparison.OrdinalIgnoreCase));
+                        if (existing != null) existing.Expression = expression;
+                        else step.Parameters.UserParameters.AddByExpression(item.Target, expression, item.Unit);
+                    }
+                    if (!(bool)step.Doc.Update2(true))
+                        throw new SizerException($"Inventor could not update {Path.GetFileName(item.File)} after correcting {item.Target}.");
+                });
+                item.Status = SetupAssignmentStatus.Applied;
+                item.Error = "";
+            }
+            catch (Exception e)
+            {
+                item.Status = SetupAssignmentStatus.Failed;
+                item.Error = "Correction failed: " + e.Message;
+            }
+            Log.Write(item.ChecklistLine());
+        }
+
+        static SetupStepDecision ReviewSetupAssignment(SetupAssignment item, bool hasNext, Func<SetupAssignment, bool, SetupStepDecision> review)
+        {
+            return review(item, hasNext) ?? new SetupStepDecision();
         }
 
         // ------------------------------------------------------------------ hardware holes

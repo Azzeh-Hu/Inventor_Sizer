@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
 using System.Windows.Forms;
+using InventorSizer.Core;
 
 namespace InventorSizer
 {
@@ -190,6 +191,8 @@ namespace InventorSizer
         public static string Ask(Form owner, string title, string text, params string[] buttons) => Run(owner, title, text, ToastKind.Info, buttons);
         public static void Error(Form owner, string title, string text) => Run(owner, title, text, ToastKind.Error, new[] { "OK" });
 
+        public static void Report(Form owner, string title, string text) => SetupReportDialog.Show(owner, title, text);
+
         static string Run(Form owner, string title, string text, ToastKind kind, string[] buttons)
         {
             using (var d = new GlassDialog(title, text, kind, buttons))
@@ -209,6 +212,207 @@ namespace InventorSizer
                 return d.Answer;
             }
         }
+    }
+
+    sealed class SetupReportDialog : GlassForm
+    {
+        SetupReportDialog(string title, string text)
+        {
+            Size = new Size(800, 600);
+            var heading = new Label
+            {
+                Text = title,
+                Font = Theme.Serif(14f),
+                ForeColor = Theme.GlassText,
+                AutoSize = true,
+                Location = new Point(24, 20),
+                BackColor = Color.Transparent
+            };
+            var report = new TextBox
+            {
+                Multiline = true,
+                ReadOnly = true,
+                WordWrap = false,
+                ScrollBars = ScrollBars.Both,
+                BorderStyle = BorderStyle.None,
+                BackColor = Theme.GlassRaised,
+                ForeColor = Theme.GlassText,
+                Font = Theme.Mono(9),
+                Text = text,
+                Location = new Point(20, 62),
+                Size = new Size(Width - 40, Height - 126),
+                Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right
+            };
+            var close = new FlatButton("Close", ButtonKind.GlassPrimary, 100, 34)
+            {
+                Anchor = AnchorStyles.Bottom | AnchorStyles.Right,
+                Location = new Point(Width - 124, Height - 50)
+            };
+            close.Click += (s, e) => Close();
+            AcceptButton = close;
+            CancelButton = close;
+            Controls.AddRange(new Control[] { heading, report, close });
+        }
+
+        public static void Show(Form owner, string title, string text)
+        {
+            using (var d = new SetupReportDialog(title, text))
+            using (var dim = new Form { FormBorderStyle = FormBorderStyle.None, ShowInTaskbar = false, StartPosition = FormStartPosition.Manual, BackColor = Color.Black })
+            {
+                var host = owner != null && !owner.IsDisposed && owner.Visible ? owner : null;
+                if (host != null)
+                {
+                    try { dim.Opacity = 0.22; } catch { }
+                    dim.Bounds = host.RectangleToScreen(host.ClientRectangle);
+                    dim.Show(host);
+                    var r = dim.Bounds;
+                    d.Location = new Point(r.X + (r.Width - d.Width) / 2, r.Y + (r.Height - d.Height) / 2);
+                    d.ShowDialog(dim);
+                }
+                else
+                {
+                    d.StartPosition = FormStartPosition.CenterScreen;
+                    d.ShowDialog();
+                }
+            }
+        }
+    }
+
+    sealed class SetupTextDialog : GlassForm
+    {
+        SetupTextDialog(string title, string prompt, string initial, out TextBox input, bool multiline)
+        {
+            Size = new Size(620, multiline ? 420 : 290);
+            var heading = new Label { Text = title, Font = Theme.Serif(14f), ForeColor = Theme.GlassText, AutoSize = true, Location = new Point(24, 20), BackColor = Color.Transparent };
+            var label = new Label { Text = prompt, Font = Theme.Body, ForeColor = Theme.GlassMuted, AutoSize = true, MaximumSize = new Size(Width - 48, 0), Location = new Point(24, 58), BackColor = Color.Transparent };
+            input = new TextBox
+            {
+                Multiline = multiline, AcceptsReturn = multiline, ScrollBars = multiline ? ScrollBars.Vertical : ScrollBars.None,
+                Text = initial ?? "", Font = multiline ? Theme.Mono(9) : Theme.Body,
+                Location = new Point(24, label.Bottom + 14), Size = new Size(Width - 48, Height - label.Bottom - 86),
+                Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right
+            };
+            var cancel = new FlatButton("Cancel", ButtonKind.Glass, 100, 34) { Anchor = AnchorStyles.Bottom | AnchorStyles.Right };
+            var ok = new FlatButton("Use value", ButtonKind.GlassPrimary, 110, 34) { Anchor = AnchorStyles.Bottom | AnchorStyles.Right };
+            cancel.Location = new Point(Width - 24 - cancel.Width - ok.Width - 10, Height - 52);
+            ok.Location = new Point(Width - 24 - ok.Width, Height - 52);
+            cancel.Click += (s, e) => { DialogResult = DialogResult.Cancel; Close(); };
+            ok.Click += (s, e) => { DialogResult = DialogResult.OK; Close(); };
+            AcceptButton = ok; CancelButton = cancel;
+            Controls.AddRange(new Control[] { heading, label, input, cancel, ok });
+        }
+
+        public static string Prompt(Form owner, string title, string prompt, string initial = "", bool multiline = false)
+        {
+            using (var d = Create(title, prompt, initial, multiline, out TextBox input))
+            {
+                if (ShowPrompt(owner, d) != DialogResult.OK) return null;
+                return input.Text;
+            }
+        }
+
+        static SetupTextDialog Create(string title, string prompt, string initial, bool multiline, out TextBox input)
+        {
+            var d = new SetupTextDialog(title, prompt, initial, out input, multiline);
+            return d;
+        }
+
+        static DialogResult ShowPrompt(Form owner, Form dialog)
+        {
+            var host = owner != null && !owner.IsDisposed && owner.Visible ? owner : null;
+            if (host == null) return dialog.ShowDialog();
+            using (var dim = new Form { FormBorderStyle = FormBorderStyle.None, ShowInTaskbar = false, StartPosition = FormStartPosition.Manual, BackColor = Color.Black })
+            {
+                try { dim.Opacity = 0.22; } catch { }
+                dim.Bounds = host.RectangleToScreen(host.ClientRectangle);
+                dim.Show(host);
+                var r = dim.Bounds;
+                dialog.StartPosition = FormStartPosition.Manual;
+                dialog.Location = new Point(r.X + (r.Width - dialog.Width) / 2, r.Y + (r.Height - dialog.Height) / 2);
+                return dialog.ShowDialog(dim);
+            }
+        }
+    }
+
+    sealed class SetupParameterDialog : GlassForm
+    {
+        public string ParameterName, Expression, Unit, Purpose;
+
+        SetupParameterDialog()
+        {
+            Size = new Size(620, 420);
+            var heading = new Label { Text = "Add user parameter", Font = Theme.Serif(14f), ForeColor = Theme.GlassText, AutoSize = true, Location = new Point(24, 20), BackColor = Color.Transparent };
+            var table = new TableLayoutPanel { Location = new Point(24, 62), Size = new Size(Width - 48, 260), ColumnCount = 2, RowCount = 4, Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right };
+            table.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 150));
+            table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            var name = new TextBox { Font = Theme.Body, Dock = DockStyle.Fill };
+            var expression = new TextBox { Font = Theme.Body, Dock = DockStyle.Fill };
+            var unit = new TextBox { Font = Theme.Body, Dock = DockStyle.Fill, Text = "mm" };
+            var purpose = new TextBox { Font = Theme.Body, Dock = DockStyle.Fill };
+            var inputs = new[] { ("Parameter name", name), ("Value / expression", expression), ("Unit (mm, ul, deg...)", unit), ("Purpose label (optional)", purpose) };
+            for (int i = 0; i < inputs.Length; i++)
+            {
+                table.Controls.Add(new Label { Text = inputs[i].Item1, AutoSize = true, ForeColor = Theme.GlassMuted, Anchor = AnchorStyles.Left, Margin = new Padding(0, 7, 8, 7) }, 0, i);
+                table.Controls.Add(inputs[i].Item2, 1, i);
+            }
+            var cancel = new FlatButton("Cancel", ButtonKind.Glass, 100, 34) { Anchor = AnchorStyles.Bottom | AnchorStyles.Right };
+            var add = new FlatButton("Add parameter", ButtonKind.GlassPrimary, 130, 34) { Anchor = AnchorStyles.Bottom | AnchorStyles.Right };
+            cancel.Location = new Point(Width - 24 - cancel.Width - add.Width - 10, Height - 52);
+            add.Location = new Point(Width - 24 - add.Width, Height - 52);
+            cancel.Click += (s, e) => { DialogResult = DialogResult.Cancel; Close(); };
+            add.Click += (s, e) =>
+            {
+                if (name.Text.Trim() == "" || expression.Text.Trim() == "" || unit.Text.Trim() == "")
+                {
+                    GlassDialog.Error(this, "Parameter details required", "Enter a name, value or expression, and a unit.");
+                    return;
+                }
+                ParameterName = name.Text.Trim(); Expression = expression.Text.Trim(); Unit = unit.Text.Trim(); Purpose = purpose.Text.Trim();
+                DialogResult = DialogResult.OK; Close();
+            };
+            AcceptButton = add; CancelButton = cancel;
+            Controls.AddRange(new Control[] { heading, table, cancel, add });
+        }
+
+        public static SetupAssignment Create(Form owner, string role, string file)
+        {
+            using (var d = new SetupParameterDialog())
+            {
+                if (ShowPrompt(owner, d) != DialogResult.OK) return null;
+                var item = new SetupAssignment
+                {
+                    Role = role, File = file, Target = d.ParameterName, Expression = d.Expression,
+                    Unit = d.Unit, Purpose = d.Purpose == "" ? $"Input parameter: {d.ParameterName}" : d.Purpose,
+                    PurposeDeclared = d.Purpose != "", Status = SetupAssignmentStatus.Pending, IsFormula = false
+                };
+                return item;
+            }
+        }
+
+        static DialogResult ShowPrompt(Form owner, Form dialog)
+        {
+            var host = owner != null && !owner.IsDisposed && owner.Visible ? owner : null;
+            if (host == null) return dialog.ShowDialog();
+            using (var dim = new Form { FormBorderStyle = FormBorderStyle.None, ShowInTaskbar = false, StartPosition = FormStartPosition.Manual, BackColor = Color.Black })
+            {
+                try { dim.Opacity = 0.22; } catch { }
+                dim.Bounds = host.RectangleToScreen(host.ClientRectangle);
+                dim.Show(host);
+                var r = dim.Bounds;
+                dialog.StartPosition = FormStartPosition.Manual;
+                dialog.Location = new Point(r.X + (r.Width - dialog.Width) / 2, r.Y + (r.Height - dialog.Height) / 2);
+                return dialog.ShowDialog(dim);
+            }
+        }
+    }
+
+    public static class SetupDialog
+    {
+        public static string EditExpression(Form owner, SetupAssignment item) =>
+            SetupTextDialog.Prompt(owner, "Edit setup expression", $"{item.Role} | {item.File}\n{item.Target} — current expression: {item.Expression}\n\nEnter the corrected expression. The app will apply it to Inventor and, after confirmation, update the selected type's standards file.", item.Expression);
+
+        public static SetupAssignment AddParameter(Form owner, string role, string file) =>
+            SetupParameterDialog.Create(owner, role, file);
     }
 
     // ------------------------------------------------------------------ activity panel

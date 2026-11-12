@@ -93,5 +93,40 @@
       <comment>TP: handles per door, evenly spaced (other types: not used)</comment>
       <isKey>false</isKey>
     </ParamWithValue>
+    <ParamWithValue>
+      <name>HolePitchL</name>
+      <typeCode>mm</typeCode>
+      <value>200 mm</value>
+      <comment>distance between each hole for (-In) and (-Au), (length - (2 * HoleEdge))/(HolesL - 1)</comment>
+      <isKey>false</isKey>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>HoleDia_sides</name>
+      <typeCode>mm</typeCode>
+      <value>4.1 mm</value>
+      <comment>Hole diameter (fixed)</comment>
+      <isKey>false</isKey>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>HoleDia_handle</name>
+      <typeCode>mm</typeCode>
+      <value>9 mm</value>
+      <comment>Hole diameter (fixed)</comment>
+      <isKey>false</isKey>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>HoleDia_hinge_small</name>
+      <typeCode>mm</typeCode>
+      <value>4.1 mm</value>
+      <comment>Hole diameter (fixed)</comment>
+      <isKey>false</isKey>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>HoleDia_hinge_large</name>
+      <typeCode>mm</typeCode>
+      <value>11 mm</value>
+      <comment>Hole diameter (fixed)</comment>
+      <isKey>false</isKey>
+    </ParamWithValue>
   </parameters>
 </ParamWithValueList>

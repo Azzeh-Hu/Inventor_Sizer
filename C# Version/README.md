@@ -96,16 +96,19 @@ Nothing to install. The tool uses:
 
 ## Using it
 
-1. Run `Launch.bat`. If Inventor has an assembly open, the window reads its name.
-2. Get the assembly you start from, in one of three ways:
+1. Run `Launch.bat`. Width, Length and Height are blank; no panel size is preset.
+2. Click **Load assembly...** and choose a panel assembly whose filename contains its size
+   (`WidthxLengthxHeight`, for example `FP-386x656x47.iam`). The app opens it and initializes
+   the size from the filename. Other panel parameters use `Parameters.xml`.
+3. Get the assembly you start from, in one of three ways:
    - **Open master**: opens the master assembly of the selected **Type** (from the standard).
    - **Open assembly...**: browse for any `.iam`. Inventor is started if it isn't running.
    - **Read from Inventor**: uses the assembly that is already active in Inventor.
-3. Edit the **name** or the values in the **grid** (they stay in sync). `HolesL` and `HolesW`
+4. Edit the **name** or the values in the **grid** (they stay in sync). `HolesL` and `HolesW`
    set the holes per length wall and per width wall. The name may start with a project number
    (`6357-3 TP-519x1194x42`); the **Type** follows the prefix in front of the size, or the
    height if there is none, and brings its own `HoleZ`.
-4. The drawing on the right updates as you type:
+5. The drawing on the right updates as you type:
    - **View**: Isometric, Front, Back, Left, Right, Top or Bottom.
    - **Show hidden edges**: back edges, back-wall holes, floor and wall thickness as dashed lines.
    - The **bill of materials** (bottom right) lists the parts of the type with their sizes and
@@ -113,10 +116,10 @@ Nothing to install. The tool uses:
      (a dot = axis points at you, a cross = away from you).
    - **Save drawing (SVG)...** writes a drawing sheet: the isometric view top left, the front
      and top views in the middle area, hole notes, and the bill of materials.
-5. If a rule is broken, the reasons appear in red under the grid, the bad holes are red in the
+6. If a rule is broken, the reasons appear in red under the grid, the bad holes are red in the
    drawing, and **Apply to Inventor** is greyed out. Grey text there is a note only (for
    example that the inner panel will be split).
-6. Click **Apply to Inventor**:
+7. Click **Apply to Inventor**:
    - **Name unchanged:** values go into Inventor, the model rebuilds, and the files are saved in place.
    - **Name changed:** the model is saved as **new files** (`FP-800x1200x47.iam`,
      `800x1200x47-Au.ipt`, `800x1200x47-In.ipt`). The Part Number iProperty gets the new size
@@ -124,11 +127,11 @@ Nothing to install. The tool uses:
    - **A panel of that name already exists:** the app asks. **Use existing** opens it and writes
      nothing; **Overwrite** replaces the assembly and its parts (every assembly that uses those
      files changes with them; files open in Inventor must be closed first); **Cancel** stops.
-7. The log at the bottom lists every parameter that changed and in which file. Errors include
+8. The log at the bottom lists every parameter that changed and in which file. Errors include
    the script line number.
-8. **Learn hardware holes** (once per type, with its master open): reads the hinge and handle
+9. **Learn hardware holes** (once per type, with its master open): reads the hinge and handle
    holes from Inventor. From then on they show in orange in every drawing of that type.
-9. **Set up master...**: choose a type's master assembly and set it up in one go (see below).
+10. **Set up master...**: choose a type's master assembly and set it up in one go (see below).
 
 ## Where new files are saved
 
@@ -233,7 +236,8 @@ Values are written as numbers in Inventor's internal units, so the Windows decim
 Each type's file, `standards\<type>.json`, holds everything about the type in one place:
 
 - `setup`: per part role (`outer`, `inner`, `assembly`), the user parameters and the formulas
-  for the master's model dimensions
+  for the master's model dimensions. An optional `label` on an assignment supplies a human-readable
+  purpose; it does not identify a sketch unless the standard explicitly says so.
 - `hardware`: hinge and handle holes
 - `hardwareCounts`: which counts can change
 
@@ -242,17 +246,28 @@ To set up a master:
 1. Pick its type.
 2. Click **Set up master...** and choose the master's `.iam`. The app:
    - opens it in Inventor
-   - creates or sets the user parameters and writes the formulas into the `-Au` part, the
-     `-In` part and the assembly
-   - uses this file as the type's master from now on (stored in `standards\<type>.json`)
-3. Check in Inventor that nothing moved, then answer:
+   - creates or sets each user parameter and assigns each formula individually
+   - pauses after each assignment with the role, file, target, expression, purpose label and
+     result. Navigate to the relevant sketch yourself; the app does not search for or highlight
+     sketches. Purpose text is not a claim about sketch ownership.
+   - lets you edit an expression and apply the correction, or add a user-parameter assignment.
+     After confirmation, these changes are written to the selected type's
+     `standards\<type>.json` and reused on later setup runs.
+   - lets you continue, skip the next assignment, or cancel the remaining setup
+3. Review the final scrollable checklist. It lists every assignment as applied, skipped or failed,
+   with failure details. A skipped, failed or cancelled setup is incomplete: no save choices are
+   offered, no master is registered, and changes already applied remain unsaved. Close the files
+   without saving to undo those changes.
+4. If every assignment succeeded, inspect the model in Inventor, then choose:
    - **Save into Inventor Sizer**: saves the assembly and its `-Au` / `-In` parts as copies in
      `masters\<type>\1T\` or `...\2T\` next to the app (the app sees whether the master has 1 or
-     2 inner panels) and uses that copy as the master. The files you opened
-     stay as they were on disk. Library parts (hinges, handles) are not copied; the master
-     keeps using them from the library.
-   - **Save where it is**: saves the opened files themselves.
-   - **Not now**: the master stays open and unsaved.
+     2 inner panels) and registers that copy as the master. The files you opened stay as they were
+     on disk. Library parts (hinges, handles) are not copied; the master keeps using them from the
+     library.
+   - **Save where it is**: saves the opened files themselves and registers that assembly as the
+     master.
+   - **Not now**: leaves the changes unsaved and does not register the master. Close without
+     saving to undo the setup.
 
 These buttons are only in the dev run. Give users the app folder with `masters\` filled (or
 commit the masters), and they start `InventorSizer.exe` and click Apply.

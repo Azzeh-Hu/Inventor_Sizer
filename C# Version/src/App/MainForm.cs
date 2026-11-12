@@ -174,6 +174,7 @@ namespace InventorSizer
             subBox = new ThemedCombo(124);   // sub type: which master is used. Auto follows the split width in Settings.
             subBox.Items.AddRange(new object[] { "Auto (width)", "1T", "2T" });
             subBox.SelectedIndex = 0;
+            var btnOpenPanel = new FlatButton("Load assembly...", ButtonKind.Secondary, 0, 32);
             nameBox = new TextBox { Font = Theme.Ui(10.5f) };
             devMenu = new MenuButton("Master", ButtonKind.Secondary) { Height = 32, Margin = new Padding(8, 0, 0, 0) };
             miOpenMaster = devMenu.Add("Open master", (s, e) => Step("Open master", () => { Inv.OpenVisible(std.MasterFor(CurrentSub())); Log.Write($"Master {std.Id} {CurrentSub()} open; the name is unchanged."); }, true));
@@ -181,7 +182,7 @@ namespace InventorSizer
             devMenu.Separator();
             miLearn = devMenu.Add("Learn hardware holes", (s, e) => Step("Learn hardware holes", () => { Inv.LearnHardware(standards, std, Standards.Get(GridValues(), "HoleDia"), Standards.Get(GridValues(), "HoleZ")); UpdatePreview(); }, true));
             panelBar = Row(Theme.App); panelBar.Dock = DockStyle.Left;
-            panelBar.Controls.AddRange(new Control[] { new Caption("Type"), typeBox, subBox, new Caption("Name") { Margin = new Padding(14, 9, 6, 0) }, new Field(nameBox, 330, 32), devMenu });
+            panelBar.Controls.AddRange(new Control[] { new Caption("Type"), typeBox, subBox, btnOpenPanel, new Caption("Name") { Margin = new Padding(14, 9, 6, 0) }, new Field(nameBox, 260, 32), devMenu });
 
             presetBox = new ThemedCombo(250);
             btnOpenGr = new FlatButton("Open GR...", ButtonKind.Secondary, 0, 32);
@@ -267,10 +268,17 @@ namespace InventorSizer
             chkFolder.CheckedChanged += (s, e) => FolderControls();
             foreach (var nb in new[] { gapBox, thickBox, splitBox, pitchBox }) nb.ValueChanged += (s, e) => { if (!syncing) { SettingsFromForm(); UpdateGridLocks(); UpdatePreview(); } };
             btnBrowse.Click += (s, e) => { using (var d = new FolderBrowserDialog { Description = "Folder for new panels (this session only)" }) if (d.ShowDialog(this) == DialogResult.OK) folderBox.Text = d.SelectedPath; };
+            btnOpenPanel.Click += (s, e) => Step("Load panel assembly", LoadPanelAssembly, true);
 
             modeSwitch.Picked += i => Step("Switch mode", () => SetMode(i == 1 ? "GR" : "Panel"));
             btnApply.Click += (s, e) => Step("Apply to Inventor", ApplyPanel, true);
-            btnReload.Click += (s, e) => Step("Reload file", () => { SetGrid(ParamFile.Read(ParamPath)); NameFromGrid(); UpdatePreview(); });
+            btnReload.Click += (s, e) => Step("Reload file", () =>
+            {
+                SetGrid(ParamFile.Read(ParamPath));
+                EnsureSizeRows();
+                ClearPanelSize();
+                UpdatePreview();
+            });
             btnDevSave.Click += (s, e) => Step("Save dev log", () =>
             {
                 using (var d = new SaveFileDialog { Filter = "Text (*.txt)|*.txt", FileName = "devlog.txt" })
@@ -425,10 +433,11 @@ namespace InventorSizer
                 foreach (var s in standards) typeBox.Items.Add(s.ToString());
                 SelectStandard(standards[0]);
                 SetGrid(ParamFile.Read(ParamPath));
-                NameFromGrid();
+                EnsureSizeRows();
+                ClearPanelSize();
             });
-            Log.Write("Ready. Inventor is not read at start: it is used when you make a new version (Apply / Write) or open / read something.");
-            Toast.Show(this, ToastKind.Info, "Ready", "Inventor is only used when you apply, write, open or read something.");
+            Log.Write("Ready. Load a panel assembly to get its starting size; no panel dimensions are preset at startup.");
+            Toast.Show(this, ToastKind.Info, "Ready", "Load a panel assembly to initialize its dimensions.");
             UpdatePreview();
         }
 
@@ -471,6 +480,49 @@ namespace InventorSizer
         // ------------------------------------------------------------------ parameter grid
 
         DataRow FindRow(string name) => table.Rows.Cast<DataRow>().FirstOrDefault(r => (string)r["Name"] == name);
+
+        void EnsureSizeRows()
+        {
+            foreach (var name in U.SizeParams)
+                if (FindRow(name) == null) table.Rows.Add(name, DBNull.Value, "mm", "Read from the selected assembly name");
+        }
+
+        void ClearPanelSize()
+        {
+            syncing = true;
+            try
+            {
+                EnsureSizeRows();
+                foreach (var name in U.SizeParams) FindRow(name)["Value"] = DBNull.Value;
+                nameBox.Clear();
+            }
+            finally { syncing = false; }
+        }
+
+        void LoadPanelAssembly()
+        {
+            using (var d = new OpenFileDialog { Filter = "Inventor assembly (*.iam)|*.iam", Title = "Choose a panel assembly" })
+            {
+                if (d.ShowDialog(this) != DialogResult.OK) { Log.Write("Cancelled: no panel assembly chosen."); return; }
+                string panelName = Path.GetFileNameWithoutExtension(d.FileName);
+                var match = U.SizeRegex.Match(panelName);
+                if (!match.Success) throw new SizerException("The selected assembly file name must contain a size like 386x656x47.");
+                Inv.OpenVisible(d.FileName);
+                syncing = true;
+                try
+                {
+                    EnsureSizeRows();
+                    for (int i = 0; i < U.SizeParams.Length; i++)
+                        FindRow(U.SizeParams[i])["Value"] = U.P(match.Groups[i + 1].Value);
+                    nameBox.Text = panelName;
+                }
+                finally { syncing = false; }
+                StandardFromName();
+                NameFromGrid();
+                UpdatePreview();
+                Log.Write($"Loaded panel size from {Path.GetFileName(d.FileName)}: {SizeToken()}");
+            }
+        }
 
         void SetGrid(List<Param> ps)
         {
@@ -617,6 +669,16 @@ namespace InventorSizer
             if (mode == "GR") { UpdateDrawing(); return; }
             AutoHoles();
             values = GridValues();
+            if (U.SizeParams.Any(k => !values.ContainsKey(k)))
+            {
+                layout = null;
+                hw = new List<PlacedHole>();
+                hud.Lines = new List<string> { "Load a panel assembly to initialize Width, Length and Height." };
+                hud.Error = false;
+                btnApply.Enabled = false;
+                UpdateDrawing();
+                return;
+            }
             var errors = new List<string>();
             var counts = Hardware.Counts(std, values);
             foreach (var k in counts.Keys.ToList())
@@ -640,9 +702,11 @@ namespace InventorSizer
         {
             var size = twin.ClientSize;
             string view = (string)viewBox.SelectedItem ?? "Isometric";
-            shapes = Log.Measure("Draw", () => mode == "GR"
-                ? GrDrawing.Window(gr, view, size.Width, size.Height)
-                : PanelDrawing.Window(PanelValues.Of(values, settings.Thickness, hw), layout, view, size.Width, size.Height, chkHidden.Checked, CurrentBom()));
+            shapes = mode != "GR" && U.SizeParams.Any(k => !values.ContainsKey(k))
+                ? new List<Shape>()
+                : Log.Measure("Draw", () => mode == "GR"
+                    ? GrDrawing.Window(gr, view, size.Width, size.Height)
+                    : PanelDrawing.Window(PanelValues.Of(values, settings.Thickness, hw), layout, view, size.Width, size.Height, chkHidden.Checked, CurrentBom()));
             twin.Invalidate();
         }
 
@@ -675,8 +739,7 @@ namespace InventorSizer
             folderInfo.Text = chkFolder.Checked ? "This session only: new panels go into the folder above." : "New panels are made from the type's master; you choose their folder on Apply.";
         }
 
-        // One button for the whole master job: choose the file, open it, write the type's
-        // parameters and formulas into it, make it the master of the type, and offer to save it.
+        // Each setup assignment is applied individually, then shown for manual inspection.
         void SetUpMaster()
         {
             string file;
@@ -687,29 +750,119 @@ namespace InventorSizer
                 if (d.ShowDialog(this) != DialogResult.OK) { Log.Write("Cancelled: no master chosen."); return; }
                 file = d.FileName;
             }
-            string go = Choose("Set up master", $"{Path.GetFileName(file)}\n\nThe app opens this assembly, creates the user parameters and writes the formulas from {std.File} into it and its parts, and uses it as the master for {std.Name} from now on.\n\nNothing is saved until you say so. Use a copy the first time.",
+            string go = Choose("Set up master", $"{Path.GetFileName(file)}\n\nThe app opens this assembly and applies each user-parameter or formula assignment individually. After each one, inspect the target manually in Inventor. The app will not find, open, select, or highlight sketches.\n\nNothing is saved until you choose a save option. Use a copy the first time.",
                 "Set up", "Cancel");
             if (go != "Set up") { Log.Write("Cancelled: nothing was changed."); return; }
             Inv.OpenVisible(file);
-            Inv.MasterSetup(std);
+            var report = Inv.MasterSetup(std, ReviewSetupAssignment);
+            GlassDialog.Report(this, "Set up master - assignment report", report.Format());
+            if (!report.Complete)
+            {
+                Log.Write(report.Cancelled
+                    ? "Setup cancelled. Changes already applied in Inventor are unsaved; close without saving to undo them."
+                    : "Setup incomplete. Changes already applied in Inventor are unsaved; close without saving to undo them.");
+                return;
+            }
+
             string sub = Inv.MasterSubType(std);   // 1 inner panel = 1T, 2 = 2T
             Log.Write($"  this master is {std.Id} {sub}");
-            Standards.SetMaster(std, sub, file, Root);
-            SelectStandard(std);
             string store = Path.Combine(Root, "masters", std.Id, sub);
-            string save = Choose($"Save the {std.Id} {sub} master?", $"The setup is done, and this is the {std.Id} {sub} master ({(sub == "2T" ? "2 inner panels" : "1 inner panel")}). Look at the model in Inventor: nothing should have moved.\n\n" +
+            string save = Choose($"Save the {std.Id} {sub} master?", $"The setup assignments succeeded, and this is the {std.Id} {sub} master ({(sub == "2T" ? "2 inner panels" : "1 inner panel")}). The changes are currently unsaved. Inspect the model in Inventor before saving.\n\n" +
                 $"Save into Inventor Sizer: saves the assembly and its {string.Join(" / ", std.Parts.Select(p => p.Suffix))} parts as copies in\n{store}\nand uses that copy as the master. Users then need no setup. The files you opened stay as they were on disk.\n\n" +
                 "Save where it is: saves the opened files themselves.\n\nNot now: leaves it open and unsaved; close it without saving to undo the setup.",
                 "Save into Inventor Sizer", "Save where it is", "Not now");
             if (save == "Save into Inventor Sizer")
             {
+                Inv.ActivateAssembly(file);
                 string copy = Inv.SaveMasterIntoApp(std, store);
                 Standards.SetMaster(std, sub, copy, Root);
                 SelectStandard(std);
             }
-            else if (save == "Save where it is") Inv.SaveActiveAssembly();
-            else Log.Write("The master is not saved yet. Apply uses it only after it is saved.");
+            else if (save == "Save where it is")
+            {
+                Inv.ActivateAssembly(file);
+                Inv.SaveActiveAssembly();
+                Standards.SetMaster(std, sub, file, Root);
+                SelectStandard(std);
+            }
+            else Log.Write("The master remains open and unsaved, and was not registered as a master. Close it without saving to undo the setup.");
         }
+
+        SetupStepDecision ReviewSetupAssignment(SetupAssignment item, bool hasNext)
+        {
+            var decision = new SetupStepDecision();
+            string status = item.Status.ToString().ToUpperInvariant();
+            string purposeSource = item.PurposeDeclared
+                ? "Purpose label: provided by the standard setup data."
+                : "Purpose label: inferred from the parameter/expression; this is not a sketch mapping.";
+            string text = $"{status}\n\n" +
+                $"File: {item.File}\nRole: {item.Role}\nTarget Inventor parameter/dimension: {item.Target}\n" +
+                $"Expression: {item.Expression}\nPurpose: {item.Purpose}\n{purposeSource}\n\n" +
+                (item.Error == "" ? "" : $"Details: {item.Error}\n\n") +
+                "Inspect the result manually in Inventor. No sketch was located or highlighted. " +
+                "Any changes already applied are currently unsaved.\n\n" +
+                (hasNext
+                    ? "Continue moves to the next assignment. Edit expression reapplies this target with your correction. Add parameter creates a user parameter in this role. Skip leaves the next target unchanged. Cancel leaves the remaining assignments unapplied."
+                    : "This is the final assignment. Choose Finish to review the report, or cancel the setup; all changes remain unsaved.");
+            string answer = hasNext
+                ? Choose("Inspect setup assignment", text, "Continue", "Edit expression...", "Add parameter...", "Skip next assignment", "Cancel remaining setup")
+                : Choose("Inspect final setup assignment", text, "Finish setup", "Edit expression...", "Add parameter...", "Cancel remaining setup");
+
+            if (answer == "Edit expression...")
+            {
+                string expression = SetupDialog.EditExpression(this, item);
+                if (expression == null || expression.Trim() == "" || expression == item.Expression) return decision;
+                expression = expression.Trim();
+                if (Choose("Update setup code?", $"This writes the corrected expression to {std.File} and applies it in Inventor:\n\n{item.Role} | {item.Target} = {expression}\n\nContinue?", "Update code and apply", "Keep current expression") != "Update code and apply")
+                    return decision;
+                try
+                {
+                    var edited = CopySetupAssignment(item);
+                    edited.Expression = expression;
+                    Standards.UpsertSetupAssignment(std, edited);
+                    decision.Expression = expression;
+                    Log.Write($"Updated {std.File}: {item.Role} {item.Target} = {expression}");
+                }
+                catch (Exception e) { decision.Error = $"Could not update {std.File}: {e.Message}"; }
+                return decision;
+            }
+
+            if (answer == "Add parameter...")
+            {
+                var added = SetupDialog.AddParameter(this, item.Role, item.File);
+                if (added == null) return decision;
+                var roleSetup = std.Setup.Obj(item.Role);
+                var existing = roleSetup != null &&
+                    roleSetup.Arr("user").Concat(roleSetup.Arr("formulas")).OfType<JsonObject>()
+                        .Any(p => string.Equals(p.Str("name"), added.Target, StringComparison.OrdinalIgnoreCase));
+                if (existing)
+                {
+                    GlassDialog.Error(this, "Parameter already defined", $"{added.Target} already exists in the {item.Role} setup in {std.File}. Edit that assignment instead.");
+                    return decision;
+                }
+                if (Choose("Add parameter to setup code?", $"This writes a new user-parameter assignment to {std.File} and then applies it in Inventor:\n\n{added.Role} | {added.Target} = {added.Expression} {added.Unit}\n\nContinue?", "Add to code and apply", "Cancel") != "Add to code and apply")
+                    return decision;
+                try
+                {
+                    Standards.UpsertSetupAssignment(std, added);
+                    decision.AddedAssignment = added;
+                    Log.Write($"Added {std.File}: {added.Role} {added.Target} = {added.Expression} {added.Unit}");
+                }
+                catch (Exception e) { decision.Error = $"Could not add the parameter to {std.File}: {e.Message}"; }
+                return decision;
+            }
+
+            if (answer == "Skip next assignment") decision.Action = SetupStepAction.SkipNext;
+            else if (answer == "Cancel remaining setup") decision.Action = SetupStepAction.CancelRemaining;
+            return decision;
+        }
+
+        static SetupAssignment CopySetupAssignment(SetupAssignment item) => new SetupAssignment
+        {
+            Role = item.Role, File = item.File, Target = item.Target, Expression = item.Expression,
+            Purpose = item.Purpose, Unit = item.Unit, IsFormula = item.IsFormula,
+            PurposeDeclared = item.PurposeDeclared, Status = item.Status
+        };
 
         // A question with named buttons; the first is the default, the last answers Esc and
         // closing the box. Returns the text of the clicked button.

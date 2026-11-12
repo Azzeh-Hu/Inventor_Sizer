@@ -26,9 +26,6 @@ namespace InventorSizer.Core
     {
         public static string[][] Defaults =
         {
-            new[] { "Width", "386", "mm", "1st number in the file name" },
-            new[] { "Length", "656", "mm", "2nd number in the file name" },
-            new[] { "Height", "47", "mm", "3rd number in the file name" },
             new[] { "HolesL", "3", "ul", "Holes per length wall (0, 1, 2, 3, ...)" },
             new[] { "HolesW", "2", "ul", "Holes per width wall (0, 1, 2, 4, 6, ...)" },
             new[] { "HoleEdge", "50", "mm", "Hole centre distance from the panel edge (-Au)" },

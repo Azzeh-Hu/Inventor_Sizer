@@ -163,6 +163,32 @@ namespace InventorSizer.Core
             Log.Write($"Master of {s.Name}, sub type {sub}: {path} (saved in {s.File})");
         }
 
+        public static void UpsertSetupAssignment(Standard s, SetupAssignment assignment)
+        {
+            if (s == null || s.Setup == null) throw new SizerException("The selected type has no setup data to update.");
+            string key = assignment.IsFormula ? "formulas" : "user";
+            var roleSetup = s.Setup.Obj(assignment.Role);
+            if (roleSetup == null) throw new SizerException($"The {assignment.Role} role has no setup section in {s.File}.");
+            var items = roleSetup.Arr(key);
+            JsonObject entry = items.OfType<JsonObject>()
+                .FirstOrDefault(x => string.Equals(x.Str("name"), assignment.Target, StringComparison.OrdinalIgnoreCase));
+            if (entry == null)
+            {
+                entry = new JsonObject();
+                items.Add(entry);
+                roleSetup[key] = items;
+            }
+            entry["name"] = assignment.Target;
+            entry[assignment.IsFormula ? "formula" : "value"] = assignment.Expression;
+            if (!assignment.IsFormula) entry["unit"] = assignment.Unit;
+            if (assignment.PurposeDeclared) entry["label"] = assignment.Purpose;
+
+            UpdateVariant(s, v =>
+            {
+                v["setup"] = s.Setup;
+            });
+        }
+
         // Splits an assembly name around its size. The type is the one whose prefix sits directly
         // in front of the size (longest wins); without a known prefix, the type with the same
         // height. Returns null when the name has no size.
