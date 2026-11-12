@@ -21,6 +21,15 @@ fallback until the C# version has been checked in daily use. Both read the same 
 
 - **Start (user run):** double-click `InventorSizer.exe`. It makes panels from the masters stored
   in `masters\<type>\`; nothing has to be set up.
+- **Type and sub type:** next to the type you choose the sub type, which decides the master:
+
+  | Sub type | Inner panel | Master folder |
+  |---|---|---|
+  | `1T` | one piece | `masters\<type>\1T\` |
+  | `2T` | 2 parts | `masters\<type>\2T\` |
+  | `Auto (width)` | `2T` above the split width in Settings, else `1T` | as above |
+
+  The line under the buttons shows the master in use, in red when that folder has none.
 - **Dev run:** double-click `Dev run.cmd` (or start `InventorSizer.exe /dev`). It also shows
   **Open master**, **Set up master...** and **Learn hardware holes**, which prepare the app.
   The window title says `DEV RUN`.
@@ -238,7 +247,8 @@ To set up a master:
    - uses this file as the type's master from now on (stored in `standards\<type>.json`)
 3. Check in Inventor that nothing moved, then answer:
    - **Save into Inventor Sizer**: saves the assembly and its `-Au` / `-In` parts as copies in
-     `masters\<type>\` next to the app and uses that copy as the master. The files you opened
+     `masters\<type>\1T\` or `...\2T\` next to the app (the app sees whether the master has 1 or
+     2 inner panels) and uses that copy as the master. The files you opened
      stay as they were on disk. Library parts (hinges, handles) are not copied; the master
      keeps using them from the library.
    - **Save where it is**: saves the opened files themselves.

@@ -8,7 +8,9 @@
       "enabled": true,
       "prefix": "TP-",
       "height": 42,
-      "master": "masters\\TP\\6357-3 TP-724x1194x42.iam",
+      "masters": {
+        "2T": "masters\\TP\\2T\\6357-3 TP-724x1194x42.iam"
+      },
       "defaults": {
         "HoleZ": 20
       },

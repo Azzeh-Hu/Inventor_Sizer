@@ -8,7 +8,7 @@
       "enabled": true,
       "prefix": "RP-",
       "height": 44,
-      "master": "",
+      "masters": {},
       "defaults": {
         "HoleZ": 20
       },

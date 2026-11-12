@@ -76,7 +76,7 @@ namespace InventorSizer.Core
             return n;
         }
 
-        public static int InnerSplit(double width, Settings s) => s.SplitWidth > 0 && width > s.SplitWidth ? 2 : 1;
+        public static int InnerSplit(double width, Settings s) => s.ForceSplit > 0 ? Math.Min(s.ForceSplit, 2) : s.SplitWidth > 0 && width > s.SplitWidth ? 2 : 1;
 
         public static HoleLayout Layout(Dictionary<string, double> v, Settings s, Standard std = null)
         {
@@ -94,7 +94,7 @@ namespace InventorSizer.Core
             double holesW = v["HolesW"];
             if (r.Split >= 2)
             {
-                r.Notes.Add($"Wider than {U.F(s.SplitWidth)} mm: the inner panel is split in 2 halves of {U.F(r.InnerWidth)} mm.");
+                r.Notes.Add($"{(s.ForceSplit > 0 ? "Sub type 2T" : $"Wider than {U.F(s.SplitWidth)} mm")}: the inner panel is split in 2 halves of {U.F(r.InnerWidth)} mm.");
                 if (holesW == 2) { holesW = 4; r.Notes.Add("Width wall: 2 holes become 4 (the centre pair holds the inner ends of the 2 halves)."); }
                 else if (holesW != 0 && holesW != 4) { r.Errors.Add($"Width wall: with a split inner panel use 0 or 4 holes (got {U.F(holesW)})."); holesW = 0; }
             }
