@@ -19,7 +19,11 @@ The app is now written in C#; the PowerShell version (`InventorSizer.ps1`, `lib\
 fallback until the C# version has been checked in daily use. Both read the same files:
 `standards\`, `masters\`, `presets\`, `Parameters.xml` and `settings.json`.
 
-- **Start:** double-click `InventorSizer.exe`, or `Launch.bat`, which uses the exe when it is there.
+- **Start (user run):** double-click `InventorSizer.exe`. It makes panels from the masters stored
+  in `masters\<type>\`; nothing has to be set up.
+- **Dev run:** double-click `Dev run.cmd` (or start `InventorSizer.exe /dev`). It also shows
+  **Open master**, **Set up master...** and **Learn hardware holes**, which prepare the app.
+  The window title says `DEV RUN`.
 - **Needs:** .NET Framework 4.8, which ships with Windows 10 and 11. Nothing to install.
 - **Speed** on the 6357 GR (5 boxes, 220 parts):
 
@@ -232,8 +236,16 @@ To set up a master:
    - creates or sets the user parameters and writes the formulas into the `-Au` part, the
      `-In` part and the assembly
    - uses this file as the type's master from now on (stored in `standards\<type>.json`)
-3. Check in Inventor that nothing moved, then answer **Save master**. With **Not now** the
-   master stays open and unsaved.
+3. Check in Inventor that nothing moved, then answer:
+   - **Save into Inventor Sizer**: saves the assembly and its `-Au` / `-In` parts as copies in
+     `masters\<type>\` next to the app and uses that copy as the master. The files you opened
+     stay as they were on disk. Library parts (hinges, handles) are not copied; the master
+     keeps using them from the library.
+   - **Save where it is**: saves the opened files themselves.
+   - **Not now**: the master stays open and unsaved.
+
+These buttons are only in the dev run. Give users the app folder with `masters\` filled (or
+commit the masters), and they start `InventorSizer.exe` and click Apply.
 
 The window title and the first log line show when the exe was built.
 
