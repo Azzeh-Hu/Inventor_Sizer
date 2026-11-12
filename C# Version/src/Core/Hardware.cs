@@ -97,9 +97,14 @@ namespace InventorSizer.Core
             var axes = PanelAxes(boxSize, W, L, H);
             var seen = new HashSet<string>();
             var t = new HoleTemplate();
+            // Inventor's range box is a little larger than the part (0.002 mm per side on the TP
+            // master): take half of the excess off, so 161.002 is read as 161.
+            var want = new[] { W, L, H };
+            var pad = new double[3];
+            for (int i = 0; i < 3; i++) { double extra = (boxSize[axes[i]] - want[i]) / 2; pad[i] = extra > 0 && extra < 0.5 ? extra : 0; }
             foreach (var c in circles)
             {
-                var p = new[] { c.Center[axes[0]] - boxMin[axes[0]], c.Center[axes[1]] - boxMin[axes[1]], c.Center[axes[2]] - boxMin[axes[2]] };
+                var p = new[] { c.Center[axes[0]] - boxMin[axes[0]] - pad[0], c.Center[axes[1]] - boxMin[axes[1]] - pad[1], c.Center[axes[2]] - boxMin[axes[2]] - pad[2] };
                 var n = new[] { Math.Abs(c.Normal[axes[0]]), Math.Abs(c.Normal[axes[1]]), Math.Abs(c.Normal[axes[2]]) };
                 int k = Array.IndexOf(n, n.Max());
                 if (n[k] < 0.99) continue;   // tilted: not a drilled hole
@@ -109,7 +114,8 @@ namespace InventorSizer.Core
                 else { wall = "width"; side = p[1] < L / 2 ? "y0" : "yL"; u = p[0]; v = p[2]; su = W; sv = H; }
                 var key = $"{wall}|{side}|{u:0.0}|{v:0.0}|{c.Dia:0.00}";
                 if (!seen.Add(key)) continue;
-                if (wall != "face" && Math.Abs(c.Dia - ruleDia) < 0.05 && Math.Abs(v - ruleZ) < 1.6) { t.RuleHolesSkipped++; continue; }
+                // HoleZ is measured from the face on some masters and from the rim on others (TP).
+                if (wall != "face" && Math.Abs(c.Dia - ruleDia) < 0.05 && (Math.Abs(v - ruleZ) < 1.6 || Math.Abs(H - v - ruleZ) < 1.6)) { t.RuleHolesSkipped++; continue; }
                 t.Holes.Add(new TemplateHole
                 {
                     Wall = wall, Side = side, Dia = Math.Round(c.Dia, 3), U = Anchor.Best(u, su),
@@ -117,6 +123,21 @@ namespace InventorSizer.Core
                 });
             }
             return t;
+        }
+
+        // Learning reads holes only, not what they are for. A learned face hole takes the group
+        // (hinge, handle) of the previous template's holes with the same diameter, when only one
+        // group uses that diameter. Without groups the hinge / handle counts would stop working.
+        public static int KeepGroups(HoleTemplate old, HoleTemplate learned)
+        {
+            if (old == null || learned == null) return 0;
+            var byDia = old.Holes.Where(h => !string.IsNullOrEmpty(h.Group) && h.Wall == "face")
+                .GroupBy(h => Math.Round(h.Dia, 1)).Where(g => g.Select(h => h.Group).Distinct().Count() == 1)
+                .ToDictionary(g => g.Key, g => g.First().Group);
+            int n = 0;
+            foreach (var h in learned.Holes)
+                if (h.Wall == "face" && string.IsNullOrEmpty(h.Group) && byDia.TryGetValue(Math.Round(h.Dia, 1), out string group)) { h.Group = group; n++; }
+            return n;
         }
 
         // Hinge / handle sets per door. The holes anchored at the start are the first set; with a
