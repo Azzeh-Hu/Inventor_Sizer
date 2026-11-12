@@ -38,6 +38,8 @@ fallback until the C# version has been checked in daily use. Both read the same 
   | `src\App\` | The window (`MainForm.cs`), the drawing painter, and everything that talks to Inventor (`Inv.cs`) |
 
 - **Build:**
+  - Easiest: double-click `build.cmd`. It finds a .NET SDK installed for your user, refuses to
+    run while the app is open, and says clearly when the build failed.
   - Open `src\InventorSizer.csproj` in Visual Studio 2022, or run `dotnet build src\InventorSizer.csproj`.
   - Or, without either: `pwsh tools\build.ps1 -RefDir <.NET 4.8 reference assemblies> -Test`
     (PowerShell 7 includes the C# compiler).
