@@ -226,7 +226,7 @@ namespace InventorSizer.Core
             var rect = new[] { 0, 0, w, viewH };
             if (view == "Isometric") Iso(d, v, lay, rect, showHidden); else Ortho(d, v, lay, view, rect, showHidden);
             d.Text("caption", 10, 14, view.ToUpperInvariant(), 0, 0, "left");
-            if (v.HW.Count > 0) d.Text("sub", 10, 32, "Orange: door hardware holes (dashed = far side)", 0, 0, "left");
+            if (v.HW.Count > 0) d.Text("sub", 10, 32, "Door hardware holes: bold outline (dashed = far side)", 0, 0, "left");
             if (bom != null)
             {
                 double bomW = Math.Min(620, w - 110);
