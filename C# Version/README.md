@@ -113,7 +113,7 @@ Nothing to install. The tool uses:
    the script line number.
 8. **Learn hardware holes** (once per type, with its master open): reads the hinge and handle
    holes from Inventor. From then on they show in orange in every drawing of that type.
-9. **Set up master...**: applies the type's setup from `standards\<type>.json` to the open master (see below).
+9. **Set up master...**: choose a type's master assembly and set it up in one go (see below).
 
 ## Where new files are saved
 
@@ -224,10 +224,16 @@ Each type's file, `standards\<type>.json`, holds everything about the type in on
 
 To set up a master:
 
-1. Open the master in Inventor.
-2. Pick its type.
-3. Click **Set up master...**. The app creates or sets the user parameters, then writes the
-   formulas into the `-Au` part, the `-In` part and the assembly.
+1. Pick its type.
+2. Click **Set up master...** and choose the master's `.iam`. The app:
+   - opens it in Inventor
+   - creates or sets the user parameters and writes the formulas into the `-Au` part, the
+     `-In` part and the assembly
+   - uses this file as the type's master from now on (stored in `standards\<type>.json`)
+3. Check in Inventor that nothing moved, then answer **Save master**. With **Not now** the
+   master stays open and unsaved.
+
+The window title and the first log line show when the exe was built.
 
 A setup with a `version` (TP has one) also marks the master: the custom iProperty
 `InventorSizerSetup` gets the type and version, e.g. `TP 2`. **Apply to Inventor** refuses a
@@ -379,7 +385,7 @@ hinge / handle holes and of the hinge / handle parts (docs/PANEL_RULES.md, secti
 ## Working without opening files in Inventor
 
 **Panels (FP / RP / TP).** Each type has a master assembly: the path in `standards\<type>.json`
-(set it with **Set master...**), or the first `.iam` in `masters\<type>\` next to the app. Type the
+(set it with **Set up master...**), or the first `.iam` in `masters\<type>\` next to the app. Type the
 name and the sizes, then click **Apply to Inventor**. The app then:
 
 1. asks once per session for the folder for the new panels;
