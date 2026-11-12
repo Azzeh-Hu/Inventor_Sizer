@@ -19,14 +19,14 @@
     <ParamWithValue>
       <name>Width</name>
       <typeCode>mm</typeCode>
-      <value>500 mm</value>
+      <value>400 mm</value>
       <comment>1st number in the file name</comment>
       <isKey>false</isKey>
     </ParamWithValue>
     <ParamWithValue>
       <name>Length</name>
       <typeCode>mm</typeCode>
-      <value>600 mm</value>
+      <value>1194 mm</value>
       <comment>2nd number in the file name</comment>
       <isKey>false</isKey>
     </ParamWithValue>
@@ -40,7 +40,7 @@
     <ParamWithValue>
       <name>HolesL</name>
       <typeCode>ul</typeCode>
-      <value>3 ul</value>
+      <value>4 ul</value>
       <comment>Holes per length wall (0, 1, 2, 3, ...)</comment>
       <isKey>false</isKey>
     </ParamWithValue>
@@ -89,7 +89,7 @@
     <ParamWithValue>
       <name>HandleCount</name>
       <typeCode>ul</typeCode>
-      <value>2 ul</value>
+      <value>3 ul</value>
       <comment>TP: handles per door, evenly spaced (other types: not used)</comment>
       <isKey>false</isKey>
     </ParamWithValue>
