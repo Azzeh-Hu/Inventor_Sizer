@@ -13,7 +13,6 @@
         "HoleZ": 20
       },
       "minHolesL": 2,
-      "notes": "master: path of the 6357-3 RP-571x996x44 assembly. Its tray has no length-wall hole pattern yet: add one like the TP tray (count HoleCountL - 1, spacing HolePitchL).",
       "parts": [
         {
           "suffix": "-Au",
@@ -30,7 +29,7 @@
         }
       ],
       "setup": {
-        "master": "6357-3 RP-571x996x44",
+        "master": "",
         "notes": "Applied to the open master by 'Set up master' (Inventor parameters): per role the user parameters are created or set, then the model dimensions get these formulas. The d-numbers belong to this master.",
         "outer": {
           "user": [
@@ -80,43 +79,13 @@
               "unit": "ul"
             },
             {
-              "name": "HoleStartL",
-              "value": "50 mm",
-              "unit": "mm"
-            },
-            {
               "name": "HolePitchL",
               "value": "298.666666667 mm",
               "unit": "mm"
             },
             {
-              "name": "HoleCountL",
-              "value": "4 ul",
-              "unit": "ul"
-            },
-            {
-              "name": "HoleOnL",
-              "value": "1 ul",
-              "unit": "ul"
-            },
-            {
-              "name": "HoleStartW",
-              "value": "50 mm",
-              "unit": "mm"
-            },
-            {
-              "name": "HolePitchW",
-              "value": "471 mm",
-              "unit": "mm"
-            },
-            {
               "name": "HoleCountW",
               "value": "2 ul",
-              "unit": "ul"
-            },
-            {
-              "name": "HoleOnW",
-              "value": "1 ul",
               "unit": "ul"
             },
             {
@@ -126,7 +95,7 @@
             },
             {
               "name": "HoleMidOffsetW",
-              "value": "HoleEdge - Stärke - Clearance",
+              "value": "HoleEdge - 1,5mm",
               "unit": "mm"
             }
           ],
@@ -236,46 +205,19 @@
               "value": "4 ul",
               "unit": "ul"
             },
-            {
-              "name": "HoleStartL",
-              "value": "50 mm",
-              "unit": "mm"
-            },
+ 
             {
               "name": "HolePitchL",
               "value": "298.666666667 mm",
               "unit": "mm"
             },
-            {
-              "name": "HoleCountL",
-              "value": "4 ul",
-              "unit": "ul"
-            },
-            {
-              "name": "HoleOnL",
-              "value": "1 ul",
-              "unit": "ul"
-            },
-            {
-              "name": "HoleStartW",
-              "value": "50 mm",
-              "unit": "mm"
-            },
+        
             {
               "name": "HolePitchW",
               "value": "471 mm",
               "unit": "mm"
             },
-            {
-              "name": "HoleCountW",
-              "value": "2 ul",
-              "unit": "ul"
-            },
-            {
-              "name": "HoleOnW",
-              "value": "1 ul",
-              "unit": "ul"
-            },
+
             {
               "name": "HoleMidOnW",
               "value": "1 ul",
@@ -286,16 +228,7 @@
               "value": "2 ul",
               "unit": "ul"
             },
-            {
-              "name": "InHolePitchW",
-              "value": "187 mm",
-              "unit": "mm"
-            },
-            {
-              "name": "InHoleCountW",
-              "value": "2 ul",
-              "unit": "ul"
-            },
+      
             {
               "name": "InHoleMidOnW",
               "value": "0 ul",
@@ -310,11 +243,11 @@
           "formulas": [
             {
               "name": "d0",
-              "formula": "( Width - 2 * Stärke - 2 * Clearance ) / InSplit"
+              "formula": "( Width - 3mm ) / InSplit"
             },
             {
               "name": "d1",
-              "formula": "Length - 2 * Stärke - 2 * Clearance"
+              "formula": "Length -3mm"
             },
             {
               "name": "d7",
