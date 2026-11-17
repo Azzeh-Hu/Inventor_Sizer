@@ -82,6 +82,7 @@ namespace InventorSizer.Core
                 string kind = h.Bad ? "hwBad" : seen == true ? "hw" : "hwHidden";
                 double r = Math.Max(h.Dia / 2, 4.5 / t.S);
                 var c = new[] { h.X, h.Y, h.Z };
+                if (!h.Bad) d.Ring3("partHw", t, c, h.Axis, r);   // the hardware's own colour under its outline
                 d.Ring3(kind, t, c, h.Axis, r);
                 if (seen == true)
                 {
@@ -92,6 +93,33 @@ namespace InventorSizer.Core
             }
         }
 
+        // The inner panel(s) on the top face, inset by i; two halves when the inner panel is split (2T).
+        static void InnerFill(Draw d, ViewT t, HoleLayout lay, double W, double L, double H, double i)
+        {
+            if (W - 2 * i <= 0 || L - 2 * i <= 0) return;
+            if (lay != null && lay.Split >= 2)
+            {
+                double g = 1 / t.S;
+                d.Poly3("partIn", t, new[] { new[] { i, i, H }, new[] { W / 2 - g, i, H }, new[] { W / 2 - g, L - i, H }, new[] { i, L - i, H } }, true);
+                d.Poly3("partIn", t, new[] { new[] { W / 2 + g, i, H }, new[] { W - i, i, H }, new[] { W - i, L - i, H }, new[] { W / 2 + g, L - i, H } }, true);
+            }
+            else d.Poly3("partIn", t, new[] { new[] { i, i, H }, new[] { W - i, i, H }, new[] { W - i, L - i, H }, new[] { i, L - i, H } }, true);
+        }
+
+        // Colour key for the sub parts, one row under the view caption.
+        static void Legend(Draw d, PanelValues v, HoleLayout lay, double x, double y)
+        {
+            var items = new List<(string, string)> { ("partAu", "Outer tray (Au)"), ("partIn", lay != null && lay.Split >= 2 ? "Inner panels (In-2T)" : "Inner panel (In)") };
+            if (v.HW.Count > 0) items.Add(("partHw", "Door hardware"));
+            foreach (var (kind, text) in items)
+            {
+                d.Rect(kind, x, y - 6, x + 14, y + 6);
+                d.Rect("ext", x, y - 6, x + 14, y + 6);
+                d.Text("sub", x + 20, y, text, 0, 0, "left");
+                x += 20 + text.Length * 6.2 + 18;
+            }
+        }
+
         public static void Iso(Draw d, PanelValues v, HoleLayout lay, double[] rect, bool showHidden)
         {
             double W = v.W, L = v.L, H = v.H, off = Math.Max(W, L) * 0.11;
@@ -99,10 +127,16 @@ namespace InventorSizer.Core
                 new[] { 0, 0, 0.0 }, new[] { W, 0, 0 }, new[] { 0, L, 0 }, new[] { W, L, 0 }, new[] { 0, 0, H }, new[] { W, 0, H }, new[] { 0, L, H }, new[] { W, L, H },
                 new[] { W + off * 1.4, 0, 0 }, new[] { W + off * 1.4, L, 0 }, new[] { 0, L + off * 1.4, 0 }, new[] { W, L + off * 1.4, 0 }, new[] { -off * 0.8, L, H } };
             var t = Draw.Fit("Isometric", pts, rect, new double[] { 30, 34, 30, 30 });
-            d.Poly3("face", t, new[] { new[] { W, 0, 0 }, new[] { W, L, 0 }, new[] { W, L, H }, new[] { W, 0, H } }, true);
-            d.Poly3("face", t, new[] { new[] { 0, L, 0 }, new[] { W, L, 0 }, new[] { W, L, H }, new[] { 0, L, H } }, true);
-            d.Poly3("face", t, new[] { new[] { 0, 0, H }, new[] { W, 0, H }, new[] { W, L, H }, new[] { 0, L, H } }, true);
+            foreach (var face in new[] {
+                new[] { new[] { W, 0, 0 }, new[] { W, L, 0 }, new[] { W, L, H }, new[] { W, 0, H } },
+                new[] { new[] { 0, L, 0 }, new[] { W, L, 0 }, new[] { W, L, H }, new[] { 0, L, H } },
+                new[] { new[] { 0, 0, H }, new[] { W, 0, H }, new[] { W, L, H }, new[] { 0, L, H } } })
+            {
+                d.Poly3("face", t, face, true);
+                d.Poly3("partAu", t, face, true);   // outer tray
+            }
             double i = Math.Max(v.T + v.C, 6 / t.S);
+            InnerFill(d, t, lay, W, L, H, i);
             d.Poly3("inner", t, new[] { new[] { i, i, H }, new[] { W - i, i, H }, new[] { W - i, L - i, H }, new[] { i, L - i, H } }, true);
             if (lay != null && lay.Split >= 2) d.Poly3("inner", t, new[] { new[] { W / 2, i, H }, new[] { W / 2, L - i, H } }, false);
             double r = Math.Max(v.D / 2, 4 / t.S);
@@ -130,10 +164,20 @@ namespace InventorSizer.Core
             double minX = double.MaxValue, maxX = double.MinValue, minY = double.MaxValue, maxY = double.MinValue;
             foreach (var c in corners) { var q = Draw.Screen(t, c); minX = Math.Min(minX, q[0]); maxX = Math.Max(maxX, q[0]); minY = Math.Min(minY, q[1]); maxY = Math.Max(maxY, q[1]); }
             d.Rect("face", minX, minY, maxX, maxY);
+            d.Rect("partAu", minX, minY, maxX, maxY);   // outer tray
             double r = Math.Max(v.D / 2, 3.5 / t.S);
             bool plan = view == "Top" || view == "Bottom";
             if (!plan)
             {
+                // the inner panel(s) inside the tray walls, seen through them
+                double tIn = Math.Max(thick * t.S, 3);
+                if (lay != null && lay.Split >= 2 && (view == "Left" || view == "Right"))
+                {
+                    double mid = (minX + maxX) / 2;
+                    d.Rect("partIn", minX + tIn, minY + 1, mid - 1, maxY - tIn);
+                    d.Rect("partIn", mid + 1, minY + 1, maxX - tIn, maxY - tIn);
+                }
+                else d.Rect("partIn", minX + tIn, minY + 1, maxX - tIn, maxY - tIn);
                 WallLayout wall = null; string along = "y"; double fix = 0;
                 switch (view) { case "Front": wall = lay?.Length; along = "y"; fix = W; break; case "Back": wall = lay?.Length; along = "y"; fix = 0; break; case "Right": wall = lay?.Width; along = "x"; fix = L; break; case "Left": wall = lay?.Width; along = "x"; fix = 0; break; }
                 if (showHidden)
@@ -160,6 +204,7 @@ namespace InventorSizer.Core
                 if (view == "Top")
                 {
                     double i = Math.Max(thick + v.C, 5 / t.S);
+                    InnerFill(d, t, lay, W, L, H, i);
                     d.Poly3("edge", t, new[] { new[] { i, i, H }, new[] { W - i, i, H }, new[] { W - i, L - i, H }, new[] { i, L - i, H } }, true);
                     if (lay != null && lay.Split >= 2) d.Poly3("edge", t, new[] { new[] { W / 2, i, H }, new[] { W / 2, L - i, H } }, false);
                 }
@@ -227,6 +272,7 @@ namespace InventorSizer.Core
             if (view == "Isometric") Iso(d, v, lay, rect, showHidden); else Ortho(d, v, lay, view, rect, showHidden);
             d.Text("caption", 10, 14, view.ToUpperInvariant(), 0, 0, "left");
             if (v.HW.Count > 0) d.Text("sub", 10, 32, "Door hardware holes: bold outline (dashed = far side)", 0, 0, "left");
+            Legend(d, v, lay, 10, v.HW.Count > 0 ? 52 : 34);
             if (bom != null)
             {
                 double bomW = Math.Min(620, w - 110);

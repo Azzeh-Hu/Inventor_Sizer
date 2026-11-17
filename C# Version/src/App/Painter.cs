@@ -31,6 +31,7 @@ namespace InventorSizer
 
         // Monochrome versions of the Core styles. Meaning that was carried by colour is carried
         // by weight, dash and fill here: problems are solid black, hardware is heavy, hidden is dashed.
+        // The only colour is the see-through fill of each sub part (partAu / partIn / partHw, from Core).
         static Style L(string stroke, double w, float[] dash = null, string fill = null) => new Style { Stroke = stroke, Width = w, Dash = dash, Fill = fill };
         static Style T(string color, double size, bool bold = false) => new Style { TextColor = color, FontSize = size, Bold = bold };
         static readonly float[] Dash = { 6, 4 }, Small = { 3, 2 }, CenterDash = { 8, 3, 1.5f, 3 };
@@ -57,7 +58,7 @@ namespace InventorSizer
             st = st ?? new Style { Stroke = "#000000" };
             Pen pen = null; Brush fill = null, text = null; Font font = null;
             if (st.Stroke != null) { pen = new Pen(C(st.Stroke), (float)st.Width) { LineJoin = LineJoin.Round }; if (st.Dash != null) pen.DashPattern = Array.ConvertAll(st.Dash, d => Math.Max(0.1f, d / (float)Math.Max(st.Width, 1))); }
-            if (st.Fill != null) fill = new SolidBrush(C(st.Fill));
+            if (st.Fill != null) fill = new SolidBrush(Color.FromArgb((int)Math.Round(255 * Math.Max(0, Math.Min(1, st.Opacity))), C(st.Fill)));
             if (st.TextColor != null)
             {
                 text = new SolidBrush(C(st.TextColor));

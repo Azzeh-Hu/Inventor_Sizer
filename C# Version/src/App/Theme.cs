@@ -37,6 +37,26 @@ namespace InventorSizer
         public static readonly Color GlassMuted = C("#A6A6A6");
         public const double GlassOpacity = 0.93;
 
+        // The Inventor-like frame around the drawing: a dark title bar, the ribbon, the browser
+        // on the left and the status bar. Blue is used sparingly (active tab, hover, selection).
+        public static readonly Color TitleBar = C("#2D3540");
+        public static readonly Color TitleRaised = C("#3E4856");
+        public static readonly Color TitleText = C("#E8ECF1");
+        public static readonly Color TitleMuted = C("#9AA5B1");
+        public static readonly Color RibbonTabs = C("#ECEEF1");
+        public static readonly Color RibbonBody = C("#FAFBFC");
+        public static readonly Color RibbonLine = C("#D3D8DE");
+        public static readonly Color RibbonCaption = C("#6B7480");
+        public static readonly Color Accent = C("#0696D7");
+        public static readonly Color AccentSoft = C("#E1F1FB");
+        public static readonly Color AccentLine = C("#A9D6F0");
+        public static readonly Color BrowserSel = C("#CFE7F7");
+
+        // The parameter pop-up: dark grey glass with lighter input cells.
+        public static readonly Color PopInput = C("#3B3B3B");
+        public static readonly Color PopHead = C("#333333");
+        public const double PopOpacity = 0.95;
+
         public const int Radius = 12, RadiusSmall = 8, Gap = 14;
 
         static Color C(string hex) => ColorTranslator.FromHtml(hex);

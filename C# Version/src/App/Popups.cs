@@ -415,6 +415,110 @@ namespace InventorSizer
             SetupParameterDialog.Create(owner, role, file);
     }
 
+    // ------------------------------------------------------------------ parameter pop-up
+    // The parameter table in a floating, slightly see-through dark glass window over the
+    // drawing (like Inventor's Parameters dialog). Drag it by its header, resize it from the
+    // right / bottom edge; it fades in and out and stays put relative to the main window.
+    public class ParamPopup : GlassForm
+    {
+        public readonly FlatButton Reload;
+        readonly DataGridView grid;
+        readonly Panel head;
+        readonly Timer fade = new Timer { Interval = 15 };
+        bool closing;
+        public bool UserSized;   // resized by hand: no more automatic height
+        Size sizeAtStart;
+        public event Action Dismissed;
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")] static extern bool ReleaseCapture();
+        [System.Runtime.InteropServices.DllImport("user32.dll")] static extern IntPtr SendMessage(IntPtr h, int msg, int w, int l);
+
+        public ParamPopup(DataGridView grid)
+        {
+            this.grid = grid;
+            Size = new Size(580, 360); MinimumSize = new Size(380, 200);
+            Padding = new Padding(5, 1, 5, 5);
+            head = new Panel { Dock = DockStyle.Top, Height = 52, BackColor = Theme.Glass, Cursor = Cursors.SizeAll };
+            var title = new Label { Text = "Parameters", Font = Theme.Serif(13f), ForeColor = Theme.GlassText, AutoSize = true, Location = new Point(14, 14), BackColor = Color.Transparent, Cursor = Cursors.SizeAll };
+            var sub = new Label { Text = "Parameters.xml", Font = Theme.Small, ForeColor = Theme.GlassMuted, AutoSize = true, BackColor = Color.Transparent, Cursor = Cursors.SizeAll };
+            sub.Location = new Point(title.Left + TextRenderer.MeasureText(title.Text, title.Font).Width + 6, 19);
+            Reload = new FlatButton("Reload file", ButtonKind.Glass, 0, 28) { Anchor = AnchorStyles.Top | AnchorStyles.Right };
+            var close = new FlatButton("✕", ButtonKind.Glass, 30, 28) { Anchor = AnchorStyles.Top | AnchorStyles.Right };
+            head.Controls.AddRange(new Control[] { title, sub, Reload, close });
+            head.Layout += (s, e) => { close.Location = new Point(head.Width - close.Width - 10, 12); Reload.Location = new Point(close.Left - Reload.Width - 6, 12); };
+            foreach (Control c in new Control[] { head, title, sub }) c.MouseDown += (s, e) => { if (e.Button == MouseButtons.Left) Drag(); };
+            var well = new Panel { Dock = DockStyle.Fill, Padding = new Padding(9, 0, 9, 9), BackColor = Theme.Glass };
+            grid.Dock = DockStyle.Fill;
+            well.Controls.Add(grid);
+            Controls.Add(well); Controls.Add(head);
+            close.Click += (s, e) => Dismiss();
+            fade.Tick += (s, e) => FadeStep();
+            KeyDown += (s, e) => { if (e.KeyCode == Keys.Escape && !grid.IsCurrentCellInEditMode) Dismiss(); };
+            FormClosing += (s, e) => { if (e.CloseReason == CloseReason.UserClosing) { e.Cancel = true; Dismiss(); } };
+            ResizeBegin += (s, e) => sizeAtStart = Size;
+            ResizeEnd += (s, e) => { if (Size != sizeAtStart) UserSized = true; };
+        }
+
+        void Drag()
+        {
+            ReleaseCapture();
+            SendMessage(Handle, 0xA1, 2, 0);   // WM_NCLBUTTONDOWN on the caption: Windows moves the window
+        }
+
+        public bool Open => Visible && !closing;
+
+        public void Popup()
+        {
+            if (Open) { Activate(); return; }
+            closing = false;
+            if (!Visible) { try { Opacity = 0; } catch { } Show(); }
+            fade.Start();
+        }
+
+        public void Dismiss()
+        {
+            if (!Visible || closing) return;
+            grid.EndEdit();
+            closing = true;
+            fade.Start();
+        }
+
+        void FadeStep()
+        {
+            try
+            {
+                double target = closing ? 0 : Theme.PopOpacity;
+                double next = Opacity + (closing ? -0.12 : 0.1);
+                Opacity = closing ? Math.Max(target, next) : Math.Min(target, next);
+                if (Opacity != target) return;
+            }
+            catch { }
+            fade.Stop();
+            if (closing) { Hide(); closing = false; Dismissed?.Invoke(); }
+        }
+
+        // Tall enough for the rows shown (no scroll bar), never taller than maxH.
+        public void FitRows(int rows, int maxH)
+        {
+            if (UserSized) return;
+            int h = Padding.Vertical + head.Height + grid.ColumnHeadersHeight + rows * grid.RowTemplate.Height + 9 + 4;
+            Height = Math.Max(MinimumSize.Height, Math.Min(h, maxH));
+        }
+
+        // The right and bottom edges resize the window.
+        protected override void WndProc(ref Message m)
+        {
+            base.WndProc(ref m);
+            if (m.Msg != 0x84 || (int)m.Result != 1) return;   // WM_NCHITTEST on the client area
+            long lp = m.LParam.ToInt64();
+            var p = PointToClient(new Point((short)(lp & 0xFFFF), (short)((lp >> 16) & 0xFFFF)));
+            bool right = p.X >= Width - 6, bottom = p.Y >= Height - 6;
+            if (right && bottom) m.Result = (IntPtr)17; else if (right) m.Result = (IntPtr)11; else if (bottom) m.Result = (IntPtr)15;
+        }
+
+        protected override void OnFormClosed(FormClosedEventArgs e) { fade.Dispose(); base.OnFormClosed(e); }
+    }
+
     // ------------------------------------------------------------------ activity panel
     // The log and the dev log in a floating glass panel at the bottom right of the window.
     public class ActivityPanel : GlassForm
