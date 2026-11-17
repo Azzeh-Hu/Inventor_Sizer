@@ -34,10 +34,11 @@ namespace InventorSizer
         "HoleDia_sides", "HoleDia_handle", "HoleDia_hinge_small", "HoleDia_hinge_large" };
 
         // controls
-        ComboBox typeBox, subBox, viewBox, presetBox;
+        ComboBox viewBox, presetBox;
         TextBox nameBox, folderBox, logBox, devBox, grNewName, grPrefix;
-        Button btnApply, btnReload, btnDevSave, btnSvg, btnBrowse, btnOpenGr, btnGrInv, btnActivity;
-        MenuButton devMenu, grFiles;
+        Button btnReload, btnDevSave, btnBrowse;
+        RibbonButton btnApply, btnSvg, btnOpenGr, btnGrInv, btnParams, btnParamsView, devMenu, grFiles;
+        FlatButton btnActivity;
         ToolStripMenuItem miOpenMaster, miSetMaster, miLearn;
         Label statusLabel, masterLabel, folderInfo, grInfo;
         Segmented modeSwitch;
@@ -45,11 +46,18 @@ namespace InventorSizer
         NumericUpDown gapBox, thickBox, splitBox, pitchBox;
         DataTable table, grTable, grDivTable;
         DataGridView grid, grGrid, grDivGrid;
-        Card paramsCard, settingsCard, twinCard;
-        Panel header, footer, panelColumn, grColumn;
-        FlowLayoutPanel panelBar, grBar, panelActions, grActions;
+        Ribbon ribbon;
+        RibbonTab tabPanel, tabView, tabSettings, tabGr;
+        RibbonGroup gMaster;
+        TypeBrowser browser;
+        Panel statusBar, grColumn;
         SplitContainer split;
         PictureBox twin;
+        ParamPopup paramPop;
+        Point popOffset = new Point(16, 76);   // the parameter pop-up, relative to the drawing's top left
+        bool placingPop;
+        int subPick;                          // sub type picked in the browser: 0 = Auto (width), 1 = 1T, 2 = 2T
+        DateTime lastPick;
         readonly TwinOverlay hud = new TwinOverlay();
         ActivityPanel activity;
         Timer redraw;
@@ -71,63 +79,52 @@ namespace InventorSizer
         }
 
         // ------------------------------------------------------------------ layout
+        // Like Inventor: the ribbon on top, the type browser on the left, the drawing (the
+        // graphics window) in all the rest, a status bar at the bottom. The parameter table
+        // floats over the drawing in its own pop-up.
 
         static NumericUpDown Num(int dec, decimal max, decimal inc, decimal min = 0) => new NumericUpDown { DecimalPlaces = dec, Maximum = max, Minimum = min, Increment = inc, Font = Theme.Body, TextAlign = HorizontalAlignment.Right };
         static FlowLayoutPanel Row(Color back, bool rtl = false) => new FlowLayoutPanel { AutoSize = true, WrapContents = false, BackColor = back, FlowDirection = rtl ? FlowDirection.RightToLeft : FlowDirection.LeftToRight, Padding = new Padding(0), Margin = new Padding(0) };
         static Panel Spacer(DockStyle dock, int size) => new Panel { Dock = dock, Height = size, Width = size, BackColor = Theme.App };
-        static void Hairline(Control c, bool bottom) => c.Paint += (s, e) => { using (var p = new Pen(Theme.Line)) { int y = bottom ? c.Height - 1 : 0; e.Graphics.DrawLine(p, 0, y, c.Width, y); } };
+        static Caption Hint(string text) => new Caption(text) { Margin = new Padding(0, 0, 0, 4), BackColor = Theme.RibbonBody };
+
+        // Ribbon rows "label .... [value]" with one label width per group.
+        static Control[] NumRows(params (string Label, NumericUpDown Box)[] items)
+        {
+            int lw = items.Max(i => TextRenderer.MeasureText(i.Label, Theme.Body).Width) + 12;
+            return items.Select(i =>
+            {
+                var p = new Panel { Size = new Size(lw + 100, 32), BackColor = Theme.RibbonBody, Margin = new Padding(0, 0, 0, 4) };
+                p.Controls.Add(new Label { Text = i.Label, AutoSize = false, Size = new Size(lw, 20), Location = new Point(0, 7), ForeColor = Theme.InkSoft, Font = Theme.Body, BackColor = Theme.RibbonBody });
+                p.Controls.Add(new Field(i.Box, 96, 28) { Location = new Point(lw, 2), Margin = new Padding(0) });
+                return (Control)p;
+            }).ToArray();
+        }
 
         void BuildUi()
         {
             Text = "Inventor Sizer - panel editing";
-            Size = new Size(1380, 900);
+            Size = new Size(1440, 920);
             MinimumSize = new Size(1120, 720);
             StartPosition = FormStartPosition.CenterScreen;
             Font = Theme.Body;
             BackColor = Theme.App;
             DoubleBuffered = true;
 
-            // ---------------------------------------------------------- body: left column | drawing
-            var body = new Panel { Dock = DockStyle.Fill, BackColor = Theme.App, Padding = new Padding(18, 4, 18, 12) };
-            split = new SplitContainer { Dock = DockStyle.Fill, Orientation = Orientation.Vertical, BackColor = Theme.App, SplitterWidth = 8, FixedPanel = FixedPanel.Panel1 };
-            split.Panel1.BackColor = split.Panel2.BackColor = Theme.App;
-            body.Controls.Add(split);
-
-            // parameter table (panel mode)
+            // ---------------------------------------------------------- parameter table: a floating pop-up
             table = new DataTable();
             table.Columns.Add("Name", typeof(string)); table.Columns.Add("Value", typeof(double)); table.Columns.Add("Unit", typeof(string)); table.Columns.Add("Description", typeof(string));
             grid = new DataGridView { Dock = DockStyle.Fill, AllowUserToAddRows = false, AllowUserToDeleteRows = false, AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill, RowHeadersVisible = false, SelectionMode = DataGridViewSelectionMode.CellSelect, DataSource = table };
-            Glass.StyleGrid(grid, Theme.Card);
-            btnReload = new FlatButton("Reload file", ButtonKind.Ghost, 0, 30);
-            paramsCard = new Card("Parameters", subtitle: "Parameters.xml") { Dock = DockStyle.Fill };
-            paramsCard.Actions.Controls.Add(btnReload);
-            paramsCard.Controls.Add(grid);
+            Glass.StyleDarkGrid(grid);
+            paramPop = new ParamPopup(grid) { Owner = this };
+            btnReload = paramPop.Reload;
 
-            // settings (collapsible)
-            settingsCard = new Card("Settings", subtitle: "Hole rules and output folder") { Dock = DockStyle.Bottom, Height = 318, Collapsible = true };
-            var sg = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, RowCount = 7, BackColor = Theme.Card };
-            sg.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); sg.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize)); sg.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-            Label SLbl(string t) => new Label { Text = t, AutoSize = true, Anchor = AnchorStyles.Left, ForeColor = Theme.InkSoft, Font = Theme.Body, Margin = new Padding(0, 6, 8, 6) };
-            chkFolder = new Toggle("Folder for new panels (this session only)") { Margin = new Padding(0, 0, 0, 6) };
-            folderBox = new TextBox { Font = Theme.Body };
-            var folderField = new Field(folderBox, 200) { Anchor = AnchorStyles.Left | AnchorStyles.Right, Margin = new Padding(0, 0, 8, 4) };
-            btnBrowse = new FlatButton("Browse...", ButtonKind.Secondary, 0, 32) { Anchor = AnchorStyles.Right, Margin = new Padding(0, 0, 0, 4) };
-            folderInfo = new Label { AutoSize = true, Anchor = AnchorStyles.Left, ForeColor = Theme.Muted, Font = Theme.Small, Margin = new Padding(0, 0, 0, 10) };
-            gapBox = Num(1, 1000, 0.5m); thickBox = Num(2, 50, 0.1m, 0.1m); splitBox = Num(0, 100000, 10); pitchBox = Num(0, 100000, 10);
-            Field NumField(NumericUpDown n) => new Field(n, 110, 30) { Anchor = AnchorStyles.Right, Margin = new Padding(0, 2, 0, 2) };
-            sg.Controls.Add(chkFolder, 0, 0); sg.SetColumnSpan(chkFolder, 3);
-            sg.Controls.Add(folderField, 0, 1); sg.SetColumnSpan(folderField, 2); sg.Controls.Add(btnBrowse, 2, 1);
-            sg.Controls.Add(folderInfo, 0, 2); sg.SetColumnSpan(folderInfo, 3);
-            var nums = new (string, NumericUpDown)[] { ("Minimum hole gap (mm)", gapBox), ("Sheet thickness, one sheet (Staerke, mm)", thickBox), ("Split inner panel above width (mm, 0 = never)", splitBox), ("Max. hole pitch for automatic counts (mm, 0 = by hand)", pitchBox) };
-            for (int i = 0; i < nums.Length; i++) { var f = NumField(nums[i].Item2); sg.Controls.Add(SLbl(nums[i].Item1), 0, 3 + i); sg.Controls.Add(f, 1, 3 + i); sg.SetColumnSpan(f, 2); }
-            settingsCard.Controls.Add(sg);
+            // ---------------------------------------------------------- body: browser | drawing
+            split = new SplitContainer { Dock = DockStyle.Fill, Orientation = Orientation.Vertical, BackColor = Theme.RibbonLine, SplitterWidth = 4, FixedPanel = FixedPanel.Panel1 };
+            split.Panel1.BackColor = Theme.App; split.Panel2.BackColor = Theme.Paper;
+            browser = new TypeBrowser { Dock = DockStyle.Fill };
 
-            panelColumn = new Panel { Dock = DockStyle.Fill, BackColor = Theme.App, Padding = new Padding(6) };
-            panelColumn.Controls.Add(paramsCard); panelColumn.Controls.Add(Spacer(DockStyle.Bottom, Theme.Gap)); panelColumn.Controls.Add(settingsCard);
-            Card.CastShadows(panelColumn);
-            settingsCard.CollapsedChanged += () => panelColumn.Invalidate();
-
-            // GR editor (GR mode)
+            // GR editor (GR mode): in the browser's place
             grTable = new DataTable();
             grTable.Columns.Add("Box", typeof(string));
             foreach (var c in new[] { "Outer L", "Outer W", "Outer H" }) grTable.Columns.Add(c, typeof(double));
@@ -149,94 +146,103 @@ namespace InventorSizer
             boxesCard.Controls.Add(grGrid); boxesCard.Controls.Add(sharedRow); boxesCard.Controls.Add(grInfo);
             var dividersCard = new Card("Dividers", subtitle: "P350, position = offset from the frame profile") { Dock = DockStyle.Bottom, Height = 260 };
             dividersCard.Controls.Add(grDivGrid);
-            grColumn = new Panel { Dock = DockStyle.Fill, BackColor = Theme.App, Padding = new Padding(6), Visible = false };
+            grColumn = new Panel { Dock = DockStyle.Fill, BackColor = Theme.App, Padding = new Padding(10), Visible = false };
             grColumn.Controls.Add(boxesCard); grColumn.Controls.Add(Spacer(DockStyle.Bottom, Theme.Gap)); grColumn.Controls.Add(dividersCard);
             Card.CastShadows(grColumn);
-            split.Panel1.Controls.Add(grColumn); split.Panel1.Controls.Add(panelColumn);
+            split.Panel1.Controls.Add(grColumn); split.Panel1.Controls.Add(browser);
 
-            // the drawing: a white card with its own toolbar
-            twinCard = new Card(null, Theme.Paper) { Dock = DockStyle.Fill, Padding = new Padding(10, 8, 10, 10) };
+            // the drawing: all the rest of the window
             twin = new PictureBox { Dock = DockStyle.Fill, BackColor = Theme.Paper };
-            var twinBar = new Panel { Dock = DockStyle.Top, Height = 44, BackColor = Theme.Paper, Padding = new Padding(6, 6, 2, 6) };
-            viewBox = new ThemedCombo(140);
-            viewBox.Items.AddRange(Draw.Views);
-            chkHidden = new Toggle("Hidden edges") { Margin = new Padding(4, 2, 0, 0) };
-            var twinLeft = Row(Theme.Paper); twinLeft.Dock = DockStyle.Left;
-            twinLeft.Controls.AddRange(new Control[] { new Caption("View") { Margin = new Padding(2, 8, 8, 0) }, viewBox, chkHidden });
-            btnSvg = new FlatButton("Export SVG", ButtonKind.Secondary, 0, 30) { Margin = new Padding(0) };
-            var twinRight = Row(Theme.Paper, true); twinRight.Dock = DockStyle.Right; twinRight.Controls.Add(btnSvg);
-            twinBar.Controls.Add(twinLeft); twinBar.Controls.Add(twinRight);
-            twinCard.Controls.Add(twin); twinCard.Controls.Add(twinBar);
-            split.Panel2.Padding = new Padding(6);
-            split.Panel2.Controls.Add(twinCard);
-            Card.CastShadows(split.Panel2);
+            split.Panel2.Controls.Add(twin);
 
-            // ---------------------------------------------------------- context bar (under the header)
-            var bar = new Panel { Dock = DockStyle.Top, Height = 58, BackColor = Theme.App, Padding = new Padding(24, 14, 24, 0) };
-            typeBox = new ThemedCombo(250);
-            subBox = new ThemedCombo(124);   // sub type: which master is used. Auto follows the split width in Settings.
-            subBox.Items.AddRange(new object[] { "Auto (width)", "1T", "2T" });
-            subBox.SelectedIndex = 0;
-            var btnOpenPanel = new FlatButton("Load assembly...", ButtonKind.Secondary, 0, 32);
-            nameBox = new TextBox { Font = Theme.Ui(10.5f) };
-            devMenu = new MenuButton("Master", ButtonKind.Secondary) { Height = 32, Margin = new Padding(8, 0, 0, 0) };
+            // ---------------------------------------------------------- ribbon
+            ribbon = new Ribbon();
+            var logo = new Panel { Size = new Size(26, 26), Margin = new Padding(0, 7, 10, 0), BackColor = Theme.TitleBar };
+            logo.Paint += (s, e) => Icons.Draw(e.Graphics, "master", new RectangleF(0, 0, 26, 26));
+            var title = new Label { Text = "Inventor Sizer", Font = Theme.Serif(13f), ForeColor = Theme.TitleText, AutoSize = true, Margin = new Padding(0, 10, 22, 0), BackColor = Theme.TitleBar };
+            modeSwitch = new Segmented("Panels", "GR frame") { Dark = true, Margin = new Padding(0, 5, 0, 0) };
+            modeSwitch.Height = 30;
+            ribbon.TitleLeft.Controls.AddRange(new Control[] { logo, title, modeSwitch });
+            btnActivity = new FlatButton("Activity", ButtonKind.Glass, 0, 28) { Margin = new Padding(0, 6, 0, 0) };
+            ribbon.TitleRight.Controls.Add(btnActivity);
+            if (Program.Dev) ribbon.TitleRight.Controls.Add(new FlatButton("Dev run", ButtonKind.GlassPrimary, 0, 22) { Margin = new Padding(0, 9, 12, 0), Font = Theme.Ui(8f, FontStyle.Bold), Cursor = Cursors.Default, TabStop = false });
+
+            // Panel tab
+            var btnOpenPanel = new RibbonButton("Load\nassembly", "open");
+            devMenu = new RibbonButton("Master", "master");
             miOpenMaster = devMenu.Add("Open master", (s, e) => Step("Open master", () => { Inv.OpenVisible(std.MasterFor(CurrentSub())); Log.Write($"Master {std.Id} {CurrentSub()} open; the name is unchanged."); }, true));
             miSetMaster = devMenu.Add("Set up master...", (s, e) => Step("Set up master", SetUpMaster, true));
             devMenu.Separator();
             miLearn = devMenu.Add("Learn hardware holes", (s, e) => Step("Learn hardware holes", () => { Inv.LearnHardware(standards, std, Standards.Get(GridValues(), "HoleDia"), Standards.Get(GridValues(), "HoleZ")); UpdatePreview(); }, true));
-            panelBar = Row(Theme.App); panelBar.Dock = DockStyle.Left;
-            panelBar.Controls.AddRange(new Control[] { new Caption("Type"), typeBox, subBox, btnOpenPanel, new Caption("Name") { Margin = new Padding(14, 9, 6, 0) }, new Field(nameBox, 260, 32), devMenu });
+            nameBox = new TextBox { Font = Theme.Ui(10.5f) };
+            btnParams = new RibbonButton("Parameters", "fx");
+            chkFolder = new Toggle("Folder for new panels (this session only)") { Margin = new Padding(0, 0, 0, 2), Height = 26 };
+            folderBox = new TextBox { Font = Theme.Body };
+            btnBrowse = new RibbonButton("Browse...", "folder", false) { Margin = new Padding(6, 0, 0, 0) };
+            folderInfo = new Label { AutoSize = false, AutoEllipsis = true, Size = new Size(360, 16), ForeColor = Theme.Muted, Font = Theme.Small, BackColor = Theme.RibbonBody, Margin = new Padding(0, 1, 0, 0) };
+            btnApply = new RibbonButton("Apply to\nInventor", "apply");
+            tabGr = ribbon.AddTab("GR frame");   // first: in GR mode it leads, in panel mode it is hidden
+            tabPanel = ribbon.AddTab("Panel");
+            tabPanel.AddGroup("Assembly", btnOpenPanel);
+            gMaster = tabPanel.AddGroup("Master", devMenu);
+            tabPanel.AddGroup("Panel name", Ribbon.Stack(Hint("Type and size, e.g. TP-900x1194x42"), new Field(nameBox, 290, 32) { Margin = new Padding(0) }));
+            tabPanel.AddGroup("Parameters", btnParams);
+            tabPanel.AddGroup("Output", Ribbon.Stack(chkFolder, Ribbon.Line(new Field(folderBox, 262, 26) { Margin = new Padding(0) }, btnBrowse), folderInfo));
+            tabPanel.AddGroup("Inventor", btnApply);
 
-            presetBox = new ThemedCombo(250);
-            btnOpenGr = new FlatButton("Open GR...", ButtonKind.Secondary, 0, 32);
-            btnGrInv = new FlatButton("Read from Inventor", ButtonKind.Secondary, 0, 32);
-            grFiles = new MenuButton("Files", ButtonKind.Secondary) { Height = 32 };
-            grBar = Row(Theme.App); grBar.Dock = DockStyle.Left; grBar.Visible = false;
-            grBar.Controls.AddRange(new Control[] { new Caption("Preset"), presetBox, btnOpenGr, btnGrInv, grFiles });
-            bar.Controls.Add(grBar); bar.Controls.Add(panelBar);
+            // View tab
+            viewBox = new ThemedCombo(160) { Margin = new Padding(0) };
+            viewBox.Items.AddRange(Draw.Views);
+            chkHidden = new Toggle("Hidden edges") { Margin = new Padding(0) };
+            btnSvg = new RibbonButton("Export\nSVG", "svg");
+            btnParamsView = new RibbonButton("Parameters", "fx");
+            var btnActivityView = new RibbonButton("Activity", "activity");
+            tabView = ribbon.AddTab("View");
+            tabView.AddGroup("Orientation", Ribbon.Stack(Hint("View"), viewBox), Ribbon.Stack(chkHidden));
+            tabView.AddGroup("Export", btnSvg);
+            tabView.AddGroup("Windows", btnParamsView, btnActivityView);
 
-            // ---------------------------------------------------------- header
-            header = new Panel { Dock = DockStyle.Top, Height = 60, BackColor = Theme.Paper, Padding = new Padding(20, 0, 20, 1) };
-            Hairline(header, true);
-            var logo = new Panel { Size = new Size(30, 30), Margin = new Padding(0, 15, 10, 0), BackColor = Theme.Paper };
-            logo.Paint += (s, e) => PaintLogo(e.Graphics);
-            var title = new Label { Text = "Inventor Sizer", Font = Theme.Title, ForeColor = Theme.Ink, AutoSize = true, Margin = new Padding(0, 17, 22, 0), BackColor = Theme.Paper };
-            modeSwitch = new Segmented("Panels", "GR frame") { Margin = new Padding(0, 12, 0, 0) };
-            var headLeft = Row(Theme.Paper); headLeft.Dock = DockStyle.Left;
-            headLeft.Controls.AddRange(new Control[] { logo, title, modeSwitch });
-            statusLabel = new Label { AutoSize = true, ForeColor = Theme.Muted, Font = Theme.Small, Margin = new Padding(0, 22, 14, 0), BackColor = Theme.Paper };
-            btnActivity = new FlatButton("Activity", ButtonKind.Secondary, 0, 32) { Margin = new Padding(0, 14, 0, 0) };
-            var headRight = Row(Theme.Paper, true); headRight.Dock = DockStyle.Right;
-            headRight.Controls.Add(btnActivity);
-            if (Program.Dev) headRight.Controls.Add(new FlatButton("Dev run", ButtonKind.Primary, 0, 24) { Margin = new Padding(0, 18, 12, 0), Font = Theme.Ui(8f, FontStyle.Bold), Cursor = Cursors.Default, TabStop = false });
-            headRight.Controls.Add(statusLabel);
-            header.Controls.Add(headLeft); header.Controls.Add(headRight);
+            // Settings tab
+            gapBox = Num(1, 1000, 0.5m); thickBox = Num(2, 50, 0.1m, 0.1m); splitBox = Num(0, 100000, 10); pitchBox = Num(0, 100000, 10);
+            tabSettings = ribbon.AddTab("Settings");
+            tabSettings.AddGroup("Hole rules", Ribbon.Stack(NumRows(("Minimum hole gap (mm)", gapBox), ("Max. hole pitch for automatic counts (mm, 0 = by hand)", pitchBox))));
+            tabSettings.AddGroup("Sheet and split", Ribbon.Stack(NumRows(("Sheet thickness, one sheet (Staerke, mm)", thickBox), ("Split inner panel above width (mm, 0 = never)", splitBox))));
 
-            // ---------------------------------------------------------- footer: the main action, right aligned
-            footer = new Panel { Dock = DockStyle.Bottom, Height = 64, BackColor = Theme.Paper, Padding = new Padding(24, 14, 24, 0) };
-            var footLeft = Row(Theme.Paper); footLeft.Dock = DockStyle.Left;
-            Hairline(footer, false);
-            masterLabel = new Label { AutoSize = true, ForeColor = Theme.Muted, Font = Theme.Small, Margin = new Padding(0, 11, 0, 0), BackColor = Theme.Paper };
-            footLeft.Controls.Add(masterLabel);
-            btnApply = new FlatButton("Apply to Inventor", ButtonKind.Primary, 190, 36) { Margin = new Padding(0) };
-            panelActions = Row(Theme.Paper, true); panelActions.Dock = DockStyle.Right;
-            panelActions.Controls.Add(btnApply);
+            // GR frame tab
+            presetBox = new ThemedCombo(230) { Margin = new Padding(0) };
+            btnOpenGr = new RibbonButton("Open\nGR...", "open");
+            btnGrInv = new RibbonButton("Read from\nInventor", "read");
+            grFiles = new RibbonButton("Files", "files");
             grNewName = new TextBox { Font = Theme.Body }; grPrefix = new TextBox { Font = Theme.Body };
-            var btnGrApply = new FlatButton("Write new GR to Inventor", ButtonKind.Primary, 0, 36) { Margin = new Padding(0) };
-            grActions = Row(Theme.Paper, true); grActions.Dock = DockStyle.Right; grActions.Visible = false;
-            grActions.Controls.AddRange(new Control[] { btnGrApply, new Field(grPrefix, 90, 34) { Margin = new Padding(0, 1, 18, 0) }, new Caption("Part prefix") { Margin = new Padding(0, 10, 8, 0) },
-                new Field(grNewName, 220, 34) { Margin = new Padding(0, 1, 16, 0) }, new Caption("New GR name") { Margin = new Padding(0, 10, 8, 0) } });
-            footer.Controls.Add(footLeft); footer.Controls.Add(panelActions); footer.Controls.Add(grActions);
+            var btnGrApply = new RibbonButton("Write new GR\nto Inventor", "apply");
+            var gGrSource = tabGr.AddGroup("GR source", Ribbon.Stack(Hint("Preset"), presetBox), btnOpenGr, btnGrInv, grFiles);
+            tabGr.AddGroup("New GR", Ribbon.Stack(Hint("New GR name"), new Field(grNewName, 220, 30) { Margin = new Padding(0) }),
+                Ribbon.Stack(Hint("Part prefix"), new Field(grPrefix, 90, 30) { Margin = new Padding(0) }), btnGrApply);
+            ribbon.ShowTab(tabGr, false);
+            ribbon.Select(tabPanel);
+
+            // ---------------------------------------------------------- status bar
+            statusBar = new Panel { Dock = DockStyle.Bottom, Height = 28, BackColor = Theme.RibbonTabs, Padding = new Padding(12, 0, 12, 0) };
+            statusBar.Paint += (s, e) => { using (var p = new Pen(Theme.RibbonLine)) e.Graphics.DrawLine(p, 0, 0, statusBar.Width, 0); };
+            masterLabel = new Label { AutoSize = true, ForeColor = Theme.Muted, Font = Theme.Small, Margin = new Padding(0, 7, 0, 0), BackColor = Theme.RibbonTabs };
+            statusLabel = new Label { AutoSize = true, ForeColor = Theme.Muted, Font = Theme.Small, Margin = new Padding(0, 7, 0, 0), BackColor = Theme.RibbonTabs };
+            var statLeft = Row(Theme.RibbonTabs); statLeft.Dock = DockStyle.Left; statLeft.Controls.Add(masterLabel);
+            var statRight = Row(Theme.RibbonTabs, true); statRight.Dock = DockStyle.Right; statRight.Controls.Add(statusLabel);
+            statusBar.Controls.Add(statLeft); statusBar.Controls.Add(statRight);
 
             // dock order: fill first, then the edges from the inside out
-            Controls.Add(body); Controls.Add(bar); Controls.Add(header); Controls.Add(footer);
+            Controls.Add(split); Controls.Add(ribbon); Controls.Add(statusBar);
 
             // ---------------------------------------------------------- floating glass: activity panel, toasts
             activity = new ActivityPanel();
             logBox = activity.LogBox; devBox = activity.DevBox; btnDevSave = activity.SaveDev;
-            Toast.Anchor = () => RectangleToScreen(new Rectangle(0, header.Bottom, ClientSize.Width, footer.Top - header.Bottom));
+            Toast.Anchor = () => RectangleToScreen(new Rectangle(0, ribbon.Bottom, ClientSize.Width, statusBar.Top - ribbon.Bottom));
             Move += (s, e) => FloatLayout(); Resize += (s, e) => FloatLayout();
             btnActivity.Click += (s, e) => ToggleActivity();
+            btnActivityView.Click += (s, e) => ToggleActivity();
+            btnParams.Click += (s, e) => ToggleParams();
+            btnParamsView.Click += (s, e) => ToggleParams();
+            paramPop.Move += (s, e) => { if (!placingPop && paramPop.Visible) { var o = twin.PointToScreen(Point.Empty); popOffset = new Point(paramPop.Left - o.X, paramPop.Top - o.Y); } };
 
             redraw = new Timer { Interval = 150 };
             redraw.Tick += (s, e) => { redraw.Stop(); UpdateDrawing(); };
@@ -245,11 +251,11 @@ namespace InventorSizer
             grid.DataBindingComplete += (s, e) =>
             {
                 foreach (var c in new[] { "Name", "Unit", "Description" }) if (grid.Columns[c] != null) grid.Columns[c].ReadOnly = true;
-                Glass.InputColumn(grid, "Value");
+                Glass.DarkInputColumn(grid, "Value");
                 var weights = new Dictionary<string, float> { ["Name"] = 26, ["Value"] = 18, ["Unit"] = 10, ["Description"] = 46 };
                 foreach (var kv in weights) if (grid.Columns[kv.Key] != null) grid.Columns[kv.Key].FillWeight = kv.Value;
-                if (grid.Columns["Description"] != null) grid.Columns["Description"].DefaultCellStyle = new DataGridViewCellStyle { ForeColor = Theme.Muted, Font = Theme.Small };
-                if (grid.Columns["Unit"] != null) grid.Columns["Unit"].DefaultCellStyle = new DataGridViewCellStyle { ForeColor = Theme.Muted };
+                if (grid.Columns["Description"] != null) grid.Columns["Description"].DefaultCellStyle = new DataGridViewCellStyle { ForeColor = Theme.GlassMuted, Font = Theme.Small };
+                if (grid.Columns["Unit"] != null) grid.Columns["Unit"].DefaultCellStyle = new DataGridViewCellStyle { ForeColor = Theme.GlassMuted };
                 UpdateGridLocks();
             };
             grid.DataError += (s, e) => { Log.Write($"Invalid value in row {e.RowIndex + 1} - enter a number."); Toast.Show(this, ToastKind.Error, "Enter a number", $"Row {e.RowIndex + 1} needs a numeric value."); e.Cancel = true; };
@@ -260,13 +266,14 @@ namespace InventorSizer
                 UpdatePreview();
             };
             nameBox.TextChanged += (s, e) => { if (syncing) return; StandardFromName(); GridFromName(); UpdatePreview(); };
-            typeBox.SelectedIndexChanged += (s, e) => { if (!syncing && typeBox.SelectedIndex >= 0) StandardFromList(); };
-            subBox.SelectedIndexChanged += (s, e) => { if (syncing || std == null) return; SettingsFromForm(); UpdateGridLocks(); UpdatePreview(); ShowMaster(); if (subBox.SelectedIndex > 0) LoadMaster(CurrentSub()); };
+            browser.Picked += (s, sub) => { if (!syncing) PickType(s, sub); };
+            browser.Opened += (s, sub) => { if (!syncing && s == std && sub == CurrentSub() && (DateTime.Now - lastPick).TotalSeconds > 1.5) LoadMaster(sub); };
             viewBox.SelectedIndexChanged += (s, e) => UpdateDrawing();
             twin.Paint += (s, e) => Painter.Paint(e.Graphics, shapes, twin.ClientSize, mode == "GR" ? null : hud);
             twin.Resize += (s, e) => { redraw.Stop(); redraw.Start(); };
             twin.MouseClick += (s, e) => { if (mode != "GR" && hud.Hit.Contains(e.Location)) { hud.Collapsed = !hud.Collapsed; twin.Invalidate(); } };
             twin.MouseMove += (s, e) => twin.Cursor = mode != "GR" && hud.Hit.Contains(e.Location) ? Cursors.Hand : Cursors.Default;
+            twin.DoubleClick += (s, e) => { if (mode != "GR") ToggleParams(); };
             chkHidden.CheckedChanged += (s, e) => UpdateDrawing();
             chkFolder.CheckedChanged += (s, e) => FolderControls();
             foreach (var nb in new[] { gapBox, thickBox, splitBox, pitchBox }) nb.ValueChanged += (s, e) => { if (!syncing) { SettingsFromForm(); UpdateGridLocks(); UpdatePreview(); } };
@@ -315,6 +322,7 @@ namespace InventorSizer
                 using (var d = new SaveFileDialog { Filter = "Cut list (*.csv)|*.csv", FileName = gr.Name + "-cut-list.csv" })
                     if (d.ShowDialog(this) == DialogResult.OK) { Gr.ExportCutList(gr, d.FileName); Log.Write($"Saved cut list {d.FileName}"); }
             }));
+            gGrSource.Fit();   // the Files button grew its menu arrow
             btnGrInv.Click += (s, e) => Step("Read GR from Inventor", () => SetGr(Log.Measure("Build the GR model", () => Gr.Build(Inv.ReadGr()))), true);
             btnOpenGr.Click += (s, e) => Step("Open GR", () =>
             {
@@ -384,31 +392,50 @@ namespace InventorSizer
             activity.BringToFront(); activity.Activate();
         }
 
-        // Keeps the floating glass (toasts, activity panel) in place when the window moves.
+        // Keeps the floating glass (toasts, activity panel, parameter pop-up) in place when the window moves.
         void FloatLayout()
         {
             Toast.Layout();
-            if (activity != null && footer != null)
+            if (activity != null && statusBar != null)
             {
                 var r = RectangleToScreen(ClientRectangle);
                 int w = Math.Min(680, Math.Max(480, ClientSize.Width / 2));
                 activity.Size = new Size(w, 340);
-                activity.Location = new Point(r.Right - w - 24, r.Y + footer.Top - activity.Height - 12);
+                activity.Location = new Point(r.Right - w - 24, r.Y + statusBar.Top - activity.Height - 12);
             }
+            if (paramPop != null && paramPop.Visible) PlacePop();
         }
 
-        // A small isometric box: the panel the app draws.
-        static void PaintLogo(Graphics g)
+        // ------------------------------------------------------------------ parameter pop-up
+
+        void ToggleParams()
         {
-            Theme.Smooth(g);
-            float cx = 15, cy = 15, s = 11;
-            var top = new[] { new PointF(cx, cy - s), new PointF(cx + s * 0.87f, cy - s * 0.5f), new PointF(cx, cy), new PointF(cx - s * 0.87f, cy - s * 0.5f) };
-            var left = new[] { new PointF(cx - s * 0.87f, cy - s * 0.5f), new PointF(cx, cy), new PointF(cx, cy + s), new PointF(cx - s * 0.87f, cy + s * 0.5f) };
-            var right = new[] { new PointF(cx, cy), new PointF(cx + s * 0.87f, cy - s * 0.5f), new PointF(cx + s * 0.87f, cy + s * 0.5f), new PointF(cx, cy + s) };
-            using (var b = new SolidBrush(Theme.Ink)) g.FillPolygon(b, right);
-            using (var b = new SolidBrush(Theme.InkSoft)) g.FillPolygon(b, left);
-            using (var b = new SolidBrush(Theme.Card)) g.FillPolygon(b, top);
-            using (var p = new Pen(Theme.Ink, 1.2f) { LineJoin = System.Drawing.Drawing2D.LineJoin.Round }) { g.DrawPolygon(p, top); g.DrawPolygon(p, left); g.DrawPolygon(p, right); }
+            if (paramPop.Open) { paramPop.Dismiss(); return; }
+            ShowParams();
+        }
+
+        void ShowParams()
+        {
+            if (mode == "GR" || WindowState == FormWindowState.Minimized) return;
+            PlacePop();
+            FitPop();
+            paramPop.Popup();
+        }
+
+        // At its offset from the drawing's top left corner, kept inside the drawing.
+        void PlacePop()
+        {
+            var o = twin.PointToScreen(Point.Empty);
+            int x = Math.Max(0, Math.Min(popOffset.X, twin.Width - 120)), y = Math.Max(0, Math.Min(popOffset.Y, twin.Height - 60));
+            placingPop = true;
+            try { paramPop.Location = new Point(o.X + x, o.Y + y); } finally { placingPop = false; }
+        }
+
+        void FitPop()
+        {
+            if (paramPop == null) return;
+            int rows = grid.Rows.Cast<DataGridViewRow>().Count(r => r.Visible);
+            paramPop.FitRows(Math.Max(rows, 3), Math.Max(240, twin.Height - Math.Max(0, popOffset.Y) - 16));
         }
 
         // ------------------------------------------------------------------ start
@@ -428,20 +455,19 @@ namespace InventorSizer
             {
                 // The build time shows at once whether this is the exe you just built.
                 try { string built = File.GetLastWriteTime(Application.ExecutablePath).ToString("yyyy-MM-dd HH:mm"); Log.Write($"Inventor Sizer, built {built} - {(Program.Dev ? "dev run" : "user run")}"); titleTail = $"  (built {built})" + (Program.Dev ? "  -  DEV RUN" : ""); Text += titleTail; } catch { }
-                devMenu.Visible = Program.Dev;
-                split.SplitterDistance = Math.Max(400, Math.Min(500, split.Width * 2 / 5));
-                settingsCard.SetCollapsed(true);
+                gMaster.Visible = Program.Dev;   // dev run only
+                split.SplitterDistance = 290;
                 standards = Standards.Read(StandardsDir, Root);
-                typeBox.Items.Clear();
-                foreach (var s in standards) typeBox.Items.Add(s.ToString());
+                browser.Build(standards);
                 SelectStandard(standards[0]);
                 SetGrid(ParamFile.Read(ParamPath));
                 EnsureSizeRows();
                 ClearPanelSize();
             });
-            Log.Write("Ready. Choose 1T or 2T to open that master, or load a panel assembly to get its starting size.");
-            Toast.Show(this, ToastKind.Info, "Ready", "Choose 1T or 2T to open the master, or load a panel assembly.");
+            Log.Write("Ready. Pick 1T or 2T in the Types browser to open that master, or load a panel assembly to get its starting size.");
+            Toast.Show(this, ToastKind.Info, "Ready", "Pick 1T or 2T in the Types browser to open the master, or load a panel assembly.");
             UpdatePreview();
+            ShowParams();   // the parameter editor opens with the window
         }
 
         // Runs a step with a wait cursor, logs it and times it in the dev log; errors go to a message box.
@@ -608,7 +634,7 @@ namespace InventorSizer
         {
             std = s;
             syncing = true;
-            try { typeBox.SelectedIndex = standards.IndexOf(s); } finally { syncing = false; }
+            try { browser.Select(s, subPick > 0 ? Standards.SubTypes[subPick - 1] : null); } finally { syncing = false; }
             if (grid.Rows.Count > 0) UpdateGridLocks();
             ShowMaster();
         }
@@ -616,7 +642,7 @@ namespace InventorSizer
         // The sub type in use: the one chosen, or with Auto the one the width asks for.
         string CurrentSub()
         {
-            if (subBox.SelectedIndex > 0) return Standards.SubTypes[subBox.SelectedIndex - 1];
+            if (subPick > 0) return Standards.SubTypes[subPick - 1];
             try { return Standards.SubOf(HoleRules.InnerSplit(Standards.Get(GridValues(), "Width"), settings)); } catch { return "1T"; }
         }
 
@@ -626,6 +652,7 @@ namespace InventorSizer
             if (std == null || mode == "GR") return;
             string sub = CurrentSub();
             bool has = std.HasMaster(sub);
+            browser.Refresh(std, sub);
             miOpenMaster.Enabled = has;
             masterLabel.ForeColor = has ? Theme.Muted : Theme.Ink;
             masterLabel.Font = has ? Theme.Small : Theme.Ui(8.5f, FontStyle.Bold);
@@ -654,9 +681,18 @@ namespace InventorSizer
             SetTypeDefaults(match, false);
         }
 
-        void StandardFromList()
+        // A node picked in the Types browser: the type, and a sub type (1T / 2T opens its master)
+        // or none (Auto: the sub type follows the width).
+        void PickType(Standard s, string sub)
         {
-            var s = standards[typeBox.SelectedIndex];
+            subPick = sub == null ? 0 : Array.IndexOf(Standards.SubTypes, sub) + 1;   // first: the browser keeps this node selected
+            if (s != std) StandardFromList(s);
+            SettingsFromForm(); UpdateGridLocks(); UpdatePreview(); ShowMaster();
+            if (subPick > 0) { LoadMaster(CurrentSub()); lastPick = DateTime.Now; }
+        }
+
+        void StandardFromList(Standard s)
+        {
             SelectStandard(s);
             syncing = true;
             try { nameBox.Text = Standards.WithPrefix(standards, nameBox.Text, s.Prefix); } finally { syncing = false; }
@@ -698,9 +734,10 @@ namespace InventorSizer
                 try { gr.Visible = !HiddenParams.Contains(name); } catch (InvalidOperationException) { }
                 bool locked = FixedParams.Contains(name) || (name == "Height" && std != null && std.Height > 0) || (settings.MaxHolePitch > 0 && AutoParams.Contains(name)) || (HardwareCountParams.Contains(name) && (std == null || std.HardwareCounts.Count == 0));
                 gr.ReadOnly = locked;
-                gr.DefaultCellStyle.ForeColor = locked ? Theme.Muted : Theme.Ink;
-                gr.Cells["Value"].Style.BackColor = locked ? Theme.Card : Theme.Paper;
+                gr.DefaultCellStyle.ForeColor = locked ? Theme.GlassMuted : Theme.GlassText;
+                gr.Cells["Value"].Style.BackColor = locked ? Theme.Glass : Theme.PopInput;
             }
+            FitPop();
         }
 
         void UpdatePreview()
@@ -769,7 +806,7 @@ namespace InventorSizer
             if (syncing) return;
             settings.MinHoleGap = (double)gapBox.Value; settings.Thickness = (double)thickBox.Value;
             settings.SplitWidth = (double)splitBox.Value; settings.MaxHolePitch = (double)pitchBox.Value;
-            settings.ForceSplit = subBox.SelectedIndex;   // 0 = Auto, 1 = 1T, 2 = 2T
+            settings.ForceSplit = subPick;   // 0 = Auto, 1 = 1T, 2 = 2T
         }
 
         void SaveFormSettings() { SettingsFromForm(); settings.Save(SettingsPath); }
@@ -955,9 +992,13 @@ namespace InventorSizer
             bool g = m == "GR";
             modeSwitch.SetSelected(g ? 1 : 0);
             Text = "Inventor Sizer - " + (g ? "GR editing" : "panel editing") + titleTail;
-            foreach (Control c in new Control[] { panelBar, panelActions, masterLabel, chkHidden, panelColumn }) c.Visible = !g;
-            devMenu.Visible = !g && Program.Dev;   // dev run only
-            foreach (Control c in new Control[] { grBar, grActions, grColumn }) c.Visible = g;
+            ribbon.ShowTab(tabPanel, !g); ribbon.ShowTab(tabSettings, !g); ribbon.ShowTab(tabGr, g);
+            ribbon.Select(g ? tabGr : tabPanel);
+            foreach (Control c in new Control[] { masterLabel, chkHidden, browser }) c.Visible = !g;
+            btnParamsView.Enabled = !g;
+            grColumn.Visible = g;
+            split.SplitterDistance = g ? Math.Min(560, split.Width / 2) : 290;
+            if (g) paramPop.Dismiss();
             if (g) { UpdatePresets(); UpdateGrGrid(); UpdateDrawing(); } else UpdatePreview();
         }
 

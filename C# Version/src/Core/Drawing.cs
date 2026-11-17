@@ -25,6 +25,7 @@ namespace InventorSizer.Core
     {
         public string Stroke, Fill; public double Width = 1; public float[] Dash;
         public double FontSize; public bool Bold; public string TextColor;
+        public double Opacity = 1;   // of the fill: the part colours are see-through
     }
 
     public class ViewT { public string View; public double S, X, Y; }
@@ -45,6 +46,8 @@ namespace InventorSizer.Core
             ["profile"] = L("#4682b4", 2.2), ["corner"] = L("#000000", 1, null, "#696969"), ["joint"] = L("#000000", 1, null, "#ffd700"),
             ["divider"] = L("#9370db", 2), ["dividerMilled"] = L("#2e8b57", 2), ["dividerMoved"] = L("#ff8c00", 2.4),
             ["label"] = T("#000000", 13, true), ["sub"] = T("#696969", 11), ["caption"] = T("#696969", 14, true), ["bom"] = T("#000000", 12),
+            // the sub parts, each its own see-through colour: outer tray (-Au), inner panel(s) (-In / -In-2T), door hardware
+            ["partAu"] = new Style { Fill = "#3d7cc9", Opacity = 0.20 }, ["partIn"] = new Style { Fill = "#2f9e64", Opacity = 0.26 }, ["partHw"] = new Style { Fill = "#f08c1e", Opacity = 0.55 },
             ["bomHead"] = T("#000000", 12, true), ["bomTitle"] = T("#000000", 14, true), ["axisLabel"] = T("#000000", 11, true), ["note"] = T("#000000", 12), ["empty"] = T("#808080", 15),
         };
     }
@@ -234,7 +237,8 @@ namespace InventorSizer.Core
                 for (int k = 0; k < s.Points.Length; k += 2) pts.Append(k > 0 ? " " : "").Append(N(s.Points[k])).Append(',').Append(N(s.Points[k + 1]));
                 string stroke = st.Stroke == null ? "stroke=\"none\"" : $"stroke=\"{st.Stroke}\" stroke-width=\"{N(st.Width)}\"" +
                                 (st.Dash != null ? $" stroke-dasharray=\"{string.Join(" ", st.Dash.Select(d => N(d)))}\"" : "");
-                if (s.Closed) sb.AppendLine($"  <polygon points=\"{pts}\" fill=\"{st.Fill ?? "none"}\" {stroke} stroke-linejoin=\"round\"/>");
+                string fillOp = st.Fill != null && st.Opacity < 1 ? $" fill-opacity=\"{st.Opacity.ToString("0.##", CultureInfo.InvariantCulture)}\"" : "";
+                if (s.Closed) sb.AppendLine($"  <polygon points=\"{pts}\" fill=\"{st.Fill ?? "none"}\"{fillOp} {stroke} stroke-linejoin=\"round\"/>");
                 else sb.AppendLine($"  <polyline points=\"{pts}\" fill=\"none\" {stroke} stroke-linecap=\"round\"/>");
             }
             sb.AppendLine("</svg>");

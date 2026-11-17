@@ -21,15 +21,25 @@ fallback until the C# version has been checked in daily use. Both read the same 
 
 - **Start (user run):** double-click `InventorSizer.exe`. It makes panels from the masters stored
   in `masters\<type>\`; nothing has to be set up.
-- **Type and sub type:** next to the type you choose the sub type, which decides the master:
+- **Window:** laid out like Inventor. The **ribbon** at the top holds the actions and settings
+  (tabs **Panel**, **View**, **Settings**; **GR frame** in GR mode), the **Types** browser on the
+  left picks the type and sub type, the drawing fills the rest, and the status bar at the bottom
+  shows the master in use. The parameter table opens as a floating dark pop-up over the
+  drawing (**Parameters** in the ribbon, or double-click the drawing); drag it by its header.
+  Each sub part has its own see-through colour in the drawing: outer tray (Au) blue, inner
+  panel(s) (In / In-2T) green, door hardware orange.
+- **Type and sub type:** the Types browser lists each type (from `standards\*.json`) with its
+  sub types under it, like the `masters\` folder; a cube icon marks a sub type that has a
+  master, the sub type in use is bold. The sub type decides the master:
 
   | Sub type | Inner panel | Master folder |
   |---|---|---|
   | `1T` | one piece | `masters\<type>\1T\` |
   | `2T` | 2 parts | `masters\<type>\2T\` |
-  | `Auto (width)` | `2T` above the split width in Settings, else `1T` | as above |
+  | `Auto (width)` (the type node) | `2T` above the split width in Settings, else `1T` | as above |
 
-  The line under the buttons shows the master in use, in red when that folder has none.
+  Clicking `1T` or `2T` opens that master in Inventor. The status bar shows the master in use,
+  in bold when that folder has none.
 - **Dev run:** double-click `Dev run.cmd` (or start `InventorSizer.exe /dev`). It also shows
   **Open master**, **Set up master...** and **Learn hardware holes**, which prepare the app.
   The window title says `DEV RUN`.
@@ -104,11 +114,11 @@ Nothing to install. The tool uses:
    - **Open master**: opens the master assembly of the selected **Type** (from the standard).
    - **Open assembly...**: browse for any `.iam`. Inventor is started if it isn't running.
    - **Read from Inventor**: uses the assembly that is already active in Inventor.
-4. Edit the **name** or the values in the **grid** (they stay in sync). `HolesL` and `HolesW`
+4. Edit the **name** (ribbon, Panel tab) or the values in the **Parameters** pop-up (they stay in sync). `HolesL` and `HolesW`
    set the holes per length wall and per width wall. The name may start with a project number
    (`6357-3 TP-519x1194x42`); the **Type** follows the prefix in front of the size, or the
    height if there is none, and brings its own `HoleZ`.
-5. The drawing on the right updates as you type:
+5. The drawing updates as you type (View tab of the ribbon):
    - **View**: Isometric, Front, Back, Left, Right, Top or Bottom.
    - **Show hidden edges**: back edges, back-wall holes, floor and wall thickness as dashed lines.
    - The **bill of materials** (bottom right) lists the parts of the type with their sizes and
@@ -146,7 +156,7 @@ every time the app starts and the folder is not saved, so the standard rule alwa
 
 ## Settings
 
-Under the grid, saved to `settings.json`:
+In the ribbon's **Settings** tab, saved to `settings.json`:
 
 - **Minimum hole gap**: smallest distance between hole centres before Apply is blocked (default 10 mm).
 - **Sheet thickness** (Stärke): used for the centre-pair offset and the inner-panel size (default 1 mm).

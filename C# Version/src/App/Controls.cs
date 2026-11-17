@@ -302,6 +302,7 @@ namespace InventorSizer
         readonly string[] items;
         public int Selected { get; private set; }
         public event Action<int> Picked;
+        public bool Dark;   // on the dark title bar
         int hover = -1;
 
         public Segmented(params string[] items)
@@ -332,19 +333,20 @@ namespace InventorSizer
             var g = e.Graphics;
             g.Clear(Parent?.BackColor ?? Theme.Paper);
             Theme.Smooth(g);
-            using (var path = Theme.Round(new RectangleF(0, 0, Width - 1, Height - 1), 10))
-            using (var b = new SolidBrush(Theme.Card)) g.FillPath(b, path);
+            using (var path = Theme.Round(new RectangleF(0, 0, Width - 1, Height - 1), Dark ? 8 : 10))
+            using (var b = new SolidBrush(Dark ? Theme.TitleRaised : Theme.Card)) g.FillPath(b, path);
             for (int i = 0; i < items.Length; i++)
             {
                 var r = Seg(i);
                 if (i == Selected)
                 {
-                    Theme.Shadow(g, r, 7, 3, 18);
-                    using (var path = Theme.Round(r, 7))
-                    using (var b = new SolidBrush(Theme.Paper)) g.FillPath(b, path);
+                    if (!Dark) Theme.Shadow(g, r, 7, 3, 18);
+                    using (var path = Theme.Round(r, Dark ? 5 : 7))
+                    using (var b = new SolidBrush(Dark ? Theme.TitleText : Theme.Paper)) g.FillPath(b, path);
                 }
-                TextRenderer.DrawText(g, items[i], i == Selected ? Theme.BodyBold : Theme.Body, r,
-                    i == Selected ? Theme.Ink : i == hover ? Theme.InkSoft : Theme.Muted, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix);
+                var ink = Dark ? (i == Selected ? Theme.TitleBar : i == hover ? Theme.TitleText : Theme.TitleMuted)
+                               : (i == Selected ? Theme.Ink : i == hover ? Theme.InkSoft : Theme.Muted);
+                TextRenderer.DrawText(g, items[i], i == Selected ? Theme.BodyBold : Theme.Body, r, ink, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix);
             }
         }
     }
@@ -390,6 +392,30 @@ namespace InventorSizer
                 BackColor = card, ForeColor = Theme.Ink, SelectionBackColor = Theme.Selection, SelectionForeColor = Theme.Ink,
                 Padding = new Padding(6, 0, 4, 0), Font = Theme.Body
             };
+        }
+
+        // The same grid on the dark glass of the parameter pop-up.
+        public static void StyleDarkGrid(DataGridView g)
+        {
+            StyleGrid(g, Theme.Glass);
+            g.GridColor = Theme.GlassLine;
+            g.ColumnHeadersDefaultCellStyle = new DataGridViewCellStyle
+            {
+                BackColor = Theme.PopHead, ForeColor = Theme.GlassMuted, Font = Theme.Ui(8.75f, FontStyle.Bold),
+                SelectionBackColor = Theme.PopHead, SelectionForeColor = Theme.GlassMuted, Padding = new Padding(6, 0, 0, 0), Alignment = DataGridViewContentAlignment.MiddleLeft, WrapMode = DataGridViewTriState.False
+            };
+            g.DefaultCellStyle = new DataGridViewCellStyle
+            {
+                BackColor = Theme.Glass, ForeColor = Theme.GlassText, SelectionBackColor = Theme.GlassLine, SelectionForeColor = Theme.GlassText,
+                Padding = new Padding(6, 0, 4, 0), Font = Theme.Body
+            };
+        }
+
+        // Value cells on the dark pop-up: lighter grey input cells.
+        public static void DarkInputColumn(DataGridView g, string column)
+        {
+            if (g.Columns[column] == null) return;
+            g.Columns[column].DefaultCellStyle = new DataGridViewCellStyle { BackColor = Theme.PopInput, ForeColor = Theme.GlassText, Font = Theme.BodyBold, SelectionBackColor = Theme.Accent, SelectionForeColor = Color.White };
         }
 
         // Editable value columns read as white input cells.
