@@ -19,7 +19,7 @@
     <ParamWithValue>
       <name>Width</name>
       <typeCode>mm</typeCode>
-      <value>600 mm</value>
+      <value>900 mm</value>
       <comment>1st number in the file name</comment>
       <isKey>false</isKey>
     </ParamWithValue>
@@ -33,7 +33,7 @@
     <ParamWithValue>
       <name>Height</name>
       <typeCode>mm</typeCode>
-      <value>42 mm</value>
+      <value>47 mm</value>
       <comment>3rd number in the file name</comment>
       <isKey>false</isKey>
     </ParamWithValue>
@@ -61,7 +61,7 @@
     <ParamWithValue>
       <name>HoleZ</name>
       <typeCode>mm</typeCode>
-      <value>20 mm</value>
+      <value>22 mm</value>
       <comment>Hole centre height</comment>
       <isKey>false</isKey>
     </ParamWithValue>
