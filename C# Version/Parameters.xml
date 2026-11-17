@@ -19,21 +19,21 @@
     <ParamWithValue>
       <name>Width</name>
       <typeCode>mm</typeCode>
-      <value>300 mm</value>
+      <value>600 mm</value>
       <comment>1st number in the file name</comment>
       <isKey>false</isKey>
     </ParamWithValue>
     <ParamWithValue>
       <name>Length</name>
       <typeCode>mm</typeCode>
-      <value>1196 mm</value>
+      <value>1194 mm</value>
       <comment>2nd number in the file name</comment>
       <isKey>false</isKey>
     </ParamWithValue>
     <ParamWithValue>
       <name>Height</name>
       <typeCode>mm</typeCode>
-      <value>47 mm</value>
+      <value>42 mm</value>
       <comment>3rd number in the file name</comment>
       <isKey>false</isKey>
     </ParamWithValue>
