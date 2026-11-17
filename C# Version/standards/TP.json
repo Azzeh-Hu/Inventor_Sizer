@@ -9,6 +9,7 @@
       "prefix": "TP-",
       "height": 42,
       "masters": {
+        "1T": "masters\\TP\\1T\\1111 TP-300x1194x42.iam",
         "2T": "masters\\TP\\2T\\1111 TP-400x1194x42.iam"
       },
       "defaults": {
@@ -83,44 +84,14 @@
               "unit": "ul"
             },
             {
-              "name": "HoleStartL",
-              "value": "50 mm",
-              "unit": "mm"
-            },
-            {
               "name": "HolePitchL",
               "value": "364.666666667 mm",
-              "unit": "mm"
-            },
-            {
-              "name": "HoleCountL",
-              "value": "4 ul",
-              "unit": "ul"
-            },
-            {
-              "name": "HoleOnL",
-              "value": "1 ul",
-              "unit": "ul"
-            },
-            {
-              "name": "HoleStartW",
-              "value": "50 mm",
               "unit": "mm"
             },
             {
               "name": "HolePitchW",
               "value": "624 mm",
               "unit": "mm"
-            },
-            {
-              "name": "HoleCountW",
-              "value": "2 ul",
-              "unit": "ul"
-            },
-            {
-              "name": "HoleOnW",
-              "value": "1 ul",
-              "unit": "ul"
             },
             {
               "name": "HoleMidOnW",
@@ -213,7 +184,7 @@
             },
             {
               "name": "d84",
-              "formula": "HoleCountL - 1 ul"
+              "formula": "HolesL - 1 ul"
             },
             {
               "name": "d86",
@@ -232,7 +203,7 @@
               "formula": "HingeEdge"
             },
             {
-              "name": "d114",
+              "name": "d129",
               "formula": "HingePitch"
             },
             {
@@ -240,15 +211,27 @@
               "formula": "HingePitch"
             },
             {
+              "name": "d131",
+              "formula": "HingePitch"
+            },
+            {
+              "name": "d134",
+              "formula": "HingePitch"
+            },
+            {
+              "name": "d135",
+              "formula": "HolesL"
+            },
+            {
               "name": "d102",
               "formula": "HandleEdge"
             },
             {
-              "name": "d107",
+              "name": "d128",
               "formula": "HandlePitch"
             },
             {
-              "name": "d112",
+              "name": "d132",
               "formula": "HingeCount"
             },
             {
@@ -256,8 +239,12 @@
               "formula": "HingeCount"
             },
             {
-              "name": "d105",
+              "name": "d126",
               "formula": "HandleCount"
+            },
+            {
+              "name": "d137",
+              "formula": "HolePitchL"
             }
           ]
         },
@@ -309,44 +296,9 @@
               "unit": "ul"
             },
             {
-              "name": "HoleStartL",
-              "value": "50 mm",
-              "unit": "mm"
-            },
-            {
-              "name": "HolePitchL",
-              "value": "364.666666667 mm",
-              "unit": "mm"
-            },
-            {
-              "name": "HoleCountL",
-              "value": "4 ul",
-              "unit": "ul"
-            },
-            {
-              "name": "HoleOnL",
-              "value": "1 ul",
-              "unit": "ul"
-            },
-            {
-              "name": "HoleStartW",
-              "value": "50 mm",
-              "unit": "mm"
-            },
-            {
               "name": "HolePitchW",
               "value": "624 mm",
               "unit": "mm"
-            },
-            {
-              "name": "HoleCountW",
-              "value": "2 ul",
-              "unit": "ul"
-            },
-            {
-              "name": "HoleOnW",
-              "value": "1 ul",
-              "unit": "ul"
             },
             {
               "name": "HoleMidOnW",
@@ -386,7 +338,7 @@
             },
             {
               "name": "d1",
-              "formula": "Length - 2 * Stärke - 2 * Clearance"
+              "formula": "Length - 3"
             },
             {
               "name": "d7",
@@ -426,7 +378,7 @@
             },
             {
               "name": "d40",
-              "formula": "HoleCountL - 1 ul"
+              "formula": "HolesL - 1 ul"
             },
             {
               "name": "d42",
@@ -504,6 +456,405 @@
             {
               "name": "d35",
               "formula": "HingeCount"
+            }
+          ]
+        }
+      },
+      "setup1T": {
+        "master": "1111 TP-300x1194x42",
+        "version": 1,
+        "notes": "Setup of the 1T master (1 inner panel, no inner-panel pattern in the assembly). Its own d-numbers, taken from the parameter exports of 1111 TP-300x1194x42 and its -Au / -In-2T parts. Only parameters the model uses; Apply skips names a part does not have.",
+        "assembly": {
+          "user": [
+            {
+              "name": "Clearance",
+              "value": "0.5 mm",
+              "unit": "mm"
+            },
+            {
+              "name": "HingeCount",
+              "value": "2 ul",
+              "unit": "ul"
+            },
+            {
+              "name": "HingePitch",
+              "value": "974 mm",
+              "unit": "mm"
+            },
+            {
+              "name": "HandleCount",
+              "value": "2 ul",
+              "unit": "ul"
+            },
+            {
+              "name": "HandlePitch",
+              "value": "794 mm",
+              "unit": "mm"
+            }
+          ],
+          "formulas": [
+            {
+              "name": "d6",
+              "formula": "Clearance"
+            },
+            {
+              "name": "d7",
+              "formula": "Clearance"
+            },
+            {
+              "name": "d29",
+              "formula": "HandlePitch"
+            },
+            {
+              "name": "d31",
+              "formula": "HandleCount"
+            },
+            {
+              "name": "d33",
+              "formula": "HingePitch"
+            },
+            {
+              "name": "d35",
+              "formula": "HingeCount"
+            }
+          ]
+        },
+        "outer": {
+          "user": [
+            {
+              "name": "Width",
+              "value": "300 mm",
+              "unit": "mm"
+            },
+            {
+              "name": "Length",
+              "value": "1194 mm",
+              "unit": "mm"
+            },
+            {
+              "name": "Height",
+              "value": "42 mm",
+              "unit": "mm"
+            },
+            {
+              "name": "HoleEdge",
+              "value": "50 mm",
+              "unit": "mm"
+            },
+            {
+              "name": "HoleZ",
+              "value": "20 mm",
+              "unit": "mm"
+            },
+            {
+              "name": "HoleDia",
+              "value": "4.1 mm",
+              "unit": "mm"
+            },
+            {
+              "name": "HolesL",
+              "value": "4 ul",
+              "unit": "ul"
+            },
+            {
+              "name": "HolesW",
+              "value": "2 ul",
+              "unit": "ul"
+            },
+            {
+              "name": "HolePitchL",
+              "value": "( Length - 100 mm ) / ( HolesL - 1 ul )",
+              "unit": "mm"
+            },
+            {
+              "name": "HolePitchW",
+              "value": "( Width - 100 mm ) / ( HolesW - 1 ul )",
+              "unit": "mm"
+            },
+            {
+              "name": "HingeEdge",
+              "value": "98 mm",
+              "unit": "mm"
+            },
+            {
+              "name": "HingeSpan",
+              "value": "24 mm",
+              "unit": "mm"
+            },
+            {
+              "name": "HandleEdge",
+              "value": "161 mm",
+              "unit": "mm"
+            },
+            {
+              "name": "HandleSpan",
+              "value": "78 mm",
+              "unit": "mm"
+            },
+            {
+              "name": "HingeCount",
+              "value": "2 ul",
+              "unit": "ul"
+            },
+            {
+              "name": "HingePitch",
+              "value": "974 mm",
+              "unit": "mm"
+            },
+            {
+              "name": "HandleCount",
+              "value": "2 ul",
+              "unit": "ul"
+            },
+            {
+              "name": "HandlePitch",
+              "value": "794 mm",
+              "unit": "mm"
+            }
+          ],
+          "formulas": [
+            {
+              "name": "d0",
+              "formula": "Width"
+            },
+            {
+              "name": "d1",
+              "formula": "Length"
+            },
+            {
+              "name": "d7",
+              "formula": "Height"
+            },
+            {
+              "name": "d13",
+              "formula": "HoleZ"
+            },
+            {
+              "name": "d14",
+              "formula": "HoleEdge"
+            },
+            {
+              "name": "d17",
+              "formula": "HoleDia"
+            },
+            {
+              "name": "d24",
+              "formula": "HoleEdge"
+            },
+            {
+              "name": "d25",
+              "formula": "HoleZ"
+            },
+            {
+              "name": "d28",
+              "formula": "HoleZ"
+            },
+            {
+              "name": "d29",
+              "formula": "HoleEdge"
+            },
+            {
+              "name": "d30",
+              "formula": "HoleDia"
+            },
+            {
+              "name": "d84",
+              "formula": "HolesL - 1 ul"
+            },
+            {
+              "name": "d86",
+              "formula": "HolePitchL"
+            },
+            {
+              "name": "d135",
+              "formula": "HolesL"
+            },
+            {
+              "name": "d137",
+              "formula": "HolePitchL"
+            },
+            {
+              "name": "d138",
+              "formula": "HolesW"
+            },
+            {
+              "name": "d140",
+              "formula": "HolePitchW"
+            },
+            {
+              "name": "d48",
+              "formula": "HingeSpan"
+            },
+            {
+              "name": "d81",
+              "formula": "HingeEdge"
+            },
+            {
+              "name": "d112",
+              "formula": "HingeCount"
+            },
+            {
+              "name": "d114",
+              "formula": "HingePitch"
+            },
+            {
+              "name": "d119",
+              "formula": "HingeCount"
+            },
+            {
+              "name": "d121",
+              "formula": "HingePitch"
+            },
+            {
+              "name": "d129",
+              "formula": "HingeCount"
+            },
+            {
+              "name": "d131",
+              "formula": "HingePitch"
+            },
+            {
+              "name": "d132",
+              "formula": "HingeCount"
+            },
+            {
+              "name": "d134",
+              "formula": "HingePitch"
+            },
+            {
+              "name": "d95",
+              "formula": "HandleSpan"
+            },
+            {
+              "name": "d102",
+              "formula": "HandleEdge"
+            },
+            {
+              "name": "d126",
+              "formula": "HandleCount"
+            },
+            {
+              "name": "d128",
+              "formula": "HandlePitch"
+            }
+          ]
+        },
+        "inner": {
+          "user": [
+            {
+              "name": "Width",
+              "value": "300 mm",
+              "unit": "mm"
+            },
+            {
+              "name": "Length",
+              "value": "1194 mm",
+              "unit": "mm"
+            },
+            {
+              "name": "Height",
+              "value": "42 mm",
+              "unit": "mm"
+            },
+            {
+              "name": "HoleEdge",
+              "value": "50 mm",
+              "unit": "mm"
+            },
+            {
+              "name": "HoleZ",
+              "value": "20 mm",
+              "unit": "mm"
+            },
+            {
+              "name": "HoleDia",
+              "value": "4.1 mm",
+              "unit": "mm"
+            },
+            {
+              "name": "HolesL",
+              "value": "4 ul",
+              "unit": "ul"
+            },
+            {
+              "name": "HolePitchL",
+              "value": "( Length - 100 mm ) / ( HolesL - 1 ul )",
+              "unit": "mm"
+            },
+            {
+              "name": "InSplit",
+              "value": "1 ul",
+              "unit": "ul"
+            },
+            {
+              "name": "InWidth",
+              "value": "( Width - 3 mm ) / InSplit",
+              "unit": "mm"
+            },
+            {
+              "name": "HolePitchW",
+              "value": "( Width - 100 mm ) / ( HolesW - 1 ul )",
+              "unit": "mm"
+            },
+            {
+              "name": "HoleMidOffsetW",
+              "value": "HoleEdge - 1.5 mm",
+              "unit": "mm"
+            }
+          ],
+          "formulas": [
+            {
+              "name": "d0",
+              "formula": "InWidth"
+            },
+            {
+              "name": "d1",
+              "formula": "Length - 3 mm"
+            },
+            {
+              "name": "d7",
+              "formula": "Height - Stärke"
+            },
+            {
+              "name": "d27",
+              "formula": "HoleMidOffsetW"
+            },
+            {
+              "name": "d28",
+              "formula": "HoleMidOffsetW"
+            },
+            {
+              "name": "d37",
+              "formula": "HoleMidOffsetW"
+            },
+            {
+              "name": "d29",
+              "formula": "HoleZ"
+            },
+            {
+              "name": "d39",
+              "formula": "HoleZ"
+            },
+            {
+              "name": "d30",
+              "formula": "HoleDia"
+            },
+            {
+              "name": "d47",
+              "formula": "HoleDia"
+            },
+            {
+              "name": "d55",
+              "formula": "HolesL"
+            },
+            {
+              "name": "d57",
+              "formula": "HolePitchL"
+            },
+            {
+              "name": "d60",
+              "formula": "HolePitchW"
+              
             }
           ]
         }

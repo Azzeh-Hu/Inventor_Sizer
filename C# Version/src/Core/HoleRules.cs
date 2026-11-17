@@ -3,9 +3,9 @@
 //   1 hole   -> in the middle of the wall
 //   2 holes  -> HoleEdge from each end
 //   n holes  -> 2 at HoleEdge, the rest evenly spaced: pitch = (span - 2*HoleEdge) / (n - 1)
-//   width wall: even counts only above 2; 4 = the 2 edge holes + a centre pair at
+//   1T (one inner panel): the width wall works like the length wall (0, 1, 2, 3, ...)
+//   2T (split inner panel): width wall 0 or 4 holes only; 4 = the 2 edge holes + a centre pair at
 //               span/2 +- MidOffset (MidOffset = HoleEdge - thickness - Clearance = 48.5 mm)
-//   split inner panel (width above the split width): width wall 0 or 4 holes only
 
 using System;
 using System.Collections.Generic;
@@ -99,7 +99,7 @@ namespace InventorSizer.Core
                 else if (holesW != 0 && holesW != 4) { r.Errors.Add($"Width wall: with a split inner panel use 0 or 4 holes (got {U.F(holesW)})."); holesW = 0; }
             }
             r.Length = Wall("Length", v["Length"], v["HolesL"], edge, mid, s.MinHoleGap, false);
-            r.Width = Wall("Width", v["Width"], holesW, edge, mid, s.MinHoleGap, true);
+            r.Width = Wall("Width", v["Width"], holesW, edge, mid, s.MinHoleGap, r.Split >= 2);
             if (std != null)
             {
                 if (std.MinHolesL > 0 && v["HolesL"] < std.MinHolesL) r.Errors.Add($"Length wall: {std.Family} panels need at least {std.MinHolesL} holes (got {U.F(v["HolesL"])}).");

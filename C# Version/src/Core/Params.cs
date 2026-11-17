@@ -27,7 +27,7 @@ namespace InventorSizer.Core
         public static string[][] Defaults =
         {
             new[] { "HolesL", "3", "ul", "Holes per length wall (0, 1, 2, 3, ...)" },
-            new[] { "HolesW", "2", "ul", "Holes per width wall (0, 1, 2, 4, 6, ...)" },
+            new[] { "HolesW", "2", "ul", "Holes per width wall (1T: 0, 1, 2, 3, ...; 2T: 0 or 4)" },
             new[] { "HoleEdge", "50", "mm", "Hole centre distance from the panel edge (-Au)" },
             new[] { "HolePitchL", "200", "mm", "distance between each hole for (-In) and (-Au), (length - (2 * HoleEdge))/(HolesL - 1)" },
             new[] { "HoleZ", "22", "mm", "Hole centre height" },

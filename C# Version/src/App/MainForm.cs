@@ -29,6 +29,9 @@ namespace InventorSizer
         static readonly string[] CountParams = { "HolesL", "HolesW" }, FixedParams = { "HoleDia_sides", "HoleDia_handle",
         "HoleDia_hinge_small", "HoleDia_hinge_large" };
         static readonly string[] AutoParams = { "HolesL", "HolesW" }, HardwareCountParams = { "HingeCount", "HandleCount" };
+        // Fixed or automatic values: still pushed to Inventor, just not shown in the grid.
+        static readonly string[] HiddenParams = { "HoleEdge", "HoleZ", "HoleDia", "Clearance", "HolePitchL", "HolePitchW",
+        "HoleDia_sides", "HoleDia_handle", "HoleDia_hinge_small", "HoleDia_hinge_large" };
 
         // controls
         ComboBox typeBox, subBox, viewBox, presetBox;
@@ -258,7 +261,7 @@ namespace InventorSizer
             };
             nameBox.TextChanged += (s, e) => { if (syncing) return; StandardFromName(); GridFromName(); UpdatePreview(); };
             typeBox.SelectedIndexChanged += (s, e) => { if (!syncing && typeBox.SelectedIndex >= 0) StandardFromList(); };
-            subBox.SelectedIndexChanged += (s, e) => { if (syncing || std == null) return; SettingsFromForm(); UpdateGridLocks(); UpdatePreview(); ShowMaster(); };
+            subBox.SelectedIndexChanged += (s, e) => { if (syncing || std == null) return; SettingsFromForm(); UpdateGridLocks(); UpdatePreview(); ShowMaster(); if (subBox.SelectedIndex > 0) LoadMaster(CurrentSub()); };
             viewBox.SelectedIndexChanged += (s, e) => UpdateDrawing();
             twin.Paint += (s, e) => Painter.Paint(e.Graphics, shapes, twin.ClientSize, mode == "GR" ? null : hud);
             twin.Resize += (s, e) => { redraw.Stop(); redraw.Start(); };
@@ -436,8 +439,8 @@ namespace InventorSizer
                 EnsureSizeRows();
                 ClearPanelSize();
             });
-            Log.Write("Ready. Load a panel assembly to get its starting size; no panel dimensions are preset at startup.");
-            Toast.Show(this, ToastKind.Info, "Ready", "Load a panel assembly to initialize its dimensions.");
+            Log.Write("Ready. Choose 1T or 2T to open that master, or load a panel assembly to get its starting size.");
+            Toast.Show(this, ToastKind.Info, "Ready", "Choose 1T or 2T to open the master, or load a panel assembly.");
             UpdatePreview();
         }
 
@@ -522,6 +525,30 @@ namespace InventorSizer
                 UpdatePreview();
                 Log.Write($"Loaded panel size from {Path.GetFileName(d.FileName)}: {SizeToken()}");
             }
+        }
+
+        // Choosing 1T or 2T opens that sub type's master in Inventor. With no panel size yet,
+        // the size is taken from the master's file name (e.g. 1111 TP-300x1194x42).
+        void LoadMaster(string sub)
+        {
+            if (std == null || !std.HasMaster(sub)) { Log.Write($"No {std?.Id} {sub} master to open."); return; }
+            string file = std.MasterFor(sub);
+            Step($"Open {std.Id} {sub} master", () =>
+            {
+                Inv.OpenVisible(file);
+                var m = U.SizeRegex.Match(Path.GetFileNameWithoutExtension(file));
+                if (SizeToken() != null || !m.Success) return;
+                syncing = true;
+                try
+                {
+                    EnsureSizeRows();
+                    for (int i = 0; i < U.SizeParams.Length; i++) FindRow(U.SizeParams[i])["Value"] = U.P(m.Groups[i + 1].Value);
+                    nameBox.Text = std.Prefix + SizeToken();
+                }
+                finally { syncing = false; }
+                Log.Write($"Panel size from the {sub} master: {SizeToken()}");
+            }, true);
+            UpdatePreview();
         }
 
         void SetGrid(List<Param> ps)
@@ -645,18 +672,31 @@ namespace InventorSizer
             if (settings.MaxHolePitch <= 0) return;
             var v = GridValues();
             if (!v.ContainsKey("Width") || !v.ContainsKey("Length") || !v.ContainsKey("HoleEdge")) return;
-            var want = new Dictionary<string, double> { ["HolesL"] = HoleRules.AutoCount(v["Length"], v["HoleEdge"], settings.MaxHolePitch, false), ["HolesW"] = HoleRules.AutoCount(v["Width"], v["HoleEdge"], settings.MaxHolePitch, true) };
+            var want = new Dictionary<string, double> { ["HolesL"] = HoleRules.AutoCount(v["Length"], v["HoleEdge"], settings.MaxHolePitch, false), ["HolesW"] = HoleRules.AutoCount(v["Width"], v["HoleEdge"], settings.MaxHolePitch, HoleRules.InnerSplit(v["Width"], settings) >= 2) };
             bool was = syncing; syncing = true;
             try { foreach (var kv in want) { var r = FindRow(kv.Key); if (r != null && (r["Value"] is DBNull || (double)r["Value"] != kv.Value)) r["Value"] = kv.Value; } }
             finally { syncing = was; }
         }
 
+        // Height is fixed per type (e.g. TP 42 mm): the grid and the name always carry the type's height.
+        void EnforceHeight()
+        {
+            if (std == null || std.Height <= 0) return;
+            var r = FindRow("Height");
+            if (r == null || (!(r["Value"] is DBNull) && (double)r["Value"] == std.Height)) return;
+            bool was = syncing; syncing = true;
+            try { r["Value"] = std.Height; } finally { syncing = was; }
+            NameFromGrid();
+        }
+
         void UpdateGridLocks()
         {
+            if (grid.CurrentCell != null && HiddenParams.Contains(Convert.ToString(grid.Rows[grid.CurrentCell.RowIndex].Cells["Name"].Value))) grid.CurrentCell = null;
             foreach (DataGridViewRow gr in grid.Rows)
             {
                 string name = Convert.ToString(gr.Cells["Name"].Value);
-                bool locked = FixedParams.Contains(name) || (settings.MaxHolePitch > 0 && AutoParams.Contains(name)) || (HardwareCountParams.Contains(name) && (std == null || std.HardwareCounts.Count == 0));
+                try { gr.Visible = !HiddenParams.Contains(name); } catch (InvalidOperationException) { }
+                bool locked = FixedParams.Contains(name) || (name == "Height" && std != null && std.Height > 0) || (settings.MaxHolePitch > 0 && AutoParams.Contains(name)) || (HardwareCountParams.Contains(name) && (std == null || std.HardwareCounts.Count == 0));
                 gr.ReadOnly = locked;
                 gr.DefaultCellStyle.ForeColor = locked ? Theme.Muted : Theme.Ink;
                 gr.Cells["Value"].Style.BackColor = locked ? Theme.Card : Theme.Paper;
@@ -667,6 +707,7 @@ namespace InventorSizer
         {
             ShowMaster();
             if (mode == "GR") { UpdateDrawing(); return; }
+            EnforceHeight();
             AutoHoles();
             values = GridValues();
             if (U.SizeParams.Any(k => !values.ContainsKey(k)))
@@ -739,6 +780,8 @@ namespace InventorSizer
             folderInfo.Text = chkFolder.Checked ? "This session only: new panels go into the folder above." : "New panels are made from the type's master; you choose their folder on Apply.";
         }
 
+        string setupSub = "2T";   // the master being set up: 1T uses "setup1T" from the type's file
+
         // Each setup assignment is applied individually, then shown for manual inspection.
         void SetUpMaster()
         {
@@ -751,10 +794,12 @@ namespace InventorSizer
                 file = d.FileName;
             }
             string go = Choose("Set up master", $"{Path.GetFileName(file)}\n\nThe app opens this assembly and applies each user-parameter or formula assignment individually. After each one, inspect the target manually in Inventor. The app will not find, open, select, or highlight sketches.\n\nNothing is saved until you choose a save option. Use a copy the first time.",
-                "Set up", "Cancel");
-            if (go != "Set up") { Log.Write("Cancelled: nothing was changed."); return; }
+                "Set up as 1T master", "Set up as 2T master", "Cancel");
+            if (go != "Set up as 1T master" && go != "Set up as 2T master") { Log.Write("Cancelled: nothing was changed."); return; }
+            setupSub = go == "Set up as 1T master" ? "1T" : "2T";
+            if (setupSub == "1T" && !std.Has1TSetup) Log.Write($"  note: {std.File} has no \"setup1T\" section - the 2T setup is used for this 1T master.");
             Inv.OpenVisible(file);
-            var report = Inv.MasterSetup(std, ReviewSetupAssignment);
+            var report = Inv.MasterSetup(std, setupSub);
             GlassDialog.Report(this, "Set up master - assignment report", report.Format());
             if (!report.Complete)
             {
@@ -764,7 +809,7 @@ namespace InventorSizer
                 return;
             }
 
-            string sub = Inv.MasterSubType(std);   // 1 inner panel = 1T, 2 = 2T
+            string sub = setupSub;   // as chosen above (the inner part's file name can say -In-2T on a 1T master)
             Log.Write($"  this master is {std.Id} {sub}");
             string store = Path.Combine(Root, "masters", std.Id, sub);
             string save = Choose($"Save the {std.Id} {sub} master?", $"The setup assignments succeeded, and this is the {std.Id} {sub} master ({(sub == "2T" ? "2 inner panels" : "1 inner panel")}). The changes are currently unsaved. Inspect the model in Inventor before saving.\n\n" +
@@ -819,7 +864,7 @@ namespace InventorSizer
                 {
                     var edited = CopySetupAssignment(item);
                     edited.Expression = expression;
-                    Standards.UpsertSetupAssignment(std, edited);
+                    Standards.UpsertSetupAssignment(std, edited, setupSub);
                     decision.Expression = expression;
                     Log.Write($"Updated {std.File}: {item.Role} {item.Target} = {expression}");
                 }
@@ -831,7 +876,7 @@ namespace InventorSizer
             {
                 var added = SetupDialog.AddParameter(this, item.Role, item.File);
                 if (added == null) return decision;
-                var roleSetup = std.Setup.Obj(item.Role);
+                var roleSetup = std.SetupFor(setupSub)?.Obj(item.Role);
                 var existing = roleSetup != null &&
                     roleSetup.Arr("user").Concat(roleSetup.Arr("formulas")).OfType<JsonObject>()
                         .Any(p => string.Equals(p.Str("name"), added.Target, StringComparison.OrdinalIgnoreCase));
@@ -844,7 +889,7 @@ namespace InventorSizer
                     return decision;
                 try
                 {
-                    Standards.UpsertSetupAssignment(std, added);
+                    Standards.UpsertSetupAssignment(std, added, setupSub);
                     decision.AddedAssignment = added;
                     Log.Write($"Added {std.File}: {added.Role} {added.Target} = {added.Expression} {added.Unit}");
                 }

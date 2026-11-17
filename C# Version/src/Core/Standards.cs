@@ -31,8 +31,13 @@ namespace InventorSizer.Core
         public Dictionary<string, double> Defaults = new Dictionary<string, double>();
         public int MinHolesL;
         public string SplitAxis = "auto";
-        public JsonObject Setup;            // per role: { user: [{name,value,unit}], formulas: [{name,formula}] }
-        public int SetupVersion => Setup == null ? 0 : (int)Setup.Num("version");   // 0 = the master is not checked
+        public JsonObject Setup;            // per role: { user: [{name,value,unit}], formulas: [{name,formula}] } - the 2T master
+        public JsonObject Setup1T;          // "setup1T": the same for the 1T master (its own d-numbers); none = "setup" is used
+        public int SetupVersion => SetupVersionFor("2T");   // 0 = the master is not checked
+        public bool Has1TSetup => Setup1T != null;
+        public JsonObject SetupFor(string sub) => sub == "1T" && Setup1T != null ? Setup1T : Setup;
+        public string SetupKey(string sub) => sub == "1T" && Setup1T != null ? "setup1T" : "setup";
+        public int SetupVersionFor(string sub) { var x = SetupFor(sub); return x == null ? 0 : (int)x.Num("version"); }
         public HoleTemplate Hardware;       // hinge / handle holes
         public Dictionary<string, (string Param, string PitchParam)> HardwareCounts = new Dictionary<string, (string, string)>();
 
@@ -88,7 +93,7 @@ namespace InventorSizer.Core
                         {
                             Id = v.Str("id"), Name = v.Str("name"), Family = json.Str("family"), Prefix = v.Str("prefix"),
                             File = Path.GetFileName(file), FilePath = file, Height = v.Num("height"), MinHolesL = (int)v.Num("minHolesL"),
-                            SplitAxis = v.Str("splitAxis", "auto"), Setup = v.Obj("setup")
+                            SplitAxis = v.Str("splitAxis", "auto"), Setup = v.Obj("setup"), Setup1T = v.Obj("setup1T")
                         };
                         foreach (var po in v.Arr("parts").OfType<JsonObject>())
                         {
@@ -163,11 +168,12 @@ namespace InventorSizer.Core
             Log.Write($"Master of {s.Name}, sub type {sub}: {path} (saved in {s.File})");
         }
 
-        public static void UpsertSetupAssignment(Standard s, SetupAssignment assignment)
+        public static void UpsertSetupAssignment(Standard s, SetupAssignment assignment, string sub = "2T")
         {
-            if (s == null || s.Setup == null) throw new SizerException("The selected type has no setup data to update.");
+            var setup = s?.SetupFor(sub);
+            if (setup == null) throw new SizerException("The selected type has no setup data to update.");
             string key = assignment.IsFormula ? "formulas" : "user";
-            var roleSetup = s.Setup.Obj(assignment.Role);
+            var roleSetup = setup.Obj(assignment.Role);
             if (roleSetup == null) throw new SizerException($"The {assignment.Role} role has no setup section in {s.File}.");
             var items = roleSetup.Arr(key);
             JsonObject entry = items.OfType<JsonObject>()
@@ -185,7 +191,7 @@ namespace InventorSizer.Core
 
             UpdateVariant(s, v =>
             {
-                v["setup"] = s.Setup;
+                v[s.SetupKey(sub)] = setup;
             });
         }
 

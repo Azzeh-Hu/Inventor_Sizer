@@ -1,6 +1,6 @@
 {
-  "minHoleGap": 70,
+  "minHoleGap": 50,
   "thickness": 1,
   "splitWidth": 500,
-  "maxHolePitch": 400
+  "maxHolePitch": 0
 }

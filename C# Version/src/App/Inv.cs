@@ -435,7 +435,7 @@ namespace InventorSizer
             var src = Open(master);
             try
             {
-                TestMasterSetup(src.Doc, s);
+                TestMasterSetup(src.Doc, s, sub);
                 UpdatePanelAssembly(src.Doc, standards, s, newName, ps, lay, set.OutputFolder, overwrite, confirm);
             }
             catch { if (src.Opened) { try { src.Doc.Close(true); } catch { } } throw; }
@@ -518,36 +518,39 @@ namespace InventorSizer
         const string CustomProps = "{D5CDD505-2E9C-101B-9397-08002B2CF9AE}";
         const string SetupMarker = "InventorSizerSetup";
 
-        static string SetupMark(Standard s) => $"{s.Id} {s.SetupVersion}";
+        // 2T keeps the mark of older versions ("TP 2"); a master set up with "setup1T" gets "TP 1T 1".
+        static string SetupMark(Standard s, string sub) => s.SetupKey(sub) == "setup1T" ? $"{s.Id} 1T {s.SetupVersionFor(sub)}" : $"{s.Id} {s.SetupVersionFor(sub)}";
 
         static string ReadSetupMark(dynamic asm)
         {
             try { return Convert.ToString(asm.PropertySets.Item(CustomProps).Item(SetupMarker).Value) ?? ""; } catch { return ""; }
         }
 
-        static void WriteSetupMark(dynamic asm, Standard s)
+        static void WriteSetupMark(dynamic asm, Standard s, string sub)
         {
             dynamic set = asm.PropertySets.Item(CustomProps);
-            try { set.Item(SetupMarker).Value = SetupMark(s); }
-            catch { set.Add(SetupMark(s), SetupMarker); }
+            try { set.Item(SetupMarker).Value = SetupMark(s, sub); }
+            catch { set.Add(SetupMark(s, sub), SetupMarker); }
         }
 
         // Types whose setup has a version need a master that "Set up master" has marked with it.
-        static void TestMasterSetup(dynamic asm, Standard s)
+        static void TestMasterSetup(dynamic asm, Standard s, string sub)
         {
-            if (s.SetupVersion <= 0) return;
+            if (s.SetupVersionFor(sub) <= 0) return;
             string mark = ReadSetupMark(asm);
-            if (mark == SetupMark(s)) return;
+            if (mark == SetupMark(s, sub)) return;
             string has = mark == "" ? "it has never been set up with this version of the app" : $"it was set up as \"{mark}\"";
-            throw new SizerException($"The master {Path.GetFileName((string)asm.FullFileName)} is not set up for the {s.Id} standard (setup version {s.SetupVersion}): {has}.\n\nStart the dev run (Dev run.cmd), click \"Set up master...\", choose this master, check that nothing moved and save it, then Apply again.");
+            throw new SizerException($"The master {Path.GetFileName((string)asm.FullFileName)} is not set up as the {s.Id} {sub} master (expected \"{SetupMark(s, sub)}\"): {has}.\n\nStart the dev run (Dev run.cmd), click \"Set up master...\", choose this master as {sub}, check that nothing moved and save it, then Apply again.");
         }
 
         // Applies the type's setup one assignment at a time. When review is null, all
         // assignments run non-interactively; otherwise the callback can skip the next item or
         // cancel the remaining work after inspecting each result.
-        public static MasterSetupReport MasterSetup(Standard s, Func<SetupAssignment, bool, SetupStepDecision> review = null)
+        public static MasterSetupReport MasterSetup(Standard s, string sub, Func<SetupAssignment, bool, SetupStepDecision> review = null)
         {
-            if (s.Setup == null) throw new SizerException($"The type {s.Name} has no setup section in {s.File}.");
+            var typeSetup = s.SetupFor(sub);
+            if (typeSetup == null) throw new SizerException($"The type {s.Name} has no setup section in {s.File}.");
+            Log.Write($"  using \"{s.SetupKey(sub)}\" from {s.File} ({sub} master)");
             dynamic asm = ActiveAssembly();
             var report = new MasterSetupReport();
             var work = new List<SetupWorkItem>();
@@ -559,7 +562,7 @@ namespace InventorSizer
                 string role = path == (string)asm.FullFileName ? "assembly"
                             : s.PartSuffixes("inner").Any(x => b.EndsWith(x, StringComparison.OrdinalIgnoreCase)) ? "inner"
                             : s.PartSuffixes("outer").Any(x => b.EndsWith(x, StringComparison.OrdinalIgnoreCase)) ? "outer" : "";
-                var setup = role == "" ? null : s.Setup.Obj(role);
+                var setup = role == "" ? null : typeSetup.Obj(role);
                 if (setup == null) continue;
                 rolesFound.Add(role);
                 bool modifiable = (bool)doc.IsModifiable;
@@ -571,7 +574,7 @@ namespace InventorSizer
             }
             foreach (string role in new[] { "assembly", "outer", "inner" })
             {
-                var setup = s.Setup.Obj(role);
+                var setup = typeSetup.Obj(role);
                 if (setup == null || rolesFound.Contains(role)) continue;
                 string missing = $"No matching {role} document was found in the open assembly.";
                 string file = $"(no matching {role} document)";
@@ -624,10 +627,10 @@ namespace InventorSizer
                 try
                 {
                     if (!(bool)asm.Update2(true)) throw new SizerException("Inventor could not update the assembly after applying the assignments.");
-                    if (s.SetupVersion > 0)
+                    if (s.SetupVersionFor(sub) > 0)
                     {
-                        WriteSetupMark(asm, s);
-                        Log.Write($"  marked the master: {SetupMarker} = {SetupMark(s)} (custom iProperty)");
+                        WriteSetupMark(asm, s, sub);
+                        Log.Write($"  marked the master: {SetupMarker} = {SetupMark(s, sub)} (custom iProperty)");
                     }
                 }
                 catch (Exception e) { report.FinalizationError = e.Message; }
