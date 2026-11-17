@@ -9,7 +9,7 @@
       "prefix": "FP-",
       "height": 47,
       "masters": {
-        "2T": "masters\\FP\\2T\\1111 FP-800x1800x47.iam",
+        "2T": "masters\\FP\\2T\\1133 FP-800x1800x47.iam",
         "1T": "masters\\FP\\1T\\1133 FP-250x1294x42.iam"
       },
       "defaults": {
@@ -19,7 +19,7 @@
       "parts": [
         {
           "suffix": "-Au",
-          "description":  "Outer tray (Au)",
+          "description": "Outer tray (Au)",
           "role": "outer",
           "qty": 1
         },
@@ -32,8 +32,51 @@
         }
       ],
       "setup": {
-        "master": "FP-800x1800x47",
-        "version": 1,
+        "master": "1133 FP-800x1800x47",
+        "version": 2,
+        "notes": "Setup of the 2T master (inner panel in 2 parts, placed by a component pattern in the assembly). Its own d-numbers, taken from the parameter exports of 1133 FP-800x1800x47 and its -Au / -In parts (2026-11-17). Only parameters the model uses; Apply skips names a part does not have. version: written into the master by 'Set up master'; Apply refuses a master with another version.",
+        "assembly": {
+          "user": [
+            {
+              "name": "Clearance",
+              "value": "0.5 mm",
+              "unit": "mm"
+            },
+            {
+              "name": "Width",
+              "value": "800 mm",
+              "unit": "mm"
+            },
+            {
+              "name": "InSplit",
+              "value": "2 ul",
+              "unit": "ul"
+            },
+            {
+              "name": "InWidth",
+              "value": "( Width - 3 mm ) / InSplit",
+              "unit": "mm"
+            }
+          ],
+          "formulas": [
+            {
+              "name": "d6",
+              "formula": "Clearance"
+            },
+            {
+              "name": "d7",
+              "formula": "Clearance"
+            },
+            {
+              "name": "d41",
+              "formula": "InWidth"
+            },
+            {
+              "name": "d43",
+              "formula": "InSplit"
+            }
+          ]
+        },
         "outer": {
           "user": [
             {
@@ -67,11 +110,6 @@
               "unit": "mm"
             },
             {
-              "name": "Clearance",
-              "value": "0.5 mm",
-              "unit": "mm"
-            },
-            {
               "name": "HolesL",
               "value": "4 ul",
               "unit": "ul"
@@ -89,6 +127,11 @@
             {
               "name": "HolePitchW",
               "value": "( Width - 100 mm ) / ( HolesW - 1 ul )",
+              "unit": "mm"
+            },
+            {
+              "name": "Clearance",
+              "value": "0.5 mm",
               "unit": "mm"
             },
             {
@@ -117,14 +160,6 @@
             {
               "name": "d14",
               "formula": "HoleEdge"
-            },
-            {
-              "name": "d15",
-              "formula": "HoleEdge"
-            },
-            {
-              "name": "d16",
-              "formula": "HoleZ"
             },
             {
               "name": "d17",
@@ -159,20 +194,20 @@
               "formula": "HolePitchL"
             },
             {
-              "name": "d91",
-              "formula": "HoleMidOffsetW"
-            },
-            {
-              "name": "d92",
-              "formula": "HoleMidOffsetW"
-            },
-            {
               "name": "d135",
               "formula": "HolesL"
             },
             {
               "name": "d137",
               "formula": "HolePitchL"
+            },
+            {
+              "name": "d138",
+              "formula": "HolesW"
+            },
+            {
+              "name": "d140",
+              "formula": "HolePitchW"
             }
           ]
         },
@@ -180,12 +215,12 @@
           "user": [
             {
               "name": "Width",
-              "value": "724 mm",
+              "value": "800 mm",
               "unit": "mm"
             },
             {
               "name": "Length",
-              "value": "1194 mm",
+              "value": "1800 mm",
               "unit": "mm"
             },
             {
@@ -209,11 +244,6 @@
               "unit": "mm"
             },
             {
-              "name": "Clearance",
-              "value": "0.5 mm",
-              "unit": "mm"
-            },
-            {
               "name": "HolesL",
               "value": "4 ul",
               "unit": "ul"
@@ -229,19 +259,14 @@
               "unit": "mm"
             },
             {
-              "name": "HolePitchW",
-              "value": "624 mm",
-              "unit": "mm"
-            },
-            {
-              "name": "HoleMidOnW",
-              "value": "1 ul",
-              "unit": "ul"
-            },
-            {
               "name": "InSplit",
               "value": "2 ul",
               "unit": "ul"
+            },
+            {
+              "name": "HoleMidOffsetW",
+              "value": "HoleEdge - 1.5 mm",
+              "unit": "mm"
             },
             {
               "name": "InWidth",
@@ -249,24 +274,19 @@
               "unit": "mm"
             },
             {
-              "name": "InHolePitchW",
-              "value": "263.5 mm",
+              "name": "HolePitchW",
+              "value": "( Width - 100 mm ) / ( HolesW - 1 ul )",
               "unit": "mm"
             },
             {
-              "name": "InHoleCountW",
-              "value": "2 ul",
-              "unit": "ul"
+              "name": "Clearance",
+              "value": "0.5 mm",
+              "unit": "mm"
             },
             {
               "name": "InHoleMidOnW",
               "value": "0 ul",
               "unit": "ul"
-            },
-            {
-              "name": "HoleMidOffsetW",
-              "value": "HoleEdge - 1.5 mm",
-              "unit": "mm"
             }
           ],
           "formulas": [
@@ -287,10 +307,6 @@
               "formula": "HoleMidOffsetW"
             },
             {
-              "name": "d28",
-              "formula": "HoleMidOffsetW"
-            },
-            {
               "name": "d29",
               "formula": "HoleZ"
             },
@@ -303,10 +319,6 @@
               "formula": "HoleMidOffsetW"
             },
             {
-              "name": "d38",
-              "formula": "HoleMidOffsetW"
-            },
-            {
               "name": "d39",
               "formula": "HoleZ"
             },
@@ -315,49 +327,20 @@
               "formula": "HoleDia"
             },
             {
-              "name": "d40",
-              "formula": "HolesL - 1 ul"
+              "name": "d55",
+              "formula": "HolesL"
             },
             {
-              "name": "d42",
+              "name": "d57",
               "formula": "HolePitchL"
-            }
-          ]
-        },
-        "assembly": {
-          "user": [
-            {
-              "name": "Clearance",
-              "value": "0.5 mm",
-              "unit": "mm"
             },
             {
-              "name": "InSplit",
-              "value": "2 ul",
-              "unit": "ul"
+              "name": "d58",
+              "formula": "HolesW"
             },
             {
-              "name": "InWidth",
-              "value": "360.5 mm",
-              "unit": "mm"
-            }
-          ],
-          "formulas": [
-            {
-              "name": "d6",
-              "formula": "Clearance"
-            },
-            {
-              "name": "d7",
-              "formula": "Clearance"
-            },
-            {
-              "name": "d37",
-              "formula": "InWidth"
-            },
-            {
-              "name": "d39",
-              "formula": "InSplit"
+              "name": "d60",
+              "formula": "HolePitchW"
             }
           ]
         }

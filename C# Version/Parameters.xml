@@ -26,7 +26,7 @@
     <ParamWithValue>
       <name>Length</name>
       <typeCode>mm</typeCode>
-      <value>1800 mm</value>
+      <value>800 mm</value>
       <comment>2nd number in the file name</comment>
       <isKey>false</isKey>
     </ParamWithValue>
@@ -40,14 +40,14 @@
     <ParamWithValue>
       <name>HolesL</name>
       <typeCode>ul</typeCode>
-      <value>10 ul</value>
+      <value>7 ul</value>
       <comment>Holes per length wall (0, 1, 2, 3, ...)</comment>
       <isKey>false</isKey>
     </ParamWithValue>
     <ParamWithValue>
       <name>HolesW</name>
       <typeCode>ul</typeCode>
-      <value>5 ul</value>
+      <value>4 ul</value>
       <comment>Holes per width wall (0, 1, 2, 4, 6, ...)</comment>
       <isKey>false</isKey>
     </ParamWithValue>
