@@ -9,8 +9,8 @@
       "prefix": "FP-",
       "height": 47,
       "masters": {
-        "2T": "masters\\FP\\2T\\1111 FP-555x1500x47.iam",
-        "1T": "masters\\FP\\1T\\6357-3 FP-276x1196x47.iam"
+        "2T": "masters\\FP\\2T\\1111 FP-800x1800x47.iam",
+        "1T": "masters\\FP\\1T\\1133 FP-250x1294x42.iam"
       },
       "defaults": {
         "HoleZ": 22
@@ -19,7 +19,7 @@
       "parts": [
         {
           "suffix": "-Au",
-          "description": "Outer tray (Au)",
+          "description":  "Outer tray (Au)",
           "role": "outer",
           "qty": 1
         },
@@ -32,19 +32,18 @@
         }
       ],
       "setup": {
-        "master": "FP from 1111 TP-400x1194x42",
+        "master": "FP-800x1800x47",
         "version": 1,
-        "notes": "Copy of the TP 2T setup (6357-3 TP-724x1194x42) without the hinges and handles: the FP master is the TP master with those components deleted, so the d-numbers are the TP ones. version: written into the master by 'Set up master'; Apply refuses a master with another version.",
         "outer": {
           "user": [
             {
               "name": "Width",
-              "value": "724 mm",
+              "value": "800 mm",
               "unit": "mm"
             },
             {
               "name": "Length",
-              "value": "1194 mm",
+              "value": "1800 mm",
               "unit": "mm"
             },
             {
@@ -89,7 +88,7 @@
             },
             {
               "name": "HolePitchW",
-              "value": "624 mm",
+              "value": "( Width - 100 mm ) / ( HolesW - 1 ul )",
               "unit": "mm"
             },
             {
