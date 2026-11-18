@@ -13,6 +13,7 @@
         "HoleZ": 20
       },
       "minHolesL": 2,
+      "evenSplitHolesW": true,
       "parts": [
         {
           "suffix": "-Au",
@@ -28,19 +29,21 @@
           "qty": 1
         }
       ],
+      "notes": "RP is built from the FP masters: copy the FP master (1T or 2T), choose RP, run 'Set up master...' as 1T / 2T and 'Save into Inventor Sizer'. The setups below are the FP ones (same parameters, equations and d-numbers) with the RP values: Height 44 mm (drives the walls), HoleZ 20 mm. Width wall on 2T: 0, 4, 6, 8, ... (evenSplitHolesW). The 2 handles across the middle are not in the FP masters: add them to the RP master, then 'Learn hardware holes'.",
       "setup": {
-        "master": "",
-        "notes": "Applied to the open master by 'Set up master' (Inventor parameters): per role the user parameters are created or set, then the model dimensions get these formulas. The d-numbers belong to this master.",
+        "master": "RP 2T, made from 1133 FP-800x1800x47",
+        "version": 1,
+        "notes": "Copy of the FP 2T setup (template masters\\FP\\2T\\*-params.xml) with RP values: Height 44 mm, HoleZ 20 mm. Same d-numbers, because the RP 2T master is a copy of the FP 2T master. push: the -In half's HolesW is the count per half (InHoleCountW). version: written into the master by 'Set up master'; Apply refuses a master with another version.",
         "outer": {
           "user": [
             {
               "name": "Width",
-              "value": "571 mm",
+              "value": "800 mm",
               "unit": "mm"
             },
             {
               "name": "Length",
-              "value": "996 mm",
+              "value": "1800 mm",
               "unit": "mm"
             },
             {
@@ -64,29 +67,29 @@
               "unit": "mm"
             },
             {
-              "name": "Clearance",
-              "value": "0.5 mm",
-              "unit": "mm"
-            },
-            {
               "name": "HolesL",
               "value": "4 ul",
               "unit": "ul"
             },
             {
               "name": "HolesW",
-              "value": "4 ul",
+              "value": "6 ul",
               "unit": "ul"
             },
             {
               "name": "HolePitchL",
-              "value": "298.666666667 mm",
+              "value": "( Length - 100 mm ) / ( HolesL - 1 ul )",
               "unit": "mm"
             },
             {
-              "name": "HoleCountW",
-              "value": "2 ul",
-              "unit": "ul"
+              "name": "HolePitchW",
+              "value": "( Width - 100 mm ) / ( HolesW - 1 ul )",
+              "unit": "mm"
+            },
+            {
+              "name": "Clearance",
+              "value": "0.5 mm",
+              "unit": "mm"
             },
             {
               "name": "HoleMidOnW",
@@ -94,8 +97,18 @@
               "unit": "ul"
             },
             {
-              "name": "HoleMidOffsetW",
-              "value": "HoleEdge - 1,5mm",
+              "name": "HolePitchW_2T",
+              "value": "( InWidth - 98.5 mm ) / ( ( HolesW / InSplit ) - 1 ul )",
+              "unit": "mm"
+            },
+            {
+              "name": "InSplit",
+              "value": "2 ul",
+              "unit": "ul"
+            },
+            {
+              "name": "InWidth",
+              "value": "Width / InSplit",
               "unit": "mm"
             }
           ],
@@ -109,8 +122,36 @@
               "formula": "Length"
             },
             {
+              "name": "d3",
+              "formula": "BreiteBiegungsfreistellung"
+            },
+            {
+              "name": "d4",
+              "formula": "TiefeBiegungsfreistellung"
+            },
+            {
+              "name": "d5",
+              "formula": "MinimalRest"
+            },
+            {
+              "name": "d6",
+              "formula": "Übergangsradius"
+            },
+            {
               "name": "d7",
               "formula": "Height"
+            },
+            {
+              "name": "d9",
+              "formula": "Biegeradius"
+            },
+            {
+              "name": "d10",
+              "formula": "GrößeEckenfreistellung"
+            },
+            {
+              "name": "d12",
+              "formula": "JacobiRadiusGröße"
             },
             {
               "name": "d13",
@@ -119,14 +160,6 @@
             {
               "name": "d14",
               "formula": "HoleEdge"
-            },
-            {
-              "name": "d15",
-              "formula": "HoleEdge"
-            },
-            {
-              "name": "d16",
-              "formula": "HoleZ"
             },
             {
               "name": "d17",
@@ -153,8 +186,48 @@
               "formula": "HoleDia"
             },
             {
-              "name": "d96",
-              "formula": "HoleMidOffsetW"
+              "name": "d84",
+              "formula": "HolesL - 1 ul"
+            },
+            {
+              "name": "d86",
+              "formula": "HolePitchL"
+            },
+            {
+              "name": "d135",
+              "formula": "HolesL"
+            },
+            {
+              "name": "d137",
+              "formula": "HolePitchL"
+            },
+            {
+              "name": "d141",
+              "formula": "HolesW / InSplit"
+            },
+            {
+              "name": "d143",
+              "formula": "HolePitchW_2T"
+            },
+            {
+              "name": "d144",
+              "formula": "HoleZ"
+            },
+            {
+              "name": "d145",
+              "formula": "HoleEdge"
+            },
+            {
+              "name": "d146",
+              "formula": "HoleDia"
+            },
+            {
+              "name": "d153",
+              "formula": "HolesW / InSplit"
+            },
+            {
+              "name": "d155",
+              "formula": "HolePitchW_2T"
             }
           ]
         },
@@ -162,12 +235,12 @@
           "user": [
             {
               "name": "Width",
-              "value": "571 mm",
+              "value": "800 mm",
               "unit": "mm"
             },
             {
               "name": "Length",
-              "value": "996 mm",
+              "value": "1800 mm",
               "unit": "mm"
             },
             {
@@ -191,102 +264,186 @@
               "unit": "mm"
             },
             {
-              "name": "Clearance",
-              "value": "0.5 mm",
-              "unit": "mm"
-            },
-            {
               "name": "HolesL",
               "value": "4 ul",
               "unit": "ul"
             },
             {
               "name": "HolesW",
-              "value": "4 ul",
+              "value": "3 ul",
               "unit": "ul"
             },
- 
             {
               "name": "HolePitchL",
-              "value": "298.666666667 mm",
+              "value": "( Length - 100 mm ) / ( HolesL - 1 ul )",
               "unit": "mm"
-            },
-        
-            {
-              "name": "HolePitchW",
-              "value": "471 mm",
-              "unit": "mm"
-            },
-
-            {
-              "name": "HoleMidOnW",
-              "value": "1 ul",
-              "unit": "ul"
             },
             {
               "name": "InSplit",
               "value": "2 ul",
               "unit": "ul"
             },
-      
+            {
+              "name": "HoleMidOffsetW",
+              "value": "HoleEdge - 1.5 mm",
+              "unit": "mm"
+            },
+            {
+              "name": "InWidth",
+              "value": "( Width - 3 mm ) / InSplit",
+              "unit": "mm"
+            },
+            {
+              "name": "HolePitchW",
+              "value": "( InWidth - 97 mm ) / ( HolesW - 1 ul )",
+              "unit": "mm"
+            },
+            {
+              "name": "Clearance",
+              "value": "0.5 mm",
+              "unit": "mm"
+            },
             {
               "name": "InHoleMidOnW",
               "value": "0 ul",
               "unit": "ul"
-            },
-            {
-              "name": "HoleMidOffsetW",
-              "value": "HoleEdge - Stärke - Clearance",
-              "unit": "mm"
             }
           ],
           "formulas": [
             {
               "name": "d0",
-              "formula": "( Width - 3mm ) / InSplit"
+              "formula": "InWidth"
             },
             {
               "name": "d1",
-              "formula": "Length -3mm"
+              "formula": "Length - 3 mm"
+            },
+            {
+              "name": "d3",
+              "formula": "BreiteBiegungsfreistellung"
+            },
+            {
+              "name": "d4",
+              "formula": "TiefeBiegungsfreistellung"
+            },
+            {
+              "name": "d5",
+              "formula": "MinimalRest"
+            },
+            {
+              "name": "d6",
+              "formula": "Übergangsradius"
             },
             {
               "name": "d7",
               "formula": "Height - Stärke"
             },
             {
-              "name": "d13",
+              "name": "d9",
+              "formula": "Biegeradius"
+            },
+            {
+              "name": "d10",
+              "formula": "GrößeEckenfreistellung"
+            },
+            {
+              "name": "d12",
+              "formula": "JacobiRadiusGröße"
+            },
+            {
+              "name": "d27",
               "formula": "HoleMidOffsetW"
             },
             {
-              "name": "d14",
-              "formula": "HoleMidOffsetW"
-            },
-            {
-              "name": "d15",
+              "name": "d29",
               "formula": "HoleZ"
             },
             {
-              "name": "d16",
+              "name": "d30",
               "formula": "HoleDia"
             },
             {
-              "name": "d23",
+              "name": "d37",
               "formula": "HoleMidOffsetW"
             },
             {
-              "name": "d24",
-              "formula": "HoleMidOffsetW"
-            },
-            {
-              "name": "d25",
+              "name": "d39",
               "formula": "HoleZ"
             },
             {
-              "name": "d26",
+              "name": "d47",
               "formula": "HoleDia"
+            },
+            {
+              "name": "d55",
+              "formula": "HolesL"
+            },
+            {
+              "name": "d57",
+              "formula": "HolePitchL"
+            },
+            {
+              "name": "d58",
+              "formula": "HolesW"
+            },
+            {
+              "name": "d60",
+              "formula": "HolePitchW"
             }
           ]
         },
+        "assembly": {
+          "user": [
+            {
+              "name": "Clearance",
+              "value": "0.5 mm",
+              "unit": "mm"
+            },
+            {
+              "name": "Width",
+              "value": "800.00000000 mm",
+              "unit": "mm"
+            },
+            {
+              "name": "InSplit",
+              "value": "2 ul",
+              "unit": "ul"
+            },
+            {
+              "name": "InWidth",
+              "value": "( Width - 3 mm ) / InSplit",
+              "unit": "mm"
+            }
+          ],
+          "formulas": [
+            {
+              "name": "d6",
+              "formula": "Clearance"
+            },
+            {
+              "name": "d7",
+              "formula": "Clearance"
+            },
+            {
+              "name": "d41",
+              "formula": "InWidth"
+            },
+            {
+              "name": "d43",
+              "formula": "InSplit"
+            }
+          ]
+        },
+        "push": {
+          "inner": {
+            "HolesW": "InHoleCountW"
+          }
+        }
+      },
+      "setup1T": {
+        "master": "RP 1T, made from 1133 FP-250x1294x42",
+        "version": 1,
+        "notes": "Copy of the FP 1T setup with RP values: Height 44 mm, HoleZ 20 mm. Same d-numbers, because the RP 1T master is a copy of the FP 1T master. version: written into the master by 'Set up master'; Apply refuses a master with another version.",
         "assembly": {
           "user": [
             {
@@ -297,16 +454,259 @@
           ],
           "formulas": [
             {
-              "name": "d1",
+              "name": "d6",
               "formula": "Clearance"
             },
             {
-              "name": "d2",
+              "name": "d7",
               "formula": "Clearance"
+            }
+          ]
+        },
+        "outer": {
+          "user": [
+            {
+              "name": "Width",
+              "value": "300 mm",
+              "unit": "mm"
+            },
+            {
+              "name": "Length",
+              "value": "1194 mm",
+              "unit": "mm"
+            },
+            {
+              "name": "Height",
+              "value": "44 mm",
+              "unit": "mm"
+            },
+            {
+              "name": "HoleEdge",
+              "value": "50 mm",
+              "unit": "mm"
+            },
+            {
+              "name": "HoleZ",
+              "value": "20 mm",
+              "unit": "mm"
+            },
+            {
+              "name": "HoleDia",
+              "value": "4.1 mm",
+              "unit": "mm"
+            },
+            {
+              "name": "HolesL",
+              "value": "4 ul",
+              "unit": "ul"
+            },
+            {
+              "name": "HolesW",
+              "value": "2 ul",
+              "unit": "ul"
+            },
+            {
+              "name": "HolePitchL",
+              "value": "( Length - 100 mm ) / ( HolesL - 1 ul )",
+              "unit": "mm"
+            },
+            {
+              "name": "HolePitchW",
+              "value": "( Width - 100 mm ) / ( HolesW - 1 ul )",
+              "unit": "mm"
+            }
+          ],
+          "formulas": [
+            {
+              "name": "d0",
+              "formula": "Width"
+            },
+            {
+              "name": "d1",
+              "formula": "Length"
+            },
+            {
+              "name": "d7",
+              "formula": "Height"
+            },
+            {
+              "name": "d13",
+              "formula": "HoleZ"
+            },
+            {
+              "name": "d14",
+              "formula": "HoleEdge"
             },
             {
               "name": "d17",
-              "formula": "Clearance"
+              "formula": "HoleDia"
+            },
+            {
+              "name": "d24",
+              "formula": "HoleEdge"
+            },
+            {
+              "name": "d25",
+              "formula": "HoleZ"
+            },
+            {
+              "name": "d28",
+              "formula": "HoleZ"
+            },
+            {
+              "name": "d29",
+              "formula": "HoleEdge"
+            },
+            {
+              "name": "d30",
+              "formula": "HoleDia"
+            },
+            {
+              "name": "d84",
+              "formula": "HolesL - 1 ul"
+            },
+            {
+              "name": "d86",
+              "formula": "HolePitchL"
+            },
+            {
+              "name": "d135",
+              "formula": "HolesL"
+            },
+            {
+              "name": "d137",
+              "formula": "HolePitchL"
+            },
+            {
+              "name": "d138",
+              "formula": "HolesW"
+            },
+            {
+              "name": "d140",
+              "formula": "HolePitchW"
+            }
+          ]
+        },
+        "inner": {
+          "user": [
+            {
+              "name": "Width",
+              "value": "300 mm",
+              "unit": "mm"
+            },
+            {
+              "name": "Length",
+              "value": "1194 mm",
+              "unit": "mm"
+            },
+            {
+              "name": "Height",
+              "value": "44 mm",
+              "unit": "mm"
+            },
+            {
+              "name": "HoleEdge",
+              "value": "50 mm",
+              "unit": "mm"
+            },
+            {
+              "name": "HoleZ",
+              "value": "20 mm",
+              "unit": "mm"
+            },
+            {
+              "name": "HoleDia",
+              "value": "4.1 mm",
+              "unit": "mm"
+            },
+            {
+              "name": "HolesL",
+              "value": "4 ul",
+              "unit": "ul"
+            },
+            {
+              "name": "HolesW",
+              "value": "2 ul",
+              "unit": "ul"
+            },
+            {
+              "name": "HolePitchL",
+              "value": "( Length - 100 mm ) / ( HolesL - 1 ul )",
+              "unit": "mm"
+            },
+            {
+              "name": "InSplit",
+              "value": "1 ul",
+              "unit": "ul"
+            },
+            {
+              "name": "InWidth",
+              "value": "( Width - 3 mm ) / InSplit",
+              "unit": "mm"
+            },
+            {
+              "name": "HolePitchW",
+              "value": "( Width - 100 mm ) / ( HolesW - 1 ul )",
+              "unit": "mm"
+            },
+            {
+              "name": "HoleMidOffsetW",
+              "value": "HoleEdge - 1.5 mm",
+              "unit": "mm"
+            }
+          ],
+          "formulas": [
+            {
+              "name": "d0",
+              "formula": "InWidth"
+            },
+            {
+              "name": "d1",
+              "formula": "Length - 3 mm"
+            },
+            {
+              "name": "d7",
+              "formula": "Height - Stärke"
+            },
+            {
+              "name": "d27",
+              "formula": "HoleMidOffsetW"
+            },
+            {
+              "name": "d37",
+              "formula": "HoleMidOffsetW"
+            },
+            {
+              "name": "d29",
+              "formula": "HoleZ"
+            },
+            {
+              "name": "d39",
+              "formula": "HoleZ"
+            },
+            {
+              "name": "d30",
+              "formula": "HoleDia"
+            },
+            {
+              "name": "d47",
+              "formula": "HoleDia"
+            },
+            {
+              "name": "d55",
+              "formula": "HolesL"
+            },
+            {
+              "name": "d57",
+              "formula": "HolePitchL"
+            },
+            {
+              "name": "d58",
+              "formula": "HolesW"
+            },
+            {
+              "name": "d60",
+              "formula": "HolePitchW"
             }
           ]
         }

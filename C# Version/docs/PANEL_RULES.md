@@ -470,3 +470,27 @@ per-half count there (6 → 3) while `-Au` gets the full count. Holes land on 50
 448.5, 599.25, 750, as the app draws them. 0 holes needs *Suppress if* `HolesW = 0` on the
 width-wall holes and their patterns, as for TP.
 
+## 17. RP: built from the FP masters
+
+`standards\RP.json` now has the FP setups for 2T (`setup`) and 1T (`setup1T`): the same parameters,
+equations and d-numbers as FP (sections 16 and the FP 1T setup). Only RP's own values differ:
+
+| | FP | RP |
+|---|---|---|
+| Height (drives the walls) | 47 mm | 44 mm |
+| HoleZ | 22 mm | 20 mm |
+| Name | `FP-WxLx47` | `RP-WxLx44` |
+
+The 2T width wall takes 0, 4, 6, 8, … (`evenSplitHolesW`), and the `-In` half gets the per-half
+count (`push`), as on FP. Both setups are version 1, so a new RP master must be set up once.
+
+To make the RP masters:
+
+1. Open the FP master (`masters\FP\2T\1133 FP-800x1800x47.iam`, or the 1T one) in Inventor.
+2. In the app choose **RP**, then **Set up master...** → *Set up as 2T master* (or 1T). It writes
+   Height 44, HoleZ 20 and the RP mark (`RP 1` / `RP 1T 1`), with every equation kept.
+3. Check the model, then **Save into Inventor Sizer**: the copy goes to `masters\RP\2T\` (or `1T\`),
+   and the FP master on disk stays as it is.
+4. The 2 handles across the middle (`MFG1000000.ipt`) are not in the FP masters. Add them to the
+   RP master, then **Learn hardware holes** to fill the `hardware` section of `RP.json`.
+
