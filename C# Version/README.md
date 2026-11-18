@@ -239,6 +239,7 @@ HoleEdge to the centre hole at W/2 − 48.5 (800 wide, 6 holes: 50, 200.75, 351.
 | `HoleMidOffsetW` | Formula in the part: centre pair at `Width / 2 - HoleMidOffsetW`, pattern count 2, spacing `2 * HoleMidOffsetW`. |
 | `InSplit` | 1 or 2. `-In` width: `( Width - 2 * Stärke - 2 * Clearance ) / InSplit`. |
 | `InHolePitchW`, `InHoleCountW`, `InHoleMidOnW` | Width-wall hole pattern of the `-In` part (differs from the tray's when split). |
+| `HandleDir`, `HandlePitch`, `HandleOffset` | RP handle row: 0 = along the length, 1 = along the width; spacing span / `HandleCount`; first handle's distance from the centre. See PANEL_RULES section 18. |
 
 Values are written as numbers in Inventor's internal units, so the Windows decimal setting
 (4,1 or 4.1) doesn't matter, and unchanged values are left alone.

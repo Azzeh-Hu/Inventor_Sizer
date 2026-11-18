@@ -40,6 +40,7 @@ namespace InventorSizer.Core
         public string SetupKey(string sub) => sub == "1T" && Setup1T != null ? "setup1T" : "setup";
         public int SetupVersionFor(string sub) { var x = SetupFor(sub); return x == null ? 0 : (int)x.Num("version"); }
         public HoleTemplate Hardware;       // hinge / handle holes
+        public HandleRow HandleRow;         // "handleRow" (RP): handles in a row along the length or the width
         public Dictionary<string, (string Param, string PitchParam)> HardwareCounts = new Dictionary<string, (string, string)>();
 
         public override string ToString() => $"{Name}   [{Prefix}...]";
@@ -106,6 +107,7 @@ namespace InventorSizer.Core
                         var defs = v.Obj("defaults");
                         if (defs != null) foreach (var k in defs.OrderedKeys) s.Defaults[k] = defs.Num(k);
                         if (v.Obj("hardware") != null) s.Hardware = HoleTemplate.FromJson(v.Obj("hardware"));
+                        if (v.Obj("handleRow") != null) s.HandleRow = HandleRow.FromJson(v.Obj("handleRow"));
                         var counts = v.Obj("hardwareCounts");
                         if (counts != null) foreach (var k in counts.OrderedKeys) { var c = counts.Obj(k); s.HardwareCounts[k] = (c.Str("param"), c.Str("pitchParam")); }
                         foreach (var sub in SubTypes) s.Masters[sub] = ResolveMaster(v.Obj("masters")?.Str(sub), s.Id, sub, root);

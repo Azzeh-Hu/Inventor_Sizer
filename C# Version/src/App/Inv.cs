@@ -596,6 +596,12 @@ namespace InventorSizer
             var values = ps.ToDictionary(p => p.Name, p => p.Value);
             var all = new List<Param>(ps); all.AddRange(lay.Params);
             all.AddRange(Hardware.PitchParams(s, Standards.Get(values, "Length"), Hardware.Counts(s, values)));
+            if (s.HandleRow != null)
+            {
+                var row = s.HandleRow.Layout(Standards.Get(values, "Width"), Standards.Get(values, "Length"), values);
+                all.AddRange(row.Params);
+                Log.Write($"  handles: {row.Count} along the {(row.Dir == 0 ? "length" : "width")}, pitch {U.F(row.Pitch)} mm, first {U.F(row.Offset)} mm from the centre, outer hole {U.F(row.Edge)} mm from the end");
+            }
             // Quiet (no redraw, no input) while values change and the model rebuilds. Not while
             // saving: an assembly's Save As also writes its view (camera) and fails with the
             // screen switched off.
@@ -627,6 +633,8 @@ namespace InventorSizer
             }
             var lay = HoleRules.Layout(values, set, s);
             if (lay.Errors.Count > 0) throw new SizerException("Not applied - fix these first:\n" + string.Join("\n", lay.Errors));
+            var rowErrors = s.HandleRow?.Layout(values["Width"], values["Length"], values).Errors ?? new List<string>();
+            if (rowErrors.Count > 0) throw new SizerException("Not applied - fix these first:\n" + string.Join("\n", rowErrors));
             string sub = Standards.SubOf(lay.Split), master = s.MasterFor(sub);
             if (!s.HasMaster(sub)) throw new SizerException($"There is no {sub} master for {s.Name} (masters\\{s.Id}\\{sub}\\ next to the app is empty). Start the dev run (Dev run.cmd), click 'Set up master...', choose a {s.Id} assembly with {(sub == "2T" ? "2 inner panels" : "1 inner panel")} and save it into Inventor Sizer.");
             if (newName == Path.GetFileNameWithoutExtension(master)) throw new SizerException("The new panel needs another name than the master; the master is never changed.");

@@ -227,4 +227,74 @@ namespace InventorSizer.Core
             return o;
         }
     }
+
+    // RP handles: HandleCount handles in a row along the length (HandleDir = 0) or the width (1),
+    // centred across the other direction. The row is cut into HandleCount equal sections with a
+    // handle in the middle of each:
+    //   HandlePitch  = span / HandleCount
+    //   HandleOffset = HandlePitch * (HandleCount - 1) / 2   (first handle from the centre; 0 for one handle)
+    // Each handle has 2 holes holeSpan apart along the row. The outer hole's centre must stay
+    // minEdge from the panel end; that also keeps the handles apart.
+    public class HandleRow
+    {
+        public string CountParam = "HandleCount", DirParam = "HandleDir", PitchParam = "HandlePitch", OffsetParam = "HandleOffset", Group = "handle";
+        public double HoleSpan = 117, HoleDia = 9, MinEdge = 75;
+
+        public static HandleRow FromJson(JsonObject j)
+        {
+            var r = new HandleRow();
+            r.CountParam = j.Str("countParam", r.CountParam); r.DirParam = j.Str("dirParam", r.DirParam);
+            r.PitchParam = j.Str("pitchParam", r.PitchParam); r.OffsetParam = j.Str("offsetParam", r.OffsetParam);
+            r.Group = j.Str("group", r.Group);
+            r.HoleSpan = j.Num("holeSpan", r.HoleSpan); r.HoleDia = j.Num("holeDia", r.HoleDia); r.MinEdge = j.Num("minEdge", r.MinEdge);
+            return r;
+        }
+
+        public class Result
+        {
+            public int Count, Dir;
+            public double Span, Pitch, Offset, Edge;
+            public List<PlacedHole> Holes = new List<PlacedHole>();
+            public List<string> Errors = new List<string>();
+            public List<Param> Params = new List<Param>();
+        }
+
+        // The most handles that keep minEdge on a span.
+        public int MaxCount(double span) => Math.Max(0, (int)Math.Floor(span / (2 * MinEdge + HoleSpan) + 1e-9));
+
+        public Result Layout(double W, double L, Dictionary<string, double> values)
+        {
+            var r = new Result();
+            double n = values.TryGetValue(CountParam, out var c) ? c : 1, d = values.TryGetValue(DirParam, out var dv) ? dv : 0;
+            if (n < 1 || n != Math.Round(n)) { r.Errors.Add($"{CountParam}: the number of handles must be a whole number of 1 or more (got {U.F(n)})."); return r; }
+            if (d != 0 && d != 1) { r.Errors.Add($"{DirParam}: 0 = handles along the length, 1 = along the width (got {U.F(d)})."); return r; }
+            r.Count = (int)n; r.Dir = (int)d;
+            string along = r.Dir == 0 ? "length" : "width";
+            r.Span = r.Dir == 0 ? L : W;
+            double cross = r.Dir == 0 ? W : L;
+            r.Pitch = r.Span / r.Count;
+            r.Offset = r.Pitch * (r.Count - 1) / 2;
+            r.Edge = r.Pitch / 2 - HoleSpan / 2;
+            if (r.Edge < MinEdge - 1e-9)
+            {
+                int max = MaxCount(r.Span);
+                r.Errors.Add(max >= 1
+                    ? $"Handles: {r.Count} along the {along} ({U.F(r.Span)} mm) leave {U.F(r.Edge)} mm from the panel end to the outer hole (minimum {U.F(MinEdge)}). At most {max} fit."
+                    : $"Handles: the {along} ({U.F(r.Span)} mm) is too short for one handle ({U.F(HoleSpan)} mm between the holes + {U.F(MinEdge)} mm at each end).");
+            }
+            for (int i = 0; i < r.Count; i++)
+            {
+                double mid = (i + 0.5) * r.Pitch;
+                foreach (double a in new[] { mid - HoleSpan / 2, mid + HoleSpan / 2 })
+                {
+                    double x = r.Dir == 0 ? cross / 2 : a, y = r.Dir == 0 ? a : cross / 2;
+                    r.Holes.Add(new PlacedHole { X = x, Y = y, Z = 0, Dia = HoleDia, Axis = "z", Wall = "face", Side = "bottom", Group = Group, Bad = r.Errors.Count > 0 });
+                }
+            }
+            r.Params.Add(new Param(DirParam, r.Dir, "ul"));
+            r.Params.Add(new Param(PitchParam, r.Pitch, "mm"));
+            r.Params.Add(new Param(OffsetParam, r.Offset, "mm"));
+            return r;
+        }
+    }
 }

@@ -30,6 +30,16 @@
         }
       ],
       "notes": "RP is built from the FP masters: copy the FP master (1T or 2T), choose RP, run 'Set up master...' as 1T / 2T and 'Save into Inventor Sizer'. The setups below are the FP ones (same parameters, equations and d-numbers) with the RP values: Height 44 mm (drives the walls), HoleZ 20 mm. Width wall on 2T: 0, 4, 6, 8, ... (evenSplitHolesW). The 2 handles across the middle are not in the FP masters: add them to the RP master, then 'Learn hardware holes'.",
+      "handleRow": {
+        "notes": "Handles in a row, centred across the panel: HandleDir 0 = along the length, 1 = along the width; HandleCount 1, 2, 3, ... HandlePitch = span / HandleCount, HandleOffset = HandlePitch * (HandleCount - 1) / 2 (first handle from the centre). Handle MFG1000000: 2 holes Ø9, 117 mm apart along the row. minEdge: panel end to the centre of the outer hole.",
+        "countParam": "HandleCount",
+        "dirParam": "HandleDir",
+        "pitchParam": "HandlePitch",
+        "offsetParam": "HandleOffset",
+        "holeSpan": 117,
+        "holeDia": 9,
+        "minEdge": 75
+      },
       "setup": {
         "master": "RP 2T, made from 1133 FP-800x1800x47",
         "version": 1,

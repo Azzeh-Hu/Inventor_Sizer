@@ -37,7 +37,8 @@ namespace InventorSizer.Core
             new[] { "HoleDia_hinge_large", "11", "mm", "Hole diameter (fixed)" },
             new[] { "Clearance", "0.5", "mm", "Gap between -In and the -Au wall (assembly offsets)" },
             new[] { "HingeCount", "2", "ul", "TP: hinges per door, evenly spaced (other types: not used)" },
-            new[] { "HandleCount", "2", "ul", "TP: handles per door, evenly spaced (other types: not used)" },
+            new[] { "HandleCount", "2", "ul", "TP: handles per door, evenly spaced; RP: handles in the row (1 = in the middle)" },
+            new[] { "HandleDir", "0", "ul", "RP: handle row 0 = along the length, 1 = along the width (other types: not used)" },
         };
 
         private static readonly Regex ValueRegex = new Regex(@"^\s*(-?\d+(?:[.,]\d+)?)\s*([^\d\s]*)\s*$");

@@ -760,7 +760,8 @@ namespace InventorSizer
             {
                 string name = Convert.ToString(gr.Cells["Name"].Value);
                 try { gr.Visible = !HiddenParams.Contains(name); } catch (InvalidOperationException) { }
-                bool locked = FixedParams.Contains(name) || (name == "Height" && std != null && std.Height > 0) || (settings.MaxHolePitch > 0 && AutoParams.Contains(name)) || (HardwareCountParams.Contains(name) && (std == null || std.HardwareCounts.Count == 0));
+                bool rowParam = std?.HandleRow != null && (name == std.HandleRow.CountParam || name == std.HandleRow.DirParam);
+                bool locked = !rowParam && (FixedParams.Contains(name) || (name == "Height" && std != null && std.Height > 0) || (settings.MaxHolePitch > 0 && AutoParams.Contains(name)) || (HardwareCountParams.Contains(name) && (std == null || std.HardwareCounts.Count == 0)) || name == "HandleDir");
                 gr.ReadOnly = locked;
                 gr.DefaultCellStyle.ForeColor = locked ? Theme.GlassMuted : Theme.GlassText;
                 gr.Cells["Value"].Style.BackColor = locked ? Theme.Glass : Theme.PopInput;
@@ -791,6 +792,12 @@ namespace InventorSizer
                 if (counts[k] < 1 || counts[k] != Math.Round(counts[k])) { errors.Add($"{k} count must be a whole number of 1 or more."); counts.Remove(k); }
             hw = std?.Hardware != null && Standards.Get(values, "Width") > 0 && Standards.Get(values, "Length") > 0 && Standards.Get(values, "Height") > 0
                 ? Hardware.Place(std.Hardware, values["Width"], values["Length"], values["Height"], counts) : new List<PlacedHole>();
+            if (std?.HandleRow != null)
+            {
+                var row = std.HandleRow.Layout(values["Width"], values["Length"], values);
+                hw = hw.Concat(row.Holes).ToList();
+                errors.AddRange(row.Errors);
+            }
             try { layout = HoleRules.Layout(values, settings, std); errors.AddRange(layout.Errors); }
             catch (Exception e) { layout = null; errors.Add(e.Message); }
             if (!U.SizeRegex.IsMatch(nameBox.Text)) errors.Add("The name must contain a size like 386x656x47.");
