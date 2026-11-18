@@ -241,6 +241,14 @@ With a split inner panel the width wall takes 0 or 4 holes only; 2 is raised to 
 Values are written as numbers in Inventor's internal units, so the Windows decimal setting
 (4,1 or 4.1) doesn't matter, and unchanged values are left alone.
 
+A parameter that is a **formula** in the master (for example `InWidth = ( Width - 3 mm ) / InSplit`)
+is never overwritten: Inventor computes it from the values above. When its result differs from
+the app's value, the log shows both. `HolesW` is written as the count actually used (on a split
+panel 2 becomes 4).
+
+The Part Number of each new file follows its name. A Part Number that carries another size than
+its file (left over from an older file) is replaced with the new file's name.
+
 ## One-time setup of a master: **Set up master...**
 
 Each type's file, `standards\<type>.json`, holds everything about the type in one place:

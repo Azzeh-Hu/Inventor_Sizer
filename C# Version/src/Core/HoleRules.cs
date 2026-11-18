@@ -122,6 +122,7 @@ namespace InventorSizer.Core
                 new Param("HoleMidOnW", r.Width.MidOn, "ul"), new Param("InSplit", r.Split, "ul"),
                 new Param("InHolePitchW", inPitch, "mm"), new Param("InHoleCountW", inCount, "ul"), new Param("InHoleMidOnW", inMidOn, "ul"),
                 new Param("InWidth", r.InnerWidth, "mm"),   // spacing of the inner panels when the master patterns them
+                new Param("HolesW", holesW, "ul"),          // the count used (2 becomes 4 when split): masters compute HolesW / InSplit from it
             });
             r.Errors.AddRange(r.Length.Errors);
             r.Errors.AddRange(r.Width.Errors);

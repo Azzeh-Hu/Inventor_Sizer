@@ -285,15 +285,27 @@ namespace InventorSizer
             return docs;
         }
 
+        // An expression that uses other parameters (InWidth = ( Width - 3 mm ) / InSplit), not
+        // a plain number with a unit.
+        static readonly HashSet<string> UnitWords = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "mm", "cm", "m", "in", "inch", "ft", "ul", "deg", "rad", "e" };
+
+        public static bool IsFormula(string expression) =>
+            System.Text.RegularExpressions.Regex.Matches(expression ?? "", @"[^\W\d][\w]*")
+                .Cast<System.Text.RegularExpressions.Match>().Any(m => !UnitWords.Contains(m.Value));
+
         // Each value is looked up by name in each panel file (one call to Inventor), instead of
         // reading every parameter of every file: parts with patterns have hundreds (d0, d1 ...),
         // and every read is a separate request to Inventor.
+        // A parameter that is a formula in the master is computed by Inventor and left alone: the
+        // master's formula wins (e.g. HolePitchW of a -In-2T part is the inner panel's own pitch,
+        // not the tray's). When its result differs from the app's value, the log says so.
         public static void PushParameters(dynamic asm, IEnumerable<Param> ps, Standard s)
         {
             var byName = new Dictionary<string, Param>();
             foreach (var p in ps) byName[p.Name] = p;
             var used = new HashSet<string>();
             int changed = 0;
+            var formulas = new List<(string File, Param Src, dynamic Ip, string Expr)>();
             var docs = PanelDocuments(asm, s);
             foreach (var doc in docs)
             {
@@ -308,11 +320,20 @@ namespace InventorSizer
                     if (ip == null || (string)ip.Name != name) continue;  // same name, other case: not the same parameter
                     used.Add(name);
                     if (UnitKind(src.Unit) != UnitKind((string)ip.Units)) { Log.Write($"  {shortName} : {name} is '{ip.Units}' in Inventor but '{src.Unit}' in the app - skipped"); continue; }
+                    string expr = ip.Expression;
+                    if (IsFormula(expr)) { formulas.Add((shortName, src, ip, expr)); continue; }
                     double target = ToDb(src.Value, src.Unit);
                     if (Math.Abs((double)ip.Value - target) < 1e-9) continue;
-                    try { string old = ip.Expression; ip.Value = target; changed++; Log.Write($"  {shortName} : {name}  {old} -> {src.FormatValue()}"); }
+                    try { ip.Value = target; changed++; Log.Write($"  {shortName} : {name}  {expr} -> {src.FormatValue()}"); }
                     catch (Exception e) { Log.Write($"  {shortName} : could not set {name} ({e.Message})"); }
                 }
+            }
+            // After all values are in: the formulas' results, compared with the app's values.
+            foreach (var f in formulas)
+            {
+                double now; try { now = (double)f.Ip.Value / ToDb(1, f.Src.Unit); } catch { continue; }
+                if (Math.Abs(now - f.Src.Value) < 1e-6) Log.Dev($"  {f.File} : {f.Src.Name} = {f.Expr} (formula, kept) = {U.F(now)}");
+                else Log.Write($"  {f.File} : {f.Src.Name} = {f.Expr} is a formula in the master - kept ({U.F(now)} {f.Src.Unit}; the app's {f.Src.Name} is {f.Src.FormatValue()})");
             }
             var missing = byName.Keys.Where(k => !used.Contains(k)).ToList();
             if (missing.Count > 0) Log.Write("  note: not used by this model (no parameter with that name): " + string.Join(", ", missing));
@@ -470,6 +491,14 @@ namespace InventorSizer
                 dynamic prop = doc.PropertySets.Item(DesignTrackingProps).ItemByPropId(PartNumberPropId);
                 string was = Convert.ToString(prop.Value);
                 string now = !string.IsNullOrEmpty(fileName) && was == Path.GetFileNameWithoutExtension((string)doc.FullFileName) ? fileName : Standards.ConvertText(was, oldN, newN);
+                // A Part Number with another size than the file's is left over from an older file
+                // (the TP 2T master said 1112 TP-900x900x42): the new file's name replaces it.
+                if (now == was && !string.IsNullOrEmpty(fileName) && U.SizeRegex.IsMatch(was) && !was.Contains(oldN.Token))
+                {
+                    prop.Value = fileName;
+                    Log.Write($"  {shortName} : Part Number {was} -> {fileName} (it had another size than the file)");
+                    return;
+                }
                 if (now != was) { prop.Value = now; Log.Write($"  {shortName} : Part Number {was} -> {now}"); }
                 else Log.Write($"  {shortName} : Part Number '{was}' has no size in it - left as is");
             }

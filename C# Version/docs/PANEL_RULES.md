@@ -409,3 +409,33 @@ To use them, change the TP master once:
 The hole sets are symmetric about their own middle. So a pattern (a move) of the first set
 lands exactly on the mirrored last set, which the app checks: with count 2 the pitches equal
 the master's 974 and 794.
+
+## 15. TP 2T master: parameter list of 2026-11-18
+
+The `setup` section of `standards\TP.json` (the 2T master `1111 TP-400x1194x42`) now follows the
+parameter exports in `masters\TP\2T\*-params.xml`. Parameters that are formulas in the master are computed
+by Inventor; Apply does not overwrite them.
+
+| Part | Parameter | Formula | 800 wide, 4 holes |
+|---|---|---|---|
+| `-In-2T` | `InWidth` (`d0`) | `( Width - 3 mm ) / InSplit` | 398.5 |
+| `-In-2T` | `InHolesW` (`d61`) | `HolesW / InSplit` | 2 |
+| `-In-2T` | `HolePitchW` (`d63`) | `( InWidth - 97 mm ) / ( InHolesW - 1 ul )` | 301.5 |
+| `-In-2T` | `HolePitchL` (`d57`) | `( Length - 100 mm ) / ( HolesL - 1 ul )` | as the app with HoleEdge 50 |
+| `-In-2T` | `InLength` (`d1`), `HoleMidOffsetW` | `Length - 3 mm`, `HoleEdge - 1.5 mm` | |
+| `-Au` | `HolePitchW_2T` (`d150`, `d172`) | `( ( Width / InSplit ) - 98.5 mm ) / ( ( HolesW / InSplit ) - 1 ul )` | 301.5 |
+| `-Au` | width-wall pattern counts `d148`, `d170` | `HolesW / 2 ul`, `HolesW / InSplit` | 2 |
+
+The width-wall holes of the tray land on 50, 351.5, 448.5 and 750: the edge holes plus the centre
+pair at `W/2 ± 48.5`, the same as the app's rule (section 3). The old names `HoleCountL`, `HoleOnL`,
+`HoleMidOnW`, `InHoleCountW`, `InHoleMidOnW` are no longer in this master; Apply lists them as not used.
+
+Open points in the master:
+
+- **0 holes on the width wall** has no switch (`HoleOnW`) any more: `HolesW = 0` gives a pattern
+  count of 0, which Inventor refuses. Use 4 on 2T panels.
+- `-Au` `d148` says `HolesW / 2 ul`, `d170` says `HolesW / InSplit`: the same on a 2T master.
+- The assembly has its own `HingeEdge` = 100 and `HandleEdge` = 160 (the `-Au` part: 98 and 161).
+  No assembly dimension uses them.
+- `InHolePitchW` (1 mm) in `-In-2T` is not used by the model; the app still writes its value into it.
+
