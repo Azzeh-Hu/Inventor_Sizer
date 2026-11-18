@@ -44,9 +44,9 @@
         "minEdge": 75
       },
       "setup": {
-        "master": "RP 2T, made from 1133 FP-800x1800x47",
+        "master": "1133 FP-800x1800x47 in masters\\RP\\2T (the RP 2T master, made from the FP 2T master)",
         "version": 1,
-        "notes": "Copy of the FP 2T setup (template masters\\FP\\2T\\*-params.xml) with RP values: Height 44 mm, HoleZ 20 mm. Same d-numbers, because the RP 2T master is a copy of the FP 2T master. push: the -In half's HolesW is the count per half (InHoleCountW). version: written into the master by 'Set up master'; Apply refuses a master with another version.",
+        "notes": "Setup of the RP 2T master: an exact copy of the template in masters\\RP\\2T\\*-params.xml (2026-11-18). user: every user parameter as written there - equations stay equations (Apply never overwrites them). formulas: every model dimension (d) that is not a plain number. Handles: HandleDir 0 / 1 switches HandleRef between Length and Width; HandlePitch = HandleRef / HandleCount, HandleOffset = HandlePitch * (HandleCount - 1) / 2; the length pattern uses HandlePitchL, the width pattern HandlePitchW (0 in the other direction). push: the -In half's HolesW is the count per half (InHoleCountW). version: the master is marked 'RP 1'; keep 1 so it needs no new setup.",
         "outer": {
           "user": [
             {
@@ -122,6 +122,51 @@
             {
               "name": "InWidth",
               "value": "Width / InSplit",
+              "unit": "mm"
+            },
+            {
+              "name": "HandleCount",
+              "value": "3 ul",
+              "unit": "ul"
+            },
+            {
+              "name": "HandelAngle",
+              "value": "90 deg * ( 1 ul - HandleDir )",
+              "unit": "deg"
+            },
+            {
+              "name": "HandlePitch",
+              "value": "HandleRef / HandleCount",
+              "unit": "mm"
+            },
+            {
+              "name": "HandleSpan",
+              "value": "117 mm",
+              "unit": "mm"
+            },
+            {
+              "name": "HandleOffset",
+              "value": "HandlePitch * ( HandleCount - 1 ul ) / 2 ul",
+              "unit": "mm"
+            },
+            {
+              "name": "HandleDir",
+              "value": "0 ul",
+              "unit": "ul"
+            },
+            {
+              "name": "HandleRef",
+              "value": "Length * ( 1 ul - HandleDir ) + Width * ( HandleDir )",
+              "unit": "mm"
+            },
+            {
+              "name": "HandlePitchW",
+              "value": "HandlePitch * ( HandleDir )",
+              "unit": "mm"
+            },
+            {
+              "name": "HandlePitchL",
+              "value": "HandlePitch * ( 1 ul - HandleDir )",
               "unit": "mm"
             }
           ],
@@ -241,6 +286,46 @@
             {
               "name": "d155",
               "formula": "HolePitchW_2T"
+            },
+            {
+              "name": "d156",
+              "formula": "HandleSpan"
+            },
+            {
+              "name": "d164",
+              "formula": "Stärke"
+            },
+            {
+              "name": "d166",
+              "formula": "HandelAngle"
+            },
+            {
+              "name": "d169",
+              "formula": "HandelAngle - 90 deg"
+            },
+            {
+              "name": "d170",
+              "formula": "117 mm / 2 ul"
+            },
+            {
+              "name": "d171",
+              "formula": "HandleOffset"
+            },
+            {
+              "name": "d172",
+              "formula": "HandleCount"
+            },
+            {
+              "name": "d174",
+              "formula": "HandlePitchL"
+            },
+            {
+              "name": "d175",
+              "formula": "HandleCount"
+            },
+            {
+              "name": "d177",
+              "formula": "HandlePitchW"
             }
           ]
         },
@@ -426,6 +511,41 @@
               "name": "InWidth",
               "value": "( Width - 3 mm ) / InSplit",
               "unit": "mm"
+            },
+            {
+              "name": "HandleCount",
+              "value": "3 ul",
+              "unit": "ul"
+            },
+            {
+              "name": "HandleDir",
+              "value": "0 ul",
+              "unit": "ul"
+            },
+            {
+              "name": "HandlePitch",
+              "value": "HandleRef / HandleCount",
+              "unit": "mm"
+            },
+            {
+              "name": "HandleRef",
+              "value": "Length * ( 1 ul - HandleDir ) + Width * HandleDir",
+              "unit": "mm"
+            },
+            {
+              "name": "Length",
+              "value": "1800 mm",
+              "unit": "mm"
+            },
+            {
+              "name": "HandlePitchW",
+              "value": "HandlePitch * ( HandleDir )",
+              "unit": "mm"
+            },
+            {
+              "name": "HandlePitchL",
+              "value": "HandlePitch * ( 1 ul - HandleDir )",
+              "unit": "mm"
             }
           ],
           "formulas": [
@@ -444,6 +564,22 @@
             {
               "name": "d43",
               "formula": "InSplit"
+            },
+            {
+              "name": "d55",
+              "formula": "HandlePitchW"
+            },
+            {
+              "name": "d56",
+              "formula": "HandlePitchL"
+            },
+            {
+              "name": "d57",
+              "formula": "HandleCount"
+            },
+            {
+              "name": "d58",
+              "formula": "HandleCount"
             }
           ]
         },
