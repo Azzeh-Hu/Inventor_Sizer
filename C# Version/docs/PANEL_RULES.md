@@ -496,34 +496,28 @@ To make the RP masters:
 
 ## 18. RP handles: a row along the length or the width
 
-Set in `"handleRow"` of `standards\RP.json`. Inputs in the app: `HandleCount` (1, 2, 3, …) and
-`HandleDir` (0 = along the length, 1 = along the width). The handles sit centred across the other
-direction, on the outer tray (`-Au`) only; the 2T joint does not matter.
+Set in `"handleRow"` of `standards\RP.json`. Inputs in the app: `HandleCount` (1, 2, 3, …) and the
+drop-down `HandleDir`: **Vertical (along the length)** = 0, **Horizontal (along the width)** = 1. The
+row is centred across the other direction, on the outer tray (`-Au`) only; the 2T joint does not
+matter.
 
-| Parameter (written by Apply) | Rule |
+| Parameter | Rule |
 |---|---|
-| `HandleDir` | 0 or 1 |
+| `HandleDir` | 0 or 1 (written by Apply) |
 | `HandlePitch` | span / `HandleCount` (span = Length or Width) |
 | `HandleOffset` | `HandlePitch * ( HandleCount - 1 ) / 2`: the first handle from the centre (0 for one handle) |
 
-Handle `MFG1000000`: 2 holes Ø9, 117 mm apart along the row. The centre of the outer hole must stay
-**75 mm** from the panel end (`minEdge`), otherwise Apply is blocked and the app says how many fit:
-at most `span / ( 2 * 75 + 117 )`, e.g. 3 on 1000 mm, 2 on 600 mm, 6 on 1800 mm.
+Each handle (`MFG1000000`, 2 holes Ø9, 117 mm apart) stands **across** the row, as in the master.
+The holes must stay **75 mm** (`minEdge`, to the hole centre) from the panel ends and sides,
+otherwise Apply is blocked and the app says how many fit: at most `span / 150` along the row
+(6 on 900 mm), and the panel must be at least 267 mm across (117 + 2 × 75).
 
-| 600×1000 | Pitch | Holes along the row | Outer hole to end |
-|---|---|---|---|
-| 1 along the length | 1000 | 441.5, 558.5 | 441.5 |
-| 2 along the length | 500 | 191.5, 308.5 · 691.5, 808.5 | 191.5 |
-| 3 along the length | 333.3 | 108.2, 225.2 · 441.5, 558.5 · 774.8, 891.8 | 108.2 |
-| 2 along the width | 300 | 91.5, 208.5 · 391.5, 508.5 | 91.5 |
+| 900 W × 800 L, 2 handles | Holes (x along the width, y along the length) |
+|---|---|
+| Horizontal (along the width) | (225, 341.5) (225, 458.5) · (675, 341.5) (675, 458.5) |
+| Vertical (along the length) | (391.5, 200) (508.5, 200) · (391.5, 600) (508.5, 600) |
 
-In the master (`-Au`):
-
-- `HandleDir`: *Add Numeric*, unit `ul`, value 0 (Make Multi-Value: 0, 1).
-- `HandleRef = Length * ( 1 ul - HandleDir ) + Width * HandleDir`, `HandlePitch = HandleRef / HandleCount`,
-  `HandleOffset = HandlePitch * ( HandleCount - 1 ul ) / 2`, `HandleAngle = HandleDir * 90 deg`.
-- Sketch: construction line through the panel centre at `HandleAngle`; the original handle on it,
-  `HandleOffset` from the centre; its 2 holes ± 58.5 along the line.
-- Pattern of the handle holes: count `HandleCount`, spacing `HandlePitch`, along the line (or two
-  patterns with *Suppress if* `HandleDir = 1` / `= 0`). Then export the parameters for `RP.json`.
-
+RP 2T master: the `setup` in `RP.json` is an exact copy of `masters\RP\2T\*-params.xml`. RP 1T
+(`setup1T`): `-Au` and the assembly have the same handle parameters as 2T (assembly also `Width`,
+`Length`), `-Au` / `-In` get `Clearance`. The d-numbers of the 1T handle sketch and patterns are
+added once the 1T master has them (export its parameters).

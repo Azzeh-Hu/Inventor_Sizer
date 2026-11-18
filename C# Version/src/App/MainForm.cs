@@ -29,6 +29,13 @@ namespace InventorSizer
         static readonly string[] CountParams = { "HolesL", "HolesW" }, FixedParams = { "HoleDia_sides", "HoleDia_handle",
         "HoleDia_hinge_small", "HoleDia_hinge_large" };
         static readonly string[] AutoParams = { "HolesL", "HolesW" }, HardwareCountParams = { "HingeCount", "HandleCount" };
+        // HandleDir (RP) is chosen from a list instead of typed: 0 / 1 in Parameters.xml and Inventor.
+        public class Choice { public string Text { get; set; } public double Value { get; set; } }
+        static readonly List<Choice> HandleDirChoices = new List<Choice>
+        {
+            new Choice { Text = "Vertical (along the length)", Value = 0 },
+            new Choice { Text = "Horizontal (along the width)", Value = 1 },
+        };
         // Fixed or automatic values: still pushed to Inventor, just not shown in the grid.
         static readonly string[] HiddenParams = { "HoleEdge", "HoleZ", "HoleDia", "Clearance", "HolePitchL", "HolePitchW",
         "HoleDia_sides", "HoleDia_handle", "HoleDia_hinge_small", "HoleDia_hinge_large" };
@@ -258,6 +265,9 @@ namespace InventorSizer
                 if (grid.Columns["Unit"] != null) grid.Columns["Unit"].DefaultCellStyle = new DataGridViewCellStyle { ForeColor = Theme.GlassMuted };
                 UpdateGridLocks();
             };
+            // a choice in a drop-down counts at once, not only when the cell is left
+            grid.CurrentCellDirtyStateChanged += (s, e) => { if (grid.IsCurrentCellDirty && grid.CurrentCell is DataGridViewComboBoxCell) grid.CommitEdit(DataGridViewDataErrorContexts.Commit); };
+            grid.EditingControlShowing += (s, e) => { if (e.Control is ComboBox c) { c.BackColor = Theme.PopInput; c.ForeColor = Theme.GlassText; } };
             grid.DataError += (s, e) => { Log.Write($"Invalid value in row {e.RowIndex + 1} - enter a number."); Toast.Show(this, ToastKind.Error, "Enter a number", $"Row {e.RowIndex + 1} needs a numeric value."); e.Cancel = true; };
             table.ColumnChanged += (s, e) =>
             {
@@ -761,6 +771,8 @@ namespace InventorSizer
                 string name = Convert.ToString(gr.Cells["Name"].Value);
                 try { gr.Visible = !HiddenParams.Contains(name); } catch (InvalidOperationException) { }
                 bool rowParam = std?.HandleRow != null && (name == std.HandleRow.CountParam || name == std.HandleRow.DirParam);
+                if (name == "HandleDir" && !(gr.Cells["Value"] is DataGridViewComboBoxCell))
+                    gr.Cells["Value"] = new DataGridViewComboBoxCell { DataSource = HandleDirChoices, DisplayMember = "Text", ValueMember = "Value", FlatStyle = FlatStyle.Flat, DisplayStyle = DataGridViewComboBoxDisplayStyle.DropDownButton };
                 bool locked = !rowParam && (FixedParams.Contains(name) || (name == "Height" && std != null && std.Height > 0) || (settings.MaxHolePitch > 0 && AutoParams.Contains(name)) || (HardwareCountParams.Contains(name) && (std == null || std.HardwareCounts.Count == 0)) || name == "HandleDir");
                 gr.ReadOnly = locked;
                 gr.DefaultCellStyle.ForeColor = locked ? Theme.GlassMuted : Theme.GlassText;

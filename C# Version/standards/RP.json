@@ -592,12 +592,52 @@
       "setup1T": {
         "master": "RP 1T, made from 1133 FP-250x1294x42",
         "version": 1,
-        "notes": "Copy of the FP 1T setup with RP values: Height 44 mm, HoleZ 20 mm. Same d-numbers, because the RP 1T master is a copy of the FP 1T master. version: written into the master by 'Set up master'; Apply refuses a master with another version.",
+        "notes": "Copy of the FP 1T setup with RP values: Height 44 mm, HoleZ 20 mm. Same d-numbers, because the RP 1T master is a copy of the FP 1T master. version: written into the master by 'Set up master'; Apply refuses a master with another version. 2026-11-18: -Au and the assembly have the same handle parameters as the RP 2T master (HandleCount, HandleDir, HandleRef, HandlePitch, HandleOffset, HandleSpan, HandelAngle, HandlePitchL / W; assembly also Width, Length), and -Au / -In Clearance. The d-numbers of the 1T handle sketch and patterns follow once the 1T master has them (export its parameters).",
         "assembly": {
           "user": [
             {
               "name": "Clearance",
               "value": "0.5 mm",
+              "unit": "mm"
+            },
+            {
+              "name": "Width",
+              "value": "300 mm",
+              "unit": "mm"
+            },
+            {
+              "name": "Length",
+              "value": "1194 mm",
+              "unit": "mm"
+            },
+            {
+              "name": "HandleCount",
+              "value": "3 ul",
+              "unit": "ul"
+            },
+            {
+              "name": "HandleDir",
+              "value": "0 ul",
+              "unit": "ul"
+            },
+            {
+              "name": "HandleRef",
+              "value": "Length * ( 1 ul - HandleDir ) + Width * HandleDir",
+              "unit": "mm"
+            },
+            {
+              "name": "HandlePitch",
+              "value": "HandleRef / HandleCount",
+              "unit": "mm"
+            },
+            {
+              "name": "HandlePitchL",
+              "value": "HandlePitch * ( 1 ul - HandleDir )",
+              "unit": "mm"
+            },
+            {
+              "name": "HandlePitchW",
+              "value": "HandlePitch * ( HandleDir )",
               "unit": "mm"
             }
           ],
@@ -662,6 +702,56 @@
             {
               "name": "HolePitchW",
               "value": "( Width - 100 mm ) / ( HolesW - 1 ul )",
+              "unit": "mm"
+            },
+            {
+              "name": "Clearance",
+              "value": "0.5 mm",
+              "unit": "mm"
+            },
+            {
+              "name": "HandleSpan",
+              "value": "117 mm",
+              "unit": "mm"
+            },
+            {
+              "name": "HandleCount",
+              "value": "3 ul",
+              "unit": "ul"
+            },
+            {
+              "name": "HandleDir",
+              "value": "0 ul",
+              "unit": "ul"
+            },
+            {
+              "name": "HandleRef",
+              "value": "Length * ( 1 ul - HandleDir ) + Width * ( HandleDir )",
+              "unit": "mm"
+            },
+            {
+              "name": "HandlePitch",
+              "value": "HandleRef / HandleCount",
+              "unit": "mm"
+            },
+            {
+              "name": "HandleOffset",
+              "value": "HandlePitch * ( HandleCount - 1 ul ) / 2 ul",
+              "unit": "mm"
+            },
+            {
+              "name": "HandelAngle",
+              "value": "90 deg * ( 1 ul - HandleDir )",
+              "unit": "deg"
+            },
+            {
+              "name": "HandlePitchL",
+              "value": "HandlePitch * ( 1 ul - HandleDir )",
+              "unit": "mm"
+            },
+            {
+              "name": "HandlePitchW",
+              "value": "HandlePitch * ( HandleDir )",
               "unit": "mm"
             }
           ],
@@ -801,6 +891,11 @@
             {
               "name": "HoleMidOffsetW",
               "value": "HoleEdge - 1.5 mm",
+              "unit": "mm"
+            },
+            {
+              "name": "Clearance",
+              "value": "0.5 mm",
               "unit": "mm"
             }
           ],

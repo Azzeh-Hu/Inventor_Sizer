@@ -600,7 +600,7 @@ namespace InventorSizer
             {
                 var row = s.HandleRow.Layout(Standards.Get(values, "Width"), Standards.Get(values, "Length"), values);
                 all.AddRange(row.Params);
-                Log.Write($"  handles: {row.Count} along the {(row.Dir == 0 ? "length" : "width")}, pitch {U.F(row.Pitch)} mm, first {U.F(row.Offset)} mm from the centre, outer hole {U.F(row.Edge)} mm from the end");
+                Log.Write($"  handles: {row.Count} along the {(row.Dir == 0 ? "length" : "width")}, pitch {U.F(row.Pitch)} mm, first {U.F(row.Offset)} mm from the centre, outer handle {U.F(row.Edge)} mm from the end");
             }
             // Quiet (no redraw, no input) while values change and the model rebuilds. Not while
             // saving: an assembly's Save As also writes its view (camera) and fails with the
