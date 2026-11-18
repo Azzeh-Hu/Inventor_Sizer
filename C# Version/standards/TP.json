@@ -35,7 +35,7 @@
       "setup": {
         "master": "1111 TP-400x1194x42",
         "version": 2,
-        "notes": "Setup of the 2T master (2 inner panels: component pattern InSplit / InWidth in the assembly). User parameters and d-numbers taken from the parameter exports next to the master (masters\\TP\\2T\\*-params.xml, 2026-11-18). Only formulas that use a user parameter are listed; sheet-metal defaults (Stärke, Biegeradius ...) stay as they are. Parameters that are formulas here (-In-2T: HolePitchL, HolePitchW, InWidth, InHolesW ...; -Au: HolePitchW_2T) are computed by Inventor: Apply leaves them alone. version: written into the master by 'Set up master'; Apply refuses a master with another version.",
+        "notes": "Setup of the 2T master 1111 TP-400x1194x42: an exact copy of the template in masters\\TP\\2T\\*-params.xml (2026-11-18). user: every user parameter as written there - equations stay equations (Set up master writes them as expressions, Apply never overwrites them). formulas: every model dimension (d) that is an equation, also those on the sheet-metal parameters (Stärke, Biegeradius ...); plain-number dimensions are not touched. version: written into the master by 'Set up master'; Apply refuses a master with another version.",
         "outer": {
           "user": [
             {
@@ -149,8 +149,36 @@
               "formula": "Length"
             },
             {
+              "name": "d3",
+              "formula": "BreiteBiegungsfreistellung"
+            },
+            {
+              "name": "d4",
+              "formula": "TiefeBiegungsfreistellung"
+            },
+            {
+              "name": "d5",
+              "formula": "MinimalRest"
+            },
+            {
+              "name": "d6",
+              "formula": "Übergangsradius"
+            },
+            {
               "name": "d7",
               "formula": "Height"
+            },
+            {
+              "name": "d9",
+              "formula": "Biegeradius"
+            },
+            {
+              "name": "d10",
+              "formula": "GrößeEckenfreistellung"
+            },
+            {
+              "name": "d12",
+              "formula": "JacobiRadiusGröße"
             },
             {
               "name": "d24",
@@ -191,6 +219,10 @@
             {
               "name": "d95",
               "formula": "HandleSpan"
+            },
+            {
+              "name": "d99",
+              "formula": "Stärke"
             },
             {
               "name": "d102",
@@ -267,6 +299,10 @@
             {
               "name": "d151",
               "formula": "HoleZ"
+            },
+            {
+              "name": "d153",
+              "formula": "d152"
             },
             {
               "name": "d154",
@@ -397,8 +433,36 @@
               "formula": "InLength"
             },
             {
+              "name": "d3",
+              "formula": "BreiteBiegungsfreistellung"
+            },
+            {
+              "name": "d4",
+              "formula": "TiefeBiegungsfreistellung"
+            },
+            {
+              "name": "d5",
+              "formula": "MinimalRest"
+            },
+            {
+              "name": "d6",
+              "formula": "Übergangsradius"
+            },
+            {
               "name": "d7",
               "formula": "Height - Stärke"
+            },
+            {
+              "name": "d9",
+              "formula": "Biegeradius"
+            },
+            {
+              "name": "d10",
+              "formula": "GrößeEckenfreistellung"
+            },
+            {
+              "name": "d12",
+              "formula": "JacobiRadiusGröße"
             },
             {
               "name": "d27",
