@@ -552,7 +552,8 @@ namespace InventorSizer
                 foreach (var item in plan)
                 {
                     UpdatePartNumber(item.Doc, oldN, newN, item.Name);
-                    item.Doc.SaveAs(item.Path, false);
+                    try { item.Doc.SaveAs(item.Path, false); }
+                    catch (COMException e) { throw new SizerException($"Inventor could not save {item.Path} ({e.Message})."); }
                     Log.Write($"  saved {item.Path}");
                 }
                 asm.Save2(true);
@@ -572,9 +573,15 @@ namespace InventorSizer
             var values = ps.ToDictionary(p => p.Name, p => p.Value);
             var all = new List<Param>(ps); all.AddRange(lay.Params);
             all.AddRange(Hardware.PitchParams(s, Standards.Get(values, "Length"), Hardware.Counts(s, values)));
-            Log.Measure("Push parameters and rebuild", () => { PushParameters(asm, all, s); });
-            Log.Measure("Inner-panel split", () => { if (!InnerPanelsPatterned(asm, s, lay.Split)) UpdateInnerSplit(asm, s, lay.Split, lay.InnerWidth); });
-            asm.Update2(true);
+            // Quiet (no redraw, no input) while values change and the model rebuilds. Not while
+            // saving: an assembly's Save As also writes its view (camera) and fails with the
+            // screen switched off.
+            Quietly((object)asm.Parent, () =>
+            {
+                Log.Measure("Push parameters and rebuild", () => { PushParameters(asm, all, s); });
+                Log.Measure("Inner-panel split", () => { if (!InnerPanelsPatterned(asm, s, lay.Split)) UpdateInnerSplit(asm, s, lay.Split, lay.InnerWidth); });
+                asm.Update2(true);
+            });
             Log.Measure("Save the new files", () => { SaveAsNewSize(asm, oldN, newN, newName, outDir, s, lay.Split, overwrite, confirm); });
         }
 
@@ -614,13 +621,17 @@ namespace InventorSizer
             var src = Open(master);
             try
             {
-                Quietly((object)src.App, () =>
-                {
-                    TestMasterSetup(src.Doc, s, sub);
-                    UpdatePanelAssembly(src.Doc, standards, s, newName, ps, lay, set.OutputFolder, overwrite, confirm);
-                });
+                TestMasterSetup(src.Doc, s, sub);
+                UpdatePanelAssembly(src.Doc, standards, s, newName, ps, lay, set.OutputFolder, overwrite, confirm);
             }
-            catch { if (src.Opened) { try { src.Doc.Close(true); } catch { } } throw; }
+            catch
+            {
+                // The app's own (hidden) copy is closed unsaved. A master open in a window is the
+                // user's: it now holds the changed values (and maybe new part files), so say so.
+                if (src.Opened) { try { src.Doc.Close(true); } catch { } }
+                else Log.Write($"  warning: the master open in Inventor ({Path.GetFileName(master)}) was changed by this Apply. Close it WITHOUT saving before the next Apply.");
+                throw;
+            }
             Show(src);
             Log.Write($"New panel: {target} (the master is unchanged)");
             return newName;
