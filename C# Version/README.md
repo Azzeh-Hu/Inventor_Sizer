@@ -443,6 +443,17 @@ name and the sizes, then click **Apply to Inventor**. The app then:
 
 The master on disk is never changed, and whatever is open in Inventor is not used.
 
+To make this faster:
+
+- While Inventor is running, the app opens every master hidden in Inventor in the background
+  (the selected type's first), so **Open master** and **Apply** find it already loaded instead of
+  waiting 10-40 s. After an Apply the master is loaded again for the next one. Masters it loaded
+  and nobody used are closed when the app closes. The app never starts Inventor just for this.
+- During Apply, Inventor does not redraw, ignores clicks and keys, and shows no dialogs; it
+  redraws once at the end.
+- Values are only written to the panel's own files (the assembly and its `-Au` / `-In` parts),
+  and each value is looked up by name. Hinges, handles and other library parts are not touched.
+
 **GR.** A GR design (**Save GR design...**) remembers the GR assembly it came from. Saved in
 `presets\GR\`, it appears in the **Preset** list and loads without Inventor. **Write new GR to
 Inventor** opens that source GR in the background, writes the new GR under the new name and

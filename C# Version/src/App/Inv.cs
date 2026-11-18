@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Threading;
 using InventorSizer.Core;
 
 namespace InventorSizer
@@ -22,6 +23,7 @@ namespace InventorSizer
 
         public static dynamic App(bool start = false)
         {
+            WaitForPreload();
             try { return Marshal.GetActiveObject("Inventor.Application"); }
             catch (COMException) { }
             if (!start) throw new SizerException("Autodesk Inventor is not running. If it is open, Inventor and this app must run at the same permission level (both normal, or both \"Run as administrator\").");
@@ -34,6 +36,7 @@ namespace InventorSizer
 
         public static string Status()
         {
+            if (PreloadRunning) return "Inventor: loading masters in the background...";
             try
             {
                 dynamic inv = Marshal.GetActiveObject("Inventor.Application");
@@ -64,12 +67,29 @@ namespace InventorSizer
             return list;
         }
 
+        static dynamic FindOpen(dynamic inv, string path)
+        {
+            foreach (var d in Items(inv.Documents))
+            {
+                string f; try { f = (string)d.FullFileName; } catch { continue; }
+                if (string.Equals(f, path, StringComparison.OrdinalIgnoreCase)) return d;
+            }
+            return null;
+        }
+
         // Opens a file in the background (no window, faster), or uses it when it is open already.
+        // A master the app pre-loaded (hidden, see PreloadMasters) counts as opened by the app:
+        // it is the app's to change, and to close again when the change fails.
         public static OpenedDoc Open(string path)
         {
             dynamic inv = App(true);
-            foreach (var d in Items(inv.Documents))
-                if (string.Equals((string)d.FullFileName, path, StringComparison.OrdinalIgnoreCase)) { Log.Dev($"{path} is already open in Inventor - used as it is"); return new OpenedDoc { Doc = d, Opened = false, App = inv }; }
+            dynamic d = FindOpen(inv, path);
+            if (d != null)
+            {
+                bool ours = TakePreloaded(path) && (int)d.Views.Count == 0;
+                Log.Dev(ours ? $"{path} was pre-loaded in the background - used without opening" : $"{path} is already open in Inventor - used as it is");
+                return new OpenedDoc { Doc = d, Opened = ours, App = inv };
+            }
             dynamic doc = Log.Measure($"Open {Path.GetFileName(path)} in the background", () => (object)inv.Documents.Open(path, false));
             return new OpenedDoc { Doc = doc, Opened = true, App = inv };
         }
@@ -77,17 +97,125 @@ namespace InventorSizer
         // After a Save As the background document is the new file: give it a window, bring it up.
         public static void Show(OpenedDoc d)
         {
-            try { if (d.Opened && (int)d.Doc.Views.Count == 0) d.Doc.Views.Add(); d.Doc.Activate(); }
+            try { if ((int)d.Doc.Views.Count == 0) d.Doc.Views.Add(); d.Doc.Activate(); }
             catch (Exception e) { Log.Write($"  note: open the new file yourself ({e.Message})"); }
         }
 
+        // Opens a file in a window. A file that is open already (also hidden, pre-loaded) gets a
+        // window instead of being opened again; from then on it is the user's, not the app's.
         public static void OpenVisible(string path)
         {
             if (!File.Exists(path)) throw new SizerException($"File not found: {path}");
             dynamic inv = App(true);
-            dynamic doc = inv.Documents.Open(path, true);
+            dynamic doc = FindOpen(inv, path);
+            TakePreloaded(path);
+            if (doc == null) doc = inv.Documents.Open(path, true);
+            else if ((int)doc.Views.Count == 0) doc.Views.Add();
             doc.Activate();
             Log.Write($"Opened {path}");
+        }
+
+        // ------------------------------------------------------------------ masters pre-loaded in the background
+
+        // Opening a master cold takes 10-40 s. The app opens the masters hidden in Inventor ahead
+        // of time, on a background thread, so "Open master" and Apply find them loaded. Only the
+        // paths are kept (COM objects belong to the thread that got them). Inventor handles one
+        // caller at a time: before the app itself talks to Inventor (App), the background thread
+        // is asked to stop after the file it is opening, and later started again for the rest.
+        static readonly object preloadLock = new object();
+        static readonly List<string> preloadQueue = new List<string>();
+        static readonly HashSet<string> preloaded = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        static Thread preloadThread;
+        static volatile bool preloadStop;
+
+        static bool PreloadRunning { get { var t = preloadThread; return t != null && t.IsAlive; } }
+
+        // Queues the masters (first ones first) and starts the background thread. Does nothing
+        // when Inventor is not running: the app never starts Inventor just to pre-load.
+        // report is called on the background thread: a line for the log, or null when it ends.
+        public static void PreloadMasters(IEnumerable<string> paths, Action<string> report)
+        {
+            lock (preloadLock)
+            {
+                foreach (var p in paths.Where(p => !string.IsNullOrEmpty(p) && File.Exists(p)).Reverse())
+                {
+                    preloadQueue.RemoveAll(q => string.Equals(q, p, StringComparison.OrdinalIgnoreCase));
+                    preloadQueue.Insert(0, p);
+                }
+                if (preloadQueue.Count == 0 || PreloadRunning) return;
+                preloadStop = false;
+                preloadThread = new Thread(() => PreloadLoop(report)) { IsBackground = true, Name = "Pre-load masters" };
+                preloadThread.SetApartmentState(ApartmentState.STA);
+                preloadThread.Start();
+            }
+        }
+
+        // report gets null when the thread ends.
+        static void PreloadLoop(Action<string> report)
+        {
+            try { PreloadQueued(report); }
+            finally { report?.Invoke(null); }
+        }
+
+        static void PreloadQueued(Action<string> report)
+        {
+            dynamic inv;
+            try { inv = Marshal.GetActiveObject("Inventor.Application"); }
+            catch { return; }   // Inventor is not running; queued paths wait for the next start
+            while (!preloadStop)
+            {
+                string path;
+                lock (preloadLock)
+                {
+                    if (preloadQueue.Count == 0) return;
+                    path = preloadQueue[0]; preloadQueue.RemoveAt(0);
+                }
+                try
+                {
+                    if (FindOpen(inv, path) != null) continue;   // open already (the user's, or loaded before)
+                    var sw = System.Diagnostics.Stopwatch.StartNew();
+                    inv.Documents.Open(path, false);
+                    lock (preloadLock) preloaded.Add(path);
+                    report?.Invoke($"Pre-loaded {Path.GetFileName(path)} in the background ({sw.ElapsedMilliseconds / 1000.0:0.0} s)");
+                }
+                catch (Exception e) { report?.Invoke($"note: could not pre-load {Path.GetFileName(path)} ({e.Message})"); }
+            }
+        }
+
+        // Called before the app's own Inventor calls: lets the background thread finish the file it
+        // is opening and stop. The rest stays queued for the next PreloadMasters.
+        static void WaitForPreload()
+        {
+            var t = preloadThread;
+            if (t == null || !t.IsAlive || t == Thread.CurrentThread) return;
+            preloadStop = true;
+            Log.Write("  waiting for the master being pre-loaded in the background...");
+            t.Join();
+            preloadStop = false;
+        }
+
+        // True when the app pre-loaded the file; it is no longer counted as pre-loaded afterwards.
+        static bool TakePreloaded(string path) { lock (preloadLock) return preloaded.Remove(path); }
+
+        // On exit: closes the masters the app pre-loaded and nobody used (no changes, nothing saved).
+        public static void ClosePreloaded()
+        {
+            List<string> paths;
+            lock (preloadLock) { preloadQueue.Clear(); paths = preloaded.ToList(); preloaded.Clear(); }
+            if (paths.Count == 0 && !PreloadRunning) return;
+            WaitForPreload();
+            lock (preloadLock) { paths.AddRange(preloaded); preloaded.Clear(); }
+            dynamic inv;
+            try { inv = Marshal.GetActiveObject("Inventor.Application"); } catch { return; }
+            foreach (var p in paths)
+            {
+                try
+                {
+                    dynamic d = FindOpen(inv, p);
+                    if (d != null && (int)d.Views.Count == 0 && !(bool)d.Dirty) d.Close(true);
+                }
+                catch { }
+            }
         }
 
         public static void ActivateAssembly(string path)
@@ -139,24 +267,45 @@ namespace InventorSizer
             }
         }
 
-        public static void PushParameters(dynamic asm, IEnumerable<Param> ps)
+        // The panel's own files: the assembly and its sized parts (-Au, -In, -In-2T ...). Hinges,
+        // handles and other library parts are left out: they hold none of the panel's parameters,
+        // and reading or rebuilding them only costs time. Without parts in the type: all files.
+        static List<dynamic> PanelDocuments(dynamic asm, Standard s)
+        {
+            var all = ModelDocuments(asm);
+            var suffixes = s.Parts.SelectMany(p => new[] { p.Suffix, p.SplitSuffix }).Where(x => !string.IsNullOrEmpty(x)).ToList();
+            if (suffixes.Count == 0) return all;
+            var docs = new List<dynamic> { asm };
+            for (int i = 1; i < all.Count; i++)
+            {
+                string b = Path.GetFileNameWithoutExtension((string)all[i].FullFileName);
+                if (suffixes.Any(x => b.EndsWith(x, StringComparison.OrdinalIgnoreCase))) docs.Add(all[i]);
+                else Log.Dev($"  not a panel file, parameters not touched: {Path.GetFileName((string)all[i].FullFileName)}");
+            }
+            return docs;
+        }
+
+        // Each value is looked up by name in each panel file (one call to Inventor), instead of
+        // reading every parameter of every file: parts with patterns have hundreds (d0, d1 ...),
+        // and every read is a separate request to Inventor.
+        public static void PushParameters(dynamic asm, IEnumerable<Param> ps, Standard s)
         {
             var byName = new Dictionary<string, Param>();
             foreach (var p in ps) byName[p.Name] = p;
             var used = new HashSet<string>();
             int changed = 0;
-            var docs = ModelDocuments(asm);
+            var docs = PanelDocuments(asm, s);
             foreach (var doc in docs)
             {
                 if (!(bool)doc.IsModifiable) continue;
                 string shortName = Path.GetFileName((string)doc.FullFileName);
                 dynamic plist = doc.ComponentDefinition.Parameters;
-                int n = (int)plist.Count;
-                for (int i = 1; i <= n; i++)
+                foreach (var src in byName.Values)
                 {
-                    dynamic ip = plist.Item(i);
-                    string name = ip.Name;
-                    if (!byName.TryGetValue(name, out var src)) continue;
+                    string name = src.Name;
+                    dynamic ip;
+                    try { ip = plist.Item(name); } catch { continue; }   // not in this file
+                    if (ip == null || (string)ip.Name != name) continue;  // same name, other case: not the same parameter
                     used.Add(name);
                     if (UnitKind(src.Unit) != UnitKind((string)ip.Units)) { Log.Write($"  {shortName} : {name} is '{ip.Units}' in Inventor but '{src.Unit}' in the app - skipped"); continue; }
                     double target = ToDb(src.Value, src.Unit);
@@ -367,6 +516,7 @@ namespace InventorSizer
                 if (open.Count > 0) throw new SizerException("These files are open in Inventor and cannot be overwritten. Close them, then Apply again:\n" + string.Join("\n", open));
                 foreach (var f in existing) Log.Write($"  overwriting {f}");
             }
+            bool wasSilent = (bool)inv.SilentOperation;
             inv.SilentOperation = true;
             try
             {
@@ -378,7 +528,7 @@ namespace InventorSizer
                 }
                 asm.Save2(true);
             }
-            finally { inv.SilentOperation = false; }
+            finally { inv.SilentOperation = wasSilent; }
         }
 
         static void UpdatePanelAssembly(dynamic asm, List<Standard> standards, Standard s, string newName, List<Param> ps, HoleLayout lay, string outDir, bool overwrite = false, Func<List<string>, bool> confirm = null)
@@ -393,7 +543,7 @@ namespace InventorSizer
             var values = ps.ToDictionary(p => p.Name, p => p.Value);
             var all = new List<Param>(ps); all.AddRange(lay.Params);
             all.AddRange(Hardware.PitchParams(s, Standards.Get(values, "Length"), Hardware.Counts(s, values)));
-            Log.Measure("Push parameters and rebuild", () => { PushParameters(asm, all); });
+            Log.Measure("Push parameters and rebuild", () => { PushParameters(asm, all, s); });
             Log.Measure("Inner-panel split", () => { if (!InnerPanelsPatterned(asm, s, lay.Split)) UpdateInnerSplit(asm, s, lay.Split, lay.InnerWidth); });
             asm.Update2(true);
             Log.Measure("Save the new files", () => { SaveAsNewSize(asm, oldN, newN, newName, outDir, s, lay.Split, overwrite, confirm); });
@@ -435,13 +585,41 @@ namespace InventorSizer
             var src = Open(master);
             try
             {
-                TestMasterSetup(src.Doc, s, sub);
-                UpdatePanelAssembly(src.Doc, standards, s, newName, ps, lay, set.OutputFolder, overwrite, confirm);
+                Quietly((object)src.App, () =>
+                {
+                    TestMasterSetup(src.Doc, s, sub);
+                    UpdatePanelAssembly(src.Doc, standards, s, newName, ps, lay, set.OutputFolder, overwrite, confirm);
+                });
             }
             catch { if (src.Opened) { try { src.Doc.Close(true); } catch { } } throw; }
             Show(src);
             Log.Write($"New panel: {target} (the master is unchanged)");
             return newName;
+        }
+
+        // While the app changes a model, Inventor does not redraw the screen, ignores clicks and
+        // keys, and shows no dialogs of its own: it redraws once at the end. Each switch is set
+        // back to what it was, also when the work fails.
+        static void Quietly(dynamic inv, Action body)
+        {
+            bool silent = false, screen = true, blocked = false;
+            dynamic ui = null;
+            try { silent = (bool)inv.SilentOperation; } catch { }
+            try { screen = (bool)inv.ScreenUpdating; } catch { }
+            try { ui = inv.UserInterfaceManager; blocked = (bool)ui.UserInteractionDisabled; } catch { ui = null; }
+            try
+            {
+                try { inv.SilentOperation = true; } catch { }
+                try { inv.ScreenUpdating = false; } catch { }
+                try { if (ui != null) ui.UserInteractionDisabled = true; } catch { }
+                body();
+            }
+            finally
+            {
+                try { if (ui != null) ui.UserInteractionDisabled = blocked; } catch { }
+                try { inv.ScreenUpdating = screen; } catch { }
+                try { inv.SilentOperation = silent; } catch { }
+            }
         }
 
         // ------------------------------------------------------------------ master setup

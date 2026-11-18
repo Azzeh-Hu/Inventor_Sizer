@@ -75,7 +75,7 @@ namespace InventorSizer
             Log.DevWritten += line => { if (!IsDisposed) devBox.AppendText(line + Environment.NewLine); };
             devBox.AppendText(string.Join(Environment.NewLine, Log.DevSnapshot()) + Environment.NewLine);
             Shown += (s, e) => OnShownLoad();
-            FormClosing += (s, e) => { try { SaveFormSettings(); } catch { } };
+            FormClosing += (s, e) => { try { SaveFormSettings(); } catch { } try { Inv.ClosePreloaded(); } catch { } };
         }
 
         // ------------------------------------------------------------------ layout
@@ -468,6 +468,27 @@ namespace InventorSizer
             Toast.Show(this, ToastKind.Info, "Ready", "Pick 1T or 2T in the Types browser to open the master, or load a panel assembly.");
             UpdatePreview();
             ShowParams();   // the parameter editor opens with the window
+            PreloadMasters();
+        }
+
+        // Opens every master hidden in Inventor in the background (when Inventor is running), the
+        // selected type's first, so opening a master or applying finds it loaded. Called again
+        // after each Inventor step: Apply turns the master in Inventor into the new panel, so the
+        // master is loaded again for the next Apply.
+        void PreloadMasters()
+        {
+            var paths = new List<string>();
+            if (std != null) paths.AddRange(Standards.SubTypes.Select(sub => std.MasterFor(sub)));
+            foreach (var s in standards) paths.AddRange(Standards.SubTypes.Select(sub => s.MasterFor(sub)));
+            Inv.PreloadMasters(paths.Distinct(StringComparer.OrdinalIgnoreCase), msg =>
+            {
+                try
+                {
+                    if (IsHandleCreated && !IsDisposed)
+                        BeginInvoke((Action)(() => { if (msg != null) Log.Write(msg); else if (Enabled) statusLabel.Text = Inv.Status(); }));
+                }
+                catch { }
+            });
         }
 
         // Runs a step with a wait cursor, logs it and times it in the dev log; errors go to a message box.
@@ -495,7 +516,7 @@ namespace InventorSizer
             {
                 Log.Written -= grab;
                 Enabled = true; Cursor = Cursors.Default;
-                if (inventor) statusLabel.Text = Inv.Status();
+                if (inventor) { try { PreloadMasters(); } catch { } statusLabel.Text = Inv.Status(); }
             }
             if (failed != null) { GlassDialog.Error(this, title, failed.Message); return; }
             if (QuietSteps.Contains(title)) return;
