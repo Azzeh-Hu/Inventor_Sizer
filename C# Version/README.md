@@ -213,8 +213,8 @@ always match). Diameter is fixed at 4.1 mm (read-only in the grid). `E` = HoleEd
 | 4 | (as above) | E from each end + a centre pair at W/2 ± 48.5 mm |
 | 6, 8, … | (as above) | evenly spaced, like the length wall |
 
-With a split inner panel the width wall takes 0 or 4 holes; 2 is raised to 4. TP (`"evenSplitHolesW": true`
-in `standards\TP.json`) also takes 6, 8, …: each half gets half the holes, evenly spaced from
+With a split inner panel the width wall takes 0 or 4 holes; 2 is raised to 4. TP and FP (`"evenSplitHolesW": true`
+in `standards\TP.json` / `FP.json`) also take 6, 8, …: each half gets half the holes, evenly spaced from
 HoleEdge to the centre hole at W/2 − 48.5 (800 wide, 6 holes: 50, 200.75, 351.5 | 448.5, 599.25, 750).
 
 48.5 mm = HoleEdge − thickness − Clearance, so the -Au and -In holes line up.
@@ -247,6 +247,10 @@ A parameter that is a **formula** in the master (for example `InWidth = ( Width 
 is never overwritten: Inventor computes it from the values above. When its result differs from
 the app's value, the log shows both. `HolesW` is written as the count actually used (on a split
 panel 2 becomes 4).
+
+A setup section can also hold `push`: per part role, parameters that get another of the app's
+values. FP 2T uses `"push": { "inner": { "HolesW": "InHoleCountW" } }`, because its `-In` half counts
+its own holes.
 
 The Part Number of each new file follows its name. A Part Number that carries another size than
 its file (left over from an older file) is replaced with the new file's name.

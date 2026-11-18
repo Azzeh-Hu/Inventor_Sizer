@@ -299,7 +299,20 @@ namespace InventorSizer
         // A parameter that is a formula in the master is computed by Inventor and left alone: the
         // master's formula wins (e.g. HolePitchW of a -In-2T part is the inner panel's own pitch,
         // not the tray's). When its result differs from the app's value, the log says so.
-        public static void PushParameters(dynamic asm, IEnumerable<Param> ps, Standard s)
+        // The role of a panel file: "assembly", "outer" (-Au) or "inner" (-In, -In-2T).
+        static string RoleOf(string path, string asmPath, Standard s)
+        {
+            if (string.Equals(path, asmPath, StringComparison.OrdinalIgnoreCase)) return "assembly";
+            string b = Path.GetFileNameWithoutExtension(path);
+            foreach (var role in new[] { "inner", "outer" })
+                if (s.PartSuffixes(role).Any(x => b.EndsWith(x, StringComparison.OrdinalIgnoreCase))) return role;
+            return "";
+        }
+
+        // push (in the master's setup section): per role, parameters that get another of the
+        // app's values, e.g. FP 2T { "inner": { "HolesW": "InHoleCountW" } }: the -In half
+        // counts its own holes, so its HolesW is the per-half count.
+        public static void PushParameters(dynamic asm, IEnumerable<Param> ps, Standard s, JsonObject push = null)
         {
             var byName = new Dictionary<string, Param>();
             foreach (var p in ps) byName[p.Name] = p;
@@ -307,12 +320,22 @@ namespace InventorSizer
             int changed = 0;
             var formulas = new List<(string File, Param Src, dynamic Ip, string Expr)>();
             var docs = PanelDocuments(asm, s);
+            string asmPath = (string)asm.FullFileName;
             foreach (var doc in docs)
             {
                 if (!(bool)doc.IsModifiable) continue;
                 string shortName = Path.GetFileName((string)doc.FullFileName);
                 dynamic plist = doc.ComponentDefinition.Parameters;
-                foreach (var src in byName.Values)
+                var docParams = new Dictionary<string, Param>(byName);
+                var map = push?.Obj(RoleOf((string)doc.FullFileName, asmPath, s));
+                if (map != null)
+                    foreach (var target in map.OrderedKeys)
+                    {
+                        string from = map.Str(target);
+                        if (byName.TryGetValue(from, out var f)) { docParams[target] = new Param(target, f.Value, f.Unit); Log.Dev($"  {shortName} : {target} gets the app's {from} ({f.FormatValue()})"); }
+                        else Log.Write($"  {shortName} : push {target} <- {from}: the app has no value {from} - not changed");
+                    }
+                foreach (var src in docParams.Values)
                 {
                     string name = src.Name;
                     dynamic ip;
@@ -578,7 +601,8 @@ namespace InventorSizer
             // screen switched off.
             Quietly((object)asm.Parent, () =>
             {
-                Log.Measure("Push parameters and rebuild", () => { PushParameters(asm, all, s); });
+                var push = s.SetupFor(Standards.SubOf(lay.Split))?.Obj("push");
+                Log.Measure("Push parameters and rebuild", () => { PushParameters(asm, all, s, push); });
                 Log.Measure("Inner-panel split", () => { if (!InnerPanelsPatterned(asm, s, lay.Split)) UpdateInnerSplit(asm, s, lay.Split, lay.InnerWidth); });
                 asm.Update2(true);
             });

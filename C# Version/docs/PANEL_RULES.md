@@ -453,3 +453,20 @@ maximum pitch. FP and RP keep 0 or 4.
   No assembly dimension uses them.
 - `InHolePitchW` (1 mm) in `-In-2T` is not used by the model; the app still writes its value into it.
 
+## 16. FP 2T master: parameter list of 2026-11-18
+
+The `setup` section of `standards\FP.json` (the 2T master `1133 FP-800x1800x47`) is an exact copy of
+the template in `masters\FP\2T\*-params.xml`; equations stay equations. FP also has
+`"evenSplitHolesW": true`, so a 2T width wall takes 0, 4, 6, 8, … holes, as TP does (section 15).
+
+| Part | Width-wall holes | 800 wide, 6 holes |
+|---|---|---|
+| `-Au` | per half: count `HolesW / InSplit` (`d141`, `d153`), spacing `HolePitchW_2T = ( InWidth - 98.5 mm ) / ( ( HolesW / InSplit ) - 1 ul )` (`d143`, `d155`), with `InWidth = Width / InSplit` in this part | 3 per half, 150.75 |
+| `-In` half | count `HolesW` (`d58`), spacing `HolePitchW = ( InWidth - 97 mm ) / ( HolesW - 1 ul )` (`d60`) | 3, 150.75 |
+
+In the FP `-In` part `HolesW` is the count **per half** (TP uses `InHolesW = HolesW / InSplit`
+instead). The setup's `"push": { "inner": { "HolesW": "InHoleCountW" } }` makes Apply write the
+per-half count there (6 → 3) while `-Au` gets the full count. Holes land on 50, 200.75, 351.5 ·
+448.5, 599.25, 750, as the app draws them. 0 holes needs *Suppress if* `HolesW = 0` on the
+width-wall holes and their patterns, as for TP.
+

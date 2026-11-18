@@ -16,6 +16,7 @@
         "HoleZ": 22
       },
       "minHolesL": 2,
+      "evenSplitHolesW": true,
       "parts": [
         {
           "suffix": "-Au",
@@ -34,49 +35,7 @@
       "setup": {
         "master": "1133 FP-800x1800x47",
         "version": 2,
-        "notes": "Setup of the 2T master (inner panel in 2 parts, placed by a component pattern in the assembly). Its own d-numbers, taken from the parameter exports of 1133 FP-800x1800x47 and its -Au / -In parts (2026-11-17). Only parameters the model uses; Apply skips names a part does not have. version: written into the master by 'Set up master'; Apply refuses a master with another version.",
-        "assembly": {
-          "user": [
-            {
-              "name": "Clearance",
-              "value": "0.5 mm",
-              "unit": "mm"
-            },
-            {
-              "name": "Width",
-              "value": "800 mm",
-              "unit": "mm"
-            },
-            {
-              "name": "InSplit",
-              "value": "2 ul",
-              "unit": "ul"
-            },
-            {
-              "name": "InWidth",
-              "value": "( Width - 3 mm ) / InSplit",
-              "unit": "mm"
-            }
-          ],
-          "formulas": [
-            {
-              "name": "d6",
-              "formula": "Clearance"
-            },
-            {
-              "name": "d7",
-              "formula": "Clearance"
-            },
-            {
-              "name": "d41",
-              "formula": "InWidth"
-            },
-            {
-              "name": "d43",
-              "formula": "InSplit"
-            }
-          ]
-        },
+        "notes": "Setup of the 2T master 1133 FP-800x1800x47: an exact copy of the template in masters\\FP\\2T\\*-params.xml (2026-11-18). user: every user parameter as written there - equations stay equations (Set up master writes them as expressions, Apply never overwrites them). formulas: every model dimension (d) that is an equation; plain-number dimensions are not touched. push: in the -In part HolesW is the count per inner half (d58, HolePitchW), so Apply writes the app's InHoleCountW (HolesW / 2) into it. version: written into the master by 'Set up master'; Apply refuses a master with another version.",
         "outer": {
           "user": [
             {
@@ -116,7 +75,7 @@
             },
             {
               "name": "HolesW",
-              "value": "4 ul",
+              "value": "6 ul",
               "unit": "ul"
             },
             {
@@ -138,6 +97,21 @@
               "name": "HoleMidOnW",
               "value": "1 ul",
               "unit": "ul"
+            },
+            {
+              "name": "HolePitchW_2T",
+              "value": "( InWidth - 98.5 mm ) / ( ( HolesW / InSplit ) - 1 ul )",
+              "unit": "mm"
+            },
+            {
+              "name": "InSplit",
+              "value": "2 ul",
+              "unit": "ul"
+            },
+            {
+              "name": "InWidth",
+              "value": "Width / InSplit",
+              "unit": "mm"
             }
           ],
           "formulas": [
@@ -150,8 +124,36 @@
               "formula": "Length"
             },
             {
+              "name": "d3",
+              "formula": "BreiteBiegungsfreistellung"
+            },
+            {
+              "name": "d4",
+              "formula": "TiefeBiegungsfreistellung"
+            },
+            {
+              "name": "d5",
+              "formula": "MinimalRest"
+            },
+            {
+              "name": "d6",
+              "formula": "Übergangsradius"
+            },
+            {
               "name": "d7",
               "formula": "Height"
+            },
+            {
+              "name": "d9",
+              "formula": "Biegeradius"
+            },
+            {
+              "name": "d10",
+              "formula": "GrößeEckenfreistellung"
+            },
+            {
+              "name": "d12",
+              "formula": "JacobiRadiusGröße"
             },
             {
               "name": "d13",
@@ -202,12 +204,32 @@
               "formula": "HolePitchL"
             },
             {
-              "name": "d138",
-              "formula": "HolesW"
+              "name": "d141",
+              "formula": "HolesW / InSplit"
             },
             {
-              "name": "d140",
-              "formula": "HolePitchW"
+              "name": "d143",
+              "formula": "HolePitchW_2T"
+            },
+            {
+              "name": "d144",
+              "formula": "HoleZ"
+            },
+            {
+              "name": "d145",
+              "formula": "HoleEdge"
+            },
+            {
+              "name": "d146",
+              "formula": "HoleDia"
+            },
+            {
+              "name": "d153",
+              "formula": "HolesW / InSplit"
+            },
+            {
+              "name": "d155",
+              "formula": "HolePitchW_2T"
             }
           ]
         },
@@ -250,7 +272,7 @@
             },
             {
               "name": "HolesW",
-              "value": "4 ul",
+              "value": "3 ul",
               "unit": "ul"
             },
             {
@@ -275,7 +297,7 @@
             },
             {
               "name": "HolePitchW",
-              "value": "( Width - 100 mm ) / ( HolesW - 1 ul )",
+              "value": "( InWidth - 97 mm ) / ( HolesW - 1 ul )",
               "unit": "mm"
             },
             {
@@ -299,8 +321,36 @@
               "formula": "Length - 3 mm"
             },
             {
+              "name": "d3",
+              "formula": "BreiteBiegungsfreistellung"
+            },
+            {
+              "name": "d4",
+              "formula": "TiefeBiegungsfreistellung"
+            },
+            {
+              "name": "d5",
+              "formula": "MinimalRest"
+            },
+            {
+              "name": "d6",
+              "formula": "Übergangsradius"
+            },
+            {
               "name": "d7",
               "formula": "Height - Stärke"
+            },
+            {
+              "name": "d9",
+              "formula": "Biegeradius"
+            },
+            {
+              "name": "d10",
+              "formula": "GrößeEckenfreistellung"
+            },
+            {
+              "name": "d12",
+              "formula": "JacobiRadiusGröße"
             },
             {
               "name": "d27",
@@ -343,6 +393,53 @@
               "formula": "HolePitchW"
             }
           ]
+        },
+        "assembly": {
+          "user": [
+            {
+              "name": "Clearance",
+              "value": "0.5 mm",
+              "unit": "mm"
+            },
+            {
+              "name": "Width",
+              "value": "800.00000000 mm",
+              "unit": "mm"
+            },
+            {
+              "name": "InSplit",
+              "value": "2 ul",
+              "unit": "ul"
+            },
+            {
+              "name": "InWidth",
+              "value": "( Width - 3 mm ) / InSplit",
+              "unit": "mm"
+            }
+          ],
+          "formulas": [
+            {
+              "name": "d6",
+              "formula": "Clearance"
+            },
+            {
+              "name": "d7",
+              "formula": "Clearance"
+            },
+            {
+              "name": "d41",
+              "formula": "InWidth"
+            },
+            {
+              "name": "d43",
+              "formula": "InSplit"
+            }
+          ]
+        },
+        "push": {
+          "inner": {
+            "HolesW": "InHoleCountW"
+          }
         }
       },
       "setup1T": {
