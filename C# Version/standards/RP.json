@@ -8,7 +8,10 @@
       "enabled": true,
       "prefix": "RP-",
       "height": 44,
-      "masters": {},
+      "masters": {
+        "2T": "masters\\RP\\2T\\1133 FP-800x1800x47.iam",
+        "1T": "masters\\RP\\1T\\1133 FP-250x1294x42.iam"
+      },
       "defaults": {
         "HoleZ": 20
       },
