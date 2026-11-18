@@ -16,6 +16,7 @@
         "HoleZ": 20
       },
       "minHolesL": 2,
+      "evenSplitHolesW": true,
       "notes": "master: path of the 6357-3 TP-724x1194x42 assembly. The second inner panel, the hinges and the handles are component patterns in the master: InSplit / InWidth set the inner panels, HingeCount / HingePitch and HandleCount / HandlePitch the hardware. minHolesL 2: fixed hole at each end of the length wall + a pattern of HolesL - 1 (d84). 2T width walls: 4 holes, 2 per half: -Au pattern count HolesW / InSplit at HolePitchW_2T, -In-2T count InHolesW at HolePitchW.",
       "parts": [
         {

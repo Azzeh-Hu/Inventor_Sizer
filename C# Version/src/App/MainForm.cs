@@ -729,7 +729,14 @@ namespace InventorSizer
             if (settings.MaxHolePitch <= 0) return;
             var v = GridValues();
             if (!v.ContainsKey("Width") || !v.ContainsKey("Length") || !v.ContainsKey("HoleEdge")) return;
-            var want = new Dictionary<string, double> { ["HolesL"] = HoleRules.AutoCount(v["Length"], v["HoleEdge"], settings.MaxHolePitch, false), ["HolesW"] = HoleRules.AutoCount(v["Width"], v["HoleEdge"], settings.MaxHolePitch, HoleRules.InnerSplit(v["Width"], settings) >= 2) };
+            bool split = HoleRules.InnerSplit(v["Width"], settings) >= 2;
+            double mid = v["HoleEdge"] - settings.Thickness - (v.TryGetValue("Clearance", out var c) ? c : 0.5);
+            var want = new Dictionary<string, double>
+            {
+                ["HolesL"] = HoleRules.AutoCount(v["Length"], v["HoleEdge"], settings.MaxHolePitch, false),
+                ["HolesW"] = split ? HoleRules.AutoCountSplitW(v["Width"], v["HoleEdge"], mid, settings.MaxHolePitch, std != null && std.EvenSplitHolesW)
+                                   : HoleRules.AutoCount(v["Width"], v["HoleEdge"], settings.MaxHolePitch, false),
+            };
             bool was = syncing; syncing = true;
             try { foreach (var kv in want) { var r = FindRow(kv.Key); if (r != null && (r["Value"] is DBNull || (double)r["Value"] != kv.Value)) r["Value"] = kv.Value; } }
             finally { syncing = was; }

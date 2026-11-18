@@ -433,7 +433,21 @@ pair at `W/2 ± 48.5`, the same as the app's rule (section 3). The old names `Ho
 Open points in the master:
 
 - **0 holes on the width wall** has no switch (`HoleOnW`) any more: `HolesW = 0` gives a pattern
-  count of 0, which Inventor refuses. Use 4 on 2T panels.
+  count of 0, which Inventor refuses. To allow 0, give the width-wall hole features and their
+  patterns *Suppress if* `HolesW = 0` (in `-Au` and `-In-2T`).
+
+**More width-wall holes (6, 8, …).** TP has `"evenSplitHolesW": true`, so a 2T width wall takes 0, 4,
+6, 8, … holes. Each half gets `HolesW / 2`, evenly spaced from `HoleEdge` to the centre hole at
+`W/2 − 48.5`, which is what the template's formulas give:
+
+| 800 wide | Tray `-Au` holes | `HolePitchW_2T` | `-In-2T` `InHolesW` / `HolePitchW` |
+|---|---|---|---|
+| 4 | 50, 351.5 · 448.5, 750 | 301.5 | 2 / 301.5 |
+| 6 | 50, 200.75, 351.5 · 448.5, 599.25, 750 | 150.75 | 3 / 150.75 |
+| 8 | 50, 150.5, 251, 351.5 · 448.5, 549, 649.5, 750 | 100.5 | 4 / 100.5 |
+
+Odd counts are refused. Automatic counts pick the smallest even count whose pitch stays within the
+maximum pitch. FP and RP keep 0 or 4.
 - `-Au` `d148` says `HolesW / 2 ul`, `d170` says `HolesW / InSplit`: the same on a 2T master.
 - The assembly has its own `HingeEdge` = 100 and `HandleEdge` = 160 (the `-Au` part: 98 and 161).
   No assembly dimension uses them.

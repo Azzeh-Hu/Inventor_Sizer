@@ -4,8 +4,10 @@
 //   2 holes  -> HoleEdge from each end
 //   n holes  -> 2 at HoleEdge, the rest evenly spaced: pitch = (span - 2*HoleEdge) / (n - 1)
 //   1T (one inner panel): the width wall works like the length wall (0, 1, 2, 3, ...)
-//   2T (split inner panel): width wall 0 or 4 holes only; 4 = the 2 edge holes + a centre pair at
-//               span/2 +- MidOffset (MidOffset = HoleEdge - thickness - Clearance = 48.5 mm)
+//   2T (split inner panel): width wall 0 or 4 holes; 4 = the 2 edge holes + a centre pair at
+//               span/2 +- MidOffset (MidOffset = HoleEdge - thickness - Clearance = 48.5 mm).
+//               Types with "evenSplitHolesW" (TP) also take 6, 8, ...: each half of the wall gets
+//               n/2 holes, evenly spaced from HoleEdge to the centre hole at span/2 - MidOffset.
 
 using System;
 using System.Collections.Generic;
@@ -44,11 +46,17 @@ namespace InventorSizer.Core
 
             if (n == 0) r.On = 0;
             else if (n == 1) { r.Start = span / 2; r.Positions.Add(span / 2); }
-            else if (widthRules && n == 4)
+            else if (widthRules && n >= 4 && n % 2 == 0)
             {
-                r.Count = 2; r.Pitch = span - 2 * edge; r.MidOn = 1;
-                r.Positions.AddRange(new[] { edge, span / 2 - midOffset, span / 2 + midOffset, span - edge });
-                if (span / 2 - midOffset <= edge) r.Errors.Add($"{wall} wall: {U.F(span)} mm is too narrow for 4 holes (the centre pair would pass the edge holes).");
+                // per half: k holes from HoleEdge to the centre hole (span/2 - MidOffset), mirrored
+                int k = n / 2;
+                double half = span / 2 - midOffset - edge, step = half / (k - 1);
+                r.MidOn = 1;
+                if (n == 4) { r.Count = 2; r.Pitch = span - 2 * edge; }   // 0-or-4 masters: edge pattern + centre pair
+                else { r.Count = k; r.Pitch = step; }                    // per half
+                for (int i = 0; i < k; i++) r.Positions.Add(edge + i * step);
+                for (int i = k - 1; i >= 0; i--) r.Positions.Add(span - edge - i * step);
+                if (half <= 0) r.Errors.Add($"{wall} wall: {U.F(span)} mm is too narrow for {n} holes (the centre pair would pass the edge holes).");
             }
             else
             {
@@ -76,6 +84,17 @@ namespace InventorSizer.Core
             return n;
         }
 
+        // Automatic width-wall count of a split panel: 4, or for "evenSplitHolesW" types as many per
+        // half as keep the pitch from HoleEdge to the centre hole within maxPitch.
+        public static int AutoCountSplitW(double span, double edge, double midOffset, double maxPitch, bool even)
+        {
+            if (!even) return 4;
+            if (maxPitch <= 0) throw new SizerException("Automatic hole counts need a maximum pitch above 0.");
+            double half = span / 2 - midOffset - edge;
+            if (half <= 0) return 4;
+            return 2 * ((int)Math.Ceiling(half / maxPitch - 1e-9) + 1);
+        }
+
         public static int InnerSplit(double width, Settings s) => s.ForceSplit > 0 ? Math.Min(s.ForceSplit, 2) : s.SplitWidth > 0 && width > s.SplitWidth ? 2 : 1;
 
         public static HoleLayout Layout(Dictionary<string, double> v, Settings s, Standard std = null)
@@ -92,10 +111,13 @@ namespace InventorSizer.Core
             // Split inner panel: each half has a hole at MidOffset from both of its ends, so the
             // tray needs the centre pair (W/2 +- MidOffset) next to the 2 edge holes.
             double holesW = v["HolesW"];
+            bool even = std != null && std.EvenSplitHolesW;
             if (r.Split >= 2)
             {
                 r.Notes.Add($"{(s.ForceSplit > 0 ? "Sub type 2T" : $"Wider than {U.F(s.SplitWidth)} mm")}: the inner panel is split in 2 halves of {U.F(r.InnerWidth)} mm.");
                 if (holesW == 2) { holesW = 4; r.Notes.Add("Width wall: 2 holes become 4 (the centre pair holds the inner ends of the 2 halves)."); }
+                else if (even && (holesW == 0 || (holesW >= 4 && holesW % 2 == 0))) { if (holesW > 4) r.Notes.Add($"Width wall: {U.F(holesW / 2)} holes per half, from the edge to the centre pair."); }
+                else if (even) { r.Errors.Add($"Width wall: with a split inner panel use 0, 4, 6, 8, ... holes (got {U.F(holesW)})."); holesW = 0; }
                 else if (holesW != 0 && holesW != 4) { r.Errors.Add($"Width wall: with a split inner panel use 0 or 4 holes (got {U.F(holesW)})."); holesW = 0; }
             }
             r.Length = Wall("Length", v["Length"], v["HolesL"], edge, mid, s.MinHoleGap, false);
@@ -105,13 +127,13 @@ namespace InventorSizer.Core
                 if (std.MinHolesL > 0 && v["HolesL"] < std.MinHolesL) r.Errors.Add($"Length wall: {std.Family} panels need at least {std.MinHolesL} holes (got {U.F(v["HolesL"])}).");
                 if (std.Height > 0 && v.ContainsKey("Height") && v["Height"] != std.Height) r.Notes.Add($"{std.Family} panels are normally {U.F(std.Height)} mm high (this one is {U.F(v["Height"])} mm).");
             }
-            // Width-wall pattern of the -In part: the tray's when one piece; for a half 2 holes,
-            // MidOffset from each end of the half, no centre pair.
+            // Width-wall pattern of the -In part: the tray's when one piece; for a half n/2 holes
+            // (2 with 4 holes), from MidOffset at one end of the half to MidOffset at the other.
             double inPitch = r.Width.Pitch; int inCount = r.Width.Count, inMidOn = r.Width.MidOn;
             if (r.Split >= 2)
             {
                 inMidOn = 0;
-                if (r.Width.On == 1) { inCount = 2; inPitch = Math.Max(r.InnerWidth - 2 * mid, 1); } else inCount = 1;
+                if (r.Width.On == 1) { inCount = Math.Max((int)Math.Round(holesW / 2), 2); inPitch = Math.Max((r.InnerWidth - 2 * mid) / (inCount - 1), 1); } else inCount = 1;
             }
             r.Params.AddRange(new[]
             {

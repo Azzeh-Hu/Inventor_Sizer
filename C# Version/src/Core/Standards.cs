@@ -30,6 +30,7 @@ namespace InventorSizer.Core
         public double Height;
         public Dictionary<string, double> Defaults = new Dictionary<string, double>();
         public int MinHolesL;
+        public bool EvenSplitHolesW;        // "evenSplitHolesW": 2T width wall takes 0, 4, 6, 8, ... (half the holes per inner half); otherwise 0 or 4
         public string SplitAxis = "auto";
         public JsonObject Setup;            // per role: { user: [{name,value,unit}], formulas: [{name,formula}] } - the 2T master
         public JsonObject Setup1T;          // "setup1T": the same for the 1T master (its own d-numbers); none = "setup" is used
@@ -92,7 +93,7 @@ namespace InventorSizer.Core
                         var s = new Standard
                         {
                             Id = v.Str("id"), Name = v.Str("name"), Family = json.Str("family"), Prefix = v.Str("prefix"),
-                            File = Path.GetFileName(file), FilePath = file, Height = v.Num("height"), MinHolesL = (int)v.Num("minHolesL"),
+                            File = Path.GetFileName(file), FilePath = file, Height = v.Num("height"), MinHolesL = (int)v.Num("minHolesL"), EvenSplitHolesW = v.Bool("evenSplitHolesW", false),
                             SplitAxis = v.Str("splitAxis", "auto"), Setup = v.Obj("setup"), Setup1T = v.Obj("setup1T")
                         };
                         foreach (var po in v.Arr("parts").OfType<JsonObject>())

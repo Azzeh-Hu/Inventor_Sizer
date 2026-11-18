@@ -213,7 +213,9 @@ always match). Diameter is fixed at 4.1 mm (read-only in the grid). `E` = HoleEd
 | 4 | (as above) | E from each end + a centre pair at W/2 ± 48.5 mm |
 | 6, 8, … | (as above) | evenly spaced, like the length wall |
 
-With a split inner panel the width wall takes 0 or 4 holes only; 2 is raised to 4.
+With a split inner panel the width wall takes 0 or 4 holes; 2 is raised to 4. TP (`"evenSplitHolesW": true`
+in `standards\TP.json`) also takes 6, 8, …: each half gets half the holes, evenly spaced from
+HoleEdge to the centre hole at W/2 − 48.5 (800 wide, 6 holes: 50, 200.75, 351.5 | 448.5, 599.25, 750).
 
 48.5 mm = HoleEdge − thickness − Clearance, so the -Au and -In holes line up.
 
