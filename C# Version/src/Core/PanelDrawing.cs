@@ -7,10 +7,14 @@ using System.Linq;
 
 namespace InventorSizer.Core
 {
+    // A pitch to show: from one hole (A) to the same hole of the next set (B), model mm.
+    public class PitchMark { public string Name; public double[] A, B; }
+
     public class PanelValues
     {
         public double W, L, H, Z, D, C, T;
         public List<PlacedHole> HW = new List<PlacedHole>();
+        public List<PitchMark> Marks = new List<PitchMark>();   // hinge / handle pitches (one each)
 
         public static PanelValues Of(Dictionary<string, double> v, double thickness, List<PlacedHole> hw)
         {
@@ -93,6 +97,41 @@ namespace InventorSizer.Core
             }
         }
 
+        // One dimension per pitch: the wall holes (HolePitchL / HolePitchW, the first two holes of a
+        // wall) and the hinge / handle sets (PanelValues.Marks). The value on top, the name under it.
+        static void PitchDims(Draw d, ViewT t, PanelValues v, HoleLayout lay, string view)
+        {
+            bool iso = view == "Isometric", plan = view == "Top" || view == "Bottom";
+            double gap = 16 / t.S;   // screen px -> mm
+            if (lay != null)
+            {
+                if (iso || view == "Front" || view == "Back") WallPitch(d, t, v, lay.Length, "y", view == "Back" ? 0 : v.W, "HolePitchL", iso, gap);
+                if (iso || view == "Left" || view == "Right") WallPitch(d, t, v, lay.Width, "x", view == "Left" ? 0 : v.L, "HolePitchW", iso, gap);
+            }
+            if (!iso && !plan) return;
+            foreach (var m in v.Marks)
+            {
+                double dx = m.B[0] - m.A[0], dy = m.B[1] - m.A[1], dist = Math.Sqrt(dx * dx + dy * dy);
+                if (dist < 1e-6) continue;
+                bool alongY = Math.Abs(dy) >= Math.Abs(dx);
+                // beside the holes: in the isometric away from the middle of the panel, in the top /
+                // bottom view towards it (the panel's own dimensions and the legend sit outside)
+                double k = 2.2 * gap + 6, away = iso ? 1 : -1;
+                var o = alongY ? new[] { (m.A[0] < v.W / 2 ? -k : k) * away, 0, 0 } : new[] { 0, (m.A[1] < v.L / 2 ? -k : k) * away, 0 };
+                d.IsoDim(t, m.A, m.B, o, U.F(dist), m.Name);
+            }
+        }
+
+        static void WallPitch(Draw d, ViewT t, PanelValues v, WallLayout w, string along, double fix, string name, bool iso, double gap)
+        {
+            if (w == null || w.Errors.Count > 0) return;
+            var p = w.Positions.OrderBy(x => x).ToList();
+            if (p.Count < 2) return;
+            // isometric: under the wall (clear of the top face); side views: above the panel
+            var o = iso ? new[] { 0, 0, -(v.Z + 2 * gap) } : new[] { 0, 0, (v.H - v.Z) + 2 * gap };
+            d.IsoDim(t, WallPoint(along, fix, p[0], v.Z), WallPoint(along, fix, p[1], v.Z), o, U.F(p[1] - p[0]), name);
+        }
+
         // The inner panel(s) on the top face, inset by i; two halves when the inner panel is split (2T).
         static void InnerFill(Draw d, ViewT t, HoleLayout lay, double W, double L, double H, double i)
         {
@@ -151,6 +190,7 @@ namespace InventorSizer.Core
             IsoHoles(d, t, lay?.Length, "y", W, v.Z, r, false);
             IsoHoles(d, t, lay?.Width, "x", L, v.Z, r, false);
             HardwareHoles(d, t, v, "Isometric", showHidden);
+            PitchDims(d, t, v, lay, "Isometric");
             d.IsoDim(t, new[] { 0, L, 0 }, new[] { W, L, 0 }, new[] { 0, off, 0 }, U.F(W), HoleText(lay?.Width, v.D));
             d.IsoDim(t, new[] { W, 0, 0 }, new[] { W, L, 0 }, new[] { off, 0, 0 }, U.F(L), HoleText(lay?.Length, v.D));
             d.IsoDim(t, new[] { 0, L, 0 }, new[] { 0, L, H }, new[] { -off * 0.55, 0, 0 }, U.F(H), "");
@@ -229,6 +269,7 @@ namespace InventorSizer.Core
                 }
             }
             HardwareHoles(d, t, v, view, showHidden);
+            PitchDims(d, t, v, lay, view);
             double hSpan = view == "Left" || view == "Right" ? W : L, vSpan = plan ? W : H;
             string hSub = view == "Left" || view == "Right" ? HoleText(lay?.Width, v.D) : HoleText(lay?.Length, v.D);
             string vSub = plan ? HoleText(lay?.Width, v.D) : "";

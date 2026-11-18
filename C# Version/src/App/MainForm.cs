@@ -22,6 +22,7 @@ namespace InventorSizer
         Dictionary<string, double> values = new Dictionary<string, double>();
         HoleLayout layout;
         List<PlacedHole> hw = new List<PlacedHole>();
+        List<PitchMark> marks = new List<PitchMark>();   // hinge / handle pitches for the drawing
         List<Shape> shapes;
         string mode = "Panel", defaultsFor = "";
         GrModel gr;
@@ -802,6 +803,7 @@ namespace InventorSizer
             var counts = Hardware.Counts(std, values);
             foreach (var k in counts.Keys.ToList())
                 if (counts[k] < 1 || counts[k] != Math.Round(counts[k])) { errors.Add($"{k} count must be a whole number of 1 or more."); counts.Remove(k); }
+            marks = PitchMarks(std, values, counts);
             hw = std?.Hardware != null && Standards.Get(values, "Width") > 0 && Standards.Get(values, "Length") > 0 && Standards.Get(values, "Height") > 0
                 ? Hardware.Place(std.Hardware, values["Width"], values["Length"], values["Height"], counts) : new List<PlacedHole>();
             if (std?.HandleRow != null)
@@ -809,6 +811,8 @@ namespace InventorSizer
                 var row = std.HandleRow.Layout(values["Width"], values["Length"], values);
                 hw = hw.Concat(row.Holes).ToList();
                 errors.AddRange(row.Errors);
+                if (row.Count >= 2 && row.Holes.Count >= 4)
+                    marks.Add(new PitchMark { Name = std.HandleRow.PitchParam, A = new[] { row.Holes[0].X, row.Holes[0].Y, row.Holes[0].Z }, B = new[] { row.Holes[2].X, row.Holes[2].Y, row.Holes[2].Z } });
             }
             try { layout = HoleRules.Layout(values, settings, std); errors.AddRange(layout.Errors); }
             catch (Exception e) { layout = null; errors.Add(e.Message); }
@@ -821,7 +825,26 @@ namespace InventorSizer
             UpdateDrawing();
         }
 
+        // TP hinges / handles: from a hole of the first set to the same hole of the second set.
+        static List<PitchMark> PitchMarks(Standard s, Dictionary<string, double> v, Dictionary<string, double> counts)
+        {
+            var o = new List<PitchMark>();
+            if (s?.Hardware == null || !v.ContainsKey("Width") || !v.ContainsKey("Length")) return o;
+            double W = v["Width"], L = v["Length"], H = Standards.Get(v, "Height");
+            foreach (var kv in Hardware.Pitches(s.Hardware, L, counts))
+            {
+                var g = kv.Value;
+                if (g.Count < 2 || g.Pitch <= 0 || !s.HardwareCounts.TryGetValue(kv.Key, out var names)) continue;
+                var h = g.Holes.OrderBy(x => x.V.Value).ThenBy(x => x.U.Resolve(W)).First();
+                double x = h.U.Resolve(W), y = h.V.Value, z = h.Side == "top" ? H : 0;
+                o.Add(new PitchMark { Name = names.PitchParam, A = new[] { x, y, z }, B = new[] { x, y + g.Pitch, z } });
+            }
+            return o;
+        }
+
         Bom CurrentBom() => std == null ? null : Standards.GetBom(std, values, settings.Thickness, nameBox.Text.Trim(), layout);
+
+        PanelValues WithMarks(PanelValues pv) { pv.Marks = marks ?? new List<PitchMark>(); return pv; }
 
         void UpdateDrawing()
         {
@@ -831,7 +854,7 @@ namespace InventorSizer
                 ? new List<Shape>()
                 : Log.Measure("Draw", () => mode == "GR"
                     ? GrDrawing.Window(gr, view, size.Width, size.Height)
-                    : PanelDrawing.Window(PanelValues.Of(values, settings.Thickness, hw), layout, view, size.Width, size.Height, chkHidden.Checked, CurrentBom()));
+                    : PanelDrawing.Window(WithMarks(PanelValues.Of(values, settings.Thickness, hw)), layout, view, size.Width, size.Height, chkHidden.Checked, CurrentBom()));
             twin.Invalidate();
         }
 
@@ -840,7 +863,7 @@ namespace InventorSizer
             using (var d = new SaveFileDialog { Filter = "SVG drawing (*.svg)|*.svg", FileName = (mode == "GR" ? gr?.Name ?? "GR" : nameBox.Text.Trim()) + ".svg" })
             {
                 if (d.ShowDialog(this) != DialogResult.OK) return;
-                var sh = mode == "GR" ? GrDrawing.Sheet(gr) : PanelDrawing.Sheet(PanelValues.Of(values, settings.Thickness, hw), layout, CurrentBom(), chkHidden.Checked);
+                var sh = mode == "GR" ? GrDrawing.Sheet(gr) : PanelDrawing.Sheet(WithMarks(PanelValues.Of(values, settings.Thickness, hw)), layout, CurrentBom(), chkHidden.Checked);
                 File.WriteAllText(d.FileName, Draw.Svg(sh, 1400, 990, mode == "GR" ? gr?.Name ?? "GR" : nameBox.Text.Trim()));
                 Log.Write($"Saved drawing {d.FileName}");
             }
