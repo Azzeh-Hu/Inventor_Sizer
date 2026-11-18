@@ -1,0 +1,774 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ParamWithValueList xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <version>20080502</version>
+  <parameterTypes>
+    <ParamType>
+      <typeName>Inventor</typeName>
+      <typeCode>0</typeCode>
+    </ParamType>
+    <ParamType>
+      <typeName>String</typeName>
+      <typeCode>1</typeCode>
+    </ParamType>
+    <ParamType>
+      <typeName>Boolean</typeName>
+      <typeCode>2</typeCode>
+    </ParamType>
+  </parameterTypes>
+  <parameters>
+    <ParamWithValue>
+      <name>Stärke</name>
+      <typeCode>mm</typeCode>
+      <value>1.000 mm</value>
+      <comment />
+      <isKey>false</isKey>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>Biegeradius</name>
+      <typeCode>mm</typeCode>
+      <value>1.000 mm</value>
+      <comment />
+      <isKey>false</isKey>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>BreiteBiegungsfreistellung</name>
+      <typeCode>mm</typeCode>
+      <value>1.000 mm</value>
+      <comment />
+      <isKey>false</isKey>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>TiefeBiegungsfreistellung</name>
+      <typeCode>mm</typeCode>
+      <value>0.500 mm</value>
+      <comment />
+      <isKey>false</isKey>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>GrößeEckenfreistellung</name>
+      <typeCode>mm</typeCode>
+      <value>4.000 mm</value>
+      <comment />
+      <isKey>false</isKey>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>MinimalRest</name>
+      <typeCode>mm</typeCode>
+      <value>2.000 mm</value>
+      <comment />
+      <isKey>false</isKey>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>Übergangsradius</name>
+      <typeCode>mm</typeCode>
+      <value>1.000 mm</value>
+      <comment />
+      <isKey>false</isKey>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>JacobiRadiusGröße</name>
+      <typeCode>mm</typeCode>
+      <value>1.000 mm</value>
+      <comment />
+      <isKey>false</isKey>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>Abstandsgröße</name>
+      <typeCode>mm</typeCode>
+      <value>1.000 mm</value>
+      <comment />
+      <isKey>false</isKey>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d0</name>
+      <typeCode>mm</typeCode>
+      <value>Width</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d1</name>
+      <typeCode>mm</typeCode>
+      <value>Length</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d2</name>
+      <typeCode>mm</typeCode>
+      <value>1.000 mm</value>
+      <comment />
+      <isKey>false</isKey>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d3</name>
+      <typeCode>mm</typeCode>
+      <value>BreiteBiegungsfreistellung</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d4</name>
+      <typeCode>mm</typeCode>
+      <value>TiefeBiegungsfreistellung</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d5</name>
+      <typeCode>mm</typeCode>
+      <value>MinimalRest</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d6</name>
+      <typeCode>mm</typeCode>
+      <value>Übergangsradius</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d7</name>
+      <typeCode>mm</typeCode>
+      <value>Height</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d8</name>
+      <typeCode>deg</typeCode>
+      <value>90.0 deg</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d9</name>
+      <typeCode>mm</typeCode>
+      <value>Biegeradius</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d10</name>
+      <typeCode>mm</typeCode>
+      <value>GrößeEckenfreistellung</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d11</name>
+      <typeCode>mm</typeCode>
+      <value>0.1 mm</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d12</name>
+      <typeCode>mm</typeCode>
+      <value>JacobiRadiusGröße</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d24</name>
+      <typeCode>mm</typeCode>
+      <value>HoleEdge</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d25</name>
+      <typeCode>mm</typeCode>
+      <value>HoleZ</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d28</name>
+      <typeCode>mm</typeCode>
+      <value>HoleZ</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d29</name>
+      <typeCode>mm</typeCode>
+      <value>HoleEdge</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d30</name>
+      <typeCode>mm</typeCode>
+      <value>HoleDia</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d48</name>
+      <typeCode>mm</typeCode>
+      <value>HingeSpan</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d50</name>
+      <typeCode>mm</typeCode>
+      <value>8 mm</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d51</name>
+      <typeCode>mm</typeCode>
+      <value>8.000 mm</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d55</name>
+      <typeCode>mm</typeCode>
+      <value>28 mm</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d56</name>
+      <typeCode>mm</typeCode>
+      <value>0 mm</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d57</name>
+      <typeCode>mm</typeCode>
+      <value>0 mm</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d59</name>
+      <typeCode>mm</typeCode>
+      <value>4.1 mm</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d66</name>
+      <typeCode>mm</typeCode>
+      <value>19.5 mm</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d67</name>
+      <typeCode>mm</typeCode>
+      <value>19.5 mm</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d68</name>
+      <typeCode>mm</typeCode>
+      <value>24 mm</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d69</name>
+      <typeCode>mm</typeCode>
+      <value>0 mm</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d70</name>
+      <typeCode>mm</typeCode>
+      <value>33 mm</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d71</name>
+      <typeCode>mm</typeCode>
+      <value>16 mm</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d72</name>
+      <typeCode>mm</typeCode>
+      <value>0 mm</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d73</name>
+      <typeCode>mm</typeCode>
+      <value>4 mm</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d74</name>
+      <typeCode>mm</typeCode>
+      <value>11 mm</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d81</name>
+      <typeCode>mm</typeCode>
+      <value>HingeEdge</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d84</name>
+      <typeCode>ul</typeCode>
+      <value>HolesL - 1 ul</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d86</name>
+      <typeCode>mm</typeCode>
+      <value>HolePitchL</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d93</name>
+      <typeCode>mm</typeCode>
+      <value>9 mm</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d95</name>
+      <typeCode>mm</typeCode>
+      <value>HandleSpan</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d99</name>
+      <typeCode>mm</typeCode>
+      <value>Stärke</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d100</name>
+      <typeCode>deg</typeCode>
+      <value>0 deg</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d102</name>
+      <typeCode>mm</typeCode>
+      <value>HandleEdge</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d104</name>
+      <typeCode>mm</typeCode>
+      <value>22.000 mm</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d112</name>
+      <typeCode>ul</typeCode>
+      <value>HingeCount</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d114</name>
+      <typeCode>mm</typeCode>
+      <value>HingePitch</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d119</name>
+      <typeCode>ul</typeCode>
+      <value>HingeCount</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d121</name>
+      <typeCode>mm</typeCode>
+      <value>HingePitch</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>Width</name>
+      <typeCode>mm</typeCode>
+      <value>724 mm</value>
+      <comment />
+      <isKey>false</isKey>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>Length</name>
+      <typeCode>mm</typeCode>
+      <value>1194 mm</value>
+      <comment />
+      <isKey>false</isKey>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>Height</name>
+      <typeCode>mm</typeCode>
+      <value>42 mm</value>
+      <comment />
+      <isKey>false</isKey>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>HoleEdge</name>
+      <typeCode>mm</typeCode>
+      <value>50 mm</value>
+      <comment />
+      <isKey>false</isKey>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>HoleZ</name>
+      <typeCode>mm</typeCode>
+      <value>20 mm</value>
+      <comment />
+      <isKey>false</isKey>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>HoleDia</name>
+      <typeCode>mm</typeCode>
+      <value>4.1 mm</value>
+      <comment />
+      <isKey>false</isKey>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>Clearance</name>
+      <typeCode>mm</typeCode>
+      <value>0.5 mm</value>
+      <comment />
+      <isKey>false</isKey>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>HolesL</name>
+      <typeCode>ul</typeCode>
+      <value>4 ul</value>
+      <comment />
+      <isKey>false</isKey>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>HolesW</name>
+      <typeCode>ul</typeCode>
+      <value>4 ul</value>
+      <comment />
+      <isKey>false</isKey>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>HolePitchL</name>
+      <typeCode>mm</typeCode>
+      <value>364.666666667 mm</value>
+      <comment />
+      <isKey>false</isKey>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>HingeEdge</name>
+      <typeCode>mm</typeCode>
+      <value>98 mm</value>
+      <comment />
+      <isKey>false</isKey>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>HandleEdge</name>
+      <typeCode>mm</typeCode>
+      <value>161 mm</value>
+      <comment />
+      <isKey>false</isKey>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>HingeCount</name>
+      <typeCode>ul</typeCode>
+      <value>2 ul</value>
+      <comment />
+      <isKey>false</isKey>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>HingePitch</name>
+      <typeCode>mm</typeCode>
+      <value>974 mm</value>
+      <comment />
+      <isKey>false</isKey>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>HandleCount</name>
+      <typeCode>ul</typeCode>
+      <value>2 ul</value>
+      <comment />
+      <isKey>false</isKey>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>HandlePitch</name>
+      <typeCode>mm</typeCode>
+      <value>794 mm</value>
+      <comment />
+      <isKey>false</isKey>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d126</name>
+      <typeCode>ul</typeCode>
+      <value>HandleCount</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d128</name>
+      <typeCode>mm</typeCode>
+      <value>HandlePitch</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d129</name>
+      <typeCode>ul</typeCode>
+      <value>HingeCount</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d131</name>
+      <typeCode>mm</typeCode>
+      <value>HingePitch</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d132</name>
+      <typeCode>ul</typeCode>
+      <value>HingeCount</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d134</name>
+      <typeCode>mm</typeCode>
+      <value>HingePitch</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d135</name>
+      <typeCode>ul</typeCode>
+      <value>HolesL</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d137</name>
+      <typeCode>mm</typeCode>
+      <value>HolePitchL</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>HingeSpan</name>
+      <typeCode>mm</typeCode>
+      <value>24 mm</value>
+      <comment />
+      <isKey>false</isKey>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>HandleSpan</name>
+      <typeCode>mm</typeCode>
+      <value>78 mm</value>
+      <comment />
+      <isKey>false</isKey>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d139</name>
+      <typeCode>mm</typeCode>
+      <value>HoleEdge</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d140</name>
+      <typeCode>mm</typeCode>
+      <value>HoleZ</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d141</name>
+      <typeCode>mm</typeCode>
+      <value>HoleDia</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d148</name>
+      <typeCode>ul</typeCode>
+      <value>HolesW / 2 ul</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d150</name>
+      <typeCode>mm</typeCode>
+      <value>HolePitchW_2T</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>InSplit</name>
+      <typeCode>ul</typeCode>
+      <value>2 ul</value>
+      <comment />
+      <isKey>false</isKey>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>HolePitchW_2T</name>
+      <typeCode>mm</typeCode>
+      <value>( ( Width / InSplit ) - 98.5 mm ) / ( ( HolesW / InSplit ) - 1 ul )</value>
+      <comment />
+      <isKey>false</isKey>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d151</name>
+      <typeCode>mm</typeCode>
+      <value>HoleZ</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d152</name>
+      <typeCode>mm</typeCode>
+      <value>48.5 mm</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d153</name>
+      <typeCode>mm</typeCode>
+      <value>d152</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d154</name>
+      <typeCode>mm</typeCode>
+      <value>HoleDia</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d161</name>
+      <typeCode>mm</typeCode>
+      <value>HoleEdge</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d162</name>
+      <typeCode>mm</typeCode>
+      <value>HoleZ</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d163</name>
+      <typeCode>mm</typeCode>
+      <value>HoleDia</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d170</name>
+      <typeCode>ul</typeCode>
+      <value>HolesW / InSplit</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d172</name>
+      <typeCode>mm</typeCode>
+      <value>HolePitchW_2T</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+  </parameters>
+</ParamWithValueList>
