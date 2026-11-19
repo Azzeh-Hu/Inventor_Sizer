@@ -1,0 +1,13 @@
+# Fails when a locked panel file (FP / TP / RP masters, their standards, MODELS) differs from
+# "C# Version/panels.lock". A change on purpose: run lock-panels.cmd and commit panels.lock with it.
+name: Panel lock
+on:
+  push:
+  pull_request:
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Locked panel files unchanged
+        run: python3 "C# Version/tools/check_panel_lock.py"

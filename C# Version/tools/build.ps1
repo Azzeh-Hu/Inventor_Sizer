@@ -42,7 +42,7 @@ function Invoke-Compile([string]$Name, [string[]]$Files, $Refs, $Kind, [string]$
     , $ms.ToArray()
 }
 
-$core = @(Get-ChildItem (Join-Path $src 'Core') -Recurse -Filter *.cs | ForEach-Object FullName)
+$core = @(Get-ChildItem (Join-Path $src 'Core'), (Join-Path $src 'Gr\Core') -Recurse -Filter *.cs | ForEach-Object FullName)   # GR code lives in src\Gr
 
 if ($Test) {
     $tpa = ([AppContext]::GetData('TRUSTED_PLATFORM_ASSEMBLIES') -split [IO.Path]::PathSeparator) | Where-Object { $_ -match '\.dll$' }
@@ -65,7 +65,7 @@ function Get-Net48Refs {
 
 if (-not $NoApp) {
     $refs = @(Get-Net48Refs)
-    $app = @(Get-ChildItem (Join-Path $src 'App') -Recurse -Filter *.cs | ForEach-Object FullName)
+    $app = @(Get-ChildItem (Join-Path $src 'App'), (Join-Path $src 'Gr\App') -Recurse -Filter *.cs | ForEach-Object FullName)
     [void](Invoke-Compile 'InventorSizer' ($core + $app) $refs ([Microsoft.CodeAnalysis.OutputKind]::WindowsApplication) (Join-Path $root 'InventorSizer.exe'))
 }
 

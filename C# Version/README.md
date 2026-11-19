@@ -387,7 +387,7 @@ as profile lengths in mm. Type a new size and press Enter, and the drawing and c
   be built from an existing one and opened again later.
 - **Save cut list (CSV)...** writes every part with its length, count and frames.
 
-Part names differ between product lines (e.g. `Joint1`). `standards\GR.json` lists the
+Part names differ between product lines (e.g. `Joint1`). `GR\GR.json` lists the
 name patterns that mark corners, joints, frame profiles, dividers and panels; add a line there
 for new names.
 
@@ -470,6 +470,31 @@ To make this faster:
   and each value is looked up by name. Hinges, handles and other library parts are not touched.
 
 **GR.** A GR design (**Save GR design...**) remembers the GR assembly it came from. Saved in
-`presets\GR\`, it appears in the **Preset** list and loads without Inventor. **Write new GR to
+`GR\presets\`, it appears in the **Preset** list and loads without Inventor. **Write new GR to
 Inventor** opens that source GR in the background, writes the new GR under the new name and
 opens it.
+
+## Locked panel files and the separate GR tree
+
+The panel process (FP / TP / RP) is finished, and its files are locked in `panels.lock`: the masters
+(`masters\FP`, `TP`, `RP`), their type files (`standards\FP.json`, `TP.json`, `RP.json`) and the hinge
+and handle parts in `MODELS\`, each with its SHA-256.
+
+- At start the app checks them. A changed, missing or new file blocks **Apply** for its type (a
+  change in `MODELS\` for every type), and the log lists the files.
+- The app never writes a locked file: *Set up master*, *Learn hardware holes* and saving a master stop
+  with a message, and new panels cannot be saved into `masters\`.
+- On GitHub the check **Panel lock** fails when a locked file differs.
+- A change on purpose: `lock-panels.cmd /unlock`, make the change, then `lock-panels.cmd` to lock again,
+  and commit `panels.lock` with the files. A change made outside the app (in Inventor) only needs
+  `lock-panels.cmd`.
+
+GR (unit frame) has its own tree, so GR work does not touch the panels:
+
+| | GR | Panels |
+|---|---|---|
+| Code | `src\Gr\Core` (model, drawing), `src\Gr\App` (Inventor, window) | `src\Core`, `src\App` |
+| Data | `GR\GR.json` (part rules), `GR\presets\` (designs) | `standards\`, `masters\`, `MODELS\` |
+
+GR designs saved by older versions in `presets\GR\` are copied into `GR\presets\` on start.
+

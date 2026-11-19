@@ -175,7 +175,7 @@ standalone .exe.
   was thousands of PowerShell COM property reads); also sets constraint offsets.
 - Dev log tab (`Write-Dev`, `Measure-Dev` in `lib\Common.ps1`) with ms timings; **Save dev log...**.
 - `setup-xml\`, `standards\hardware\`, `gr-parts.json` and `lib\TreeExport.ps1` removed. Each `standards\<type>.json` holds
-  `setup` (user params + formulas per role), `hardware`, `hardwareCounts`; `standards\GR.json` holds the GR part rules.
+  `setup` (user params + formulas per role), `hardware`, `hardwareCounts`; `GR\GR.json` holds the GR part rules (GR has its own tree: `GR\`, `src\Gr\`).
   **Set up master...** applies `setup` through COM.
 - TP: `HingeCount` / `HandleCount` -> `HingePitch` / `HandlePitch`, evenly spaced sets (docs section 14).
 - GR: dividers placed by an offset constraint are listed, drawn and movable; **Write new GR to Inventor** saves a new GR

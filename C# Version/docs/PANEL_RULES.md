@@ -335,7 +335,7 @@ Example: 6357 is about 5680 × 1840 × 1420 mm outside.
 4. It replaces those occurrences with the new file, so their constraints stay.
 5. It leaves the GR unsaved, so you can check it before saving.
 
-The parameter names are in `standards\GR.json` (`lengthParameters`).
+The parameter names are in `GR\GR.json` (`lengthParameters`).
 
 Not written yet, and reported in the log instead:
 

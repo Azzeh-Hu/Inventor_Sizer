@@ -151,6 +151,7 @@ namespace InventorSizer.Core
         // Writes a change into the type's variant in its file (master, hardware) and keeps the rest.
         public static void UpdateVariant(Standard s, Action<JsonObject> change)
         {
+            PanelLock.EnsureWritable(s.FilePath, $"Saving {s.File}");
             var json = (JsonObject)Json.Parse(System.IO.File.ReadAllText(s.FilePath));
             var v = json.Arr("variants").OfType<JsonObject>().First(x => x.Str("id") == s.Id);
             change(v);

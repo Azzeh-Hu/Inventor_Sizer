@@ -13,7 +13,7 @@ namespace InventorSizer
 {
     public class OpenedDoc { public dynamic Doc; public bool Opened; public dynamic App; }
 
-    public static class Inv
+    public static partial class Inv
     {
         const int kPartDocumentObject = 12290, kAssemblyDocumentObject = 12291;
         const string DesignTrackingProps = "{32853F0F-3444-11D1-9E93-0060B03C1CA6}";
@@ -621,6 +621,7 @@ namespace InventorSizer
         // is only replaced with overwrite; confirm is asked when only part files exist already.
         public static string ApplyPanel(string name, List<Param> ps, Settings set, string paramPath, List<Standard> standards, Standard s, bool overwrite = false, Func<List<string>, bool> confirm = null)
         {
+            PanelLock.RequireUnchanged(s.Id);
             string newName = name.Trim();
             var m = U.SizeRegex.Match(newName);
             if (!m.Success) throw new SizerException("The name must contain a size like 386x656x47.");
@@ -639,6 +640,7 @@ namespace InventorSizer
             if (!s.HasMaster(sub)) throw new SizerException($"There is no {sub} master for {s.Name} (masters\\{s.Id}\\{sub}\\ next to the app is empty). Start the dev run (Dev run.cmd), click 'Set up master...', choose a {s.Id} assembly with {(sub == "2T" ? "2 inner panels" : "1 inner panel")} and save it into Inventor Sizer.");
             if (newName == Path.GetFileNameWithoutExtension(master)) throw new SizerException("The new panel needs another name than the master; the master is never changed.");
             if (string.IsNullOrEmpty(set.OutputFolder)) throw new SizerException("Choose the folder for the new panel files first.");
+            PanelLock.EnsureWritable(set.OutputFolder, "New panels cannot go into the masters");
             string target = Path.Combine(set.OutputFolder, newName + ".iam");
             if (File.Exists(target) && !overwrite) throw new SizerException($"{target} already exists.");
 
@@ -702,6 +704,7 @@ namespace InventorSizer
         // the open documents become the copies. Returns the copy's assembly path.
         public static string SaveMasterIntoApp(Standard s, string dir)
         {
+            PanelLock.EnsureWritable(dir, "Save into Inventor Sizer");
             dynamic asm = ActiveAssembly();
             string asmPath = (string)asm.FullFileName;
             var suffixes = s.PartSuffixes("inner").Concat(s.PartSuffixes("outer")).ToList();
@@ -758,6 +761,7 @@ namespace InventorSizer
         public static void SaveActiveAssembly()
         {
             dynamic asm = ActiveAssembly();
+            foreach (var d in ModelDocuments(asm)) PanelLock.EnsureWritable((string)d.FullFileName, "Save where it is");
             asm.Save2(true);
             Log.Write($"Saved {asm.FullFileName} and its changed parts");
         }
@@ -1043,132 +1047,6 @@ namespace InventorSizer
             Log.Write($"Learned {t.Holes.Count} hardware hole(s) from {name}; skipped {t.RuleHolesSkipped} wall hole(s) made by the hole rules; {grouped} sorted into hinge / handle groups. Saved in {s.File}.");
             foreach (var h in t.Holes) Log.Write($"  {h.Wall} {h.Side}: dia {U.F(h.Dia)}, {h.U.From} {U.F(h.U.Value)} / {h.V.From} {U.F(h.V.Value)}");
             return t;
-        }
-
-        // ------------------------------------------------------------------ GR
-
-        // Components (with file and range box) and constraints of the active GR, in one pass.
-        public static GrData ReadGr()
-        {
-            dynamic asm = ActiveAssembly();
-            var d = new GrData { Source = "Inventor", SourcePath = asm.FullFileName };
-            d.Name = U.LeafName(d.SourcePath);
-            int skipped = 0;
-            Log.Measure("Read components from Inventor", () =>
-            {
-                foreach (var occ in Items(asm.ComponentDefinition.Occurrences))
-                {
-                    string name, file = "";
-                    try { name = occ.Name; } catch { skipped++; continue; }
-                    try { file = occ.ReferencedDocumentDescriptor.FullDocumentName; } catch { }
-                    var c = Gr.NewComponent(name, file);
-                    try
-                    {
-                        dynamic rb = occ.RangeBox; dynamic mn = rb.MinPoint; dynamic mx = rb.MaxPoint;
-                        c.Box = new[] { (double)mn.X * 10, (double)mn.Y * 10, (double)mn.Z * 10, (double)mx.X * 10, (double)mx.Y * 10, (double)mx.Z * 10 };
-                    }
-                    catch { }
-                    d.Components[name] = c;
-                }
-            });
-            Log.Measure("Read constraints from Inventor", () =>
-            {
-                foreach (var c in Items(asm.ComponentDefinition.Constraints))
-                {
-                    var k = new GrConstraint();
-                    try { k.Name = c.Name; } catch { skipped++; continue; }
-                    k.Type = Microsoft.VisualBasic.Information.TypeName(c) ?? "";
-                    if (k.Type.EndsWith("Constraint")) k.Type = k.Type.Substring(0, k.Type.Length - "Constraint".Length);
-                    try { k.A = c.OccurrenceOne.Name; } catch { }
-                    try { k.B = c.OccurrenceTwo.Name; } catch { }
-                    try { k.Suppressed = c.Suppressed; } catch { }
-                    try { k.Value = c.Offset.Expression; } catch { try { k.Value = c.Angle.Expression; } catch { } }
-                    d.Constraints.Add(k);
-                }
-            });
-            Log.Dev($"  {d.Components.Count} components, {d.Constraints.Count} constraints, {skipped} skipped");
-            if (skipped > 0) Log.Write($"  note: {skipped} item(s) Inventor could not return were skipped");
-            return d;
-        }
-
-        static dynamic FindLengthParameter(dynamic doc, string kind, double oldLength)
-        {
-            dynamic ps = doc.ComponentDefinition.Parameters;
-            double want = oldLength / 10;
-            if (Gr.LengthParams.TryGetValue(kind, out var name))
-                try { dynamic p = ps.Item(name); if (Math.Abs((double)p.Value - want) < 1e-6) return p; } catch { }
-            List<dynamic> mps = Items(ps.ModelParameters);
-            var hits = mps.Where(p => Math.Abs((double)p.Value - want) < 1e-6).ToList();
-            if (hits.Count == 1) return hits[0];
-            throw new SizerException($"{Path.GetFileName((string)doc.FullFileName)}: no single parameter holds the length {U.F(oldLength)} mm (looked for '{name}').");
-        }
-
-        static OpenedDoc OpenGrSource(GrModel m)
-        {
-            if (!string.IsNullOrEmpty(m.SourcePath) && File.Exists(m.SourcePath)) return Open(m.SourcePath);
-            dynamic inv = App(true);
-            dynamic a = inv.ActiveDocument;
-            if (a != null && Path.GetFileNameWithoutExtension((string)a.FullFileName) == m.Name) return new OpenedDoc { Doc = a, Opened = false, App = inv };
-            throw new SizerException($"The source GR '{m.Name}' was not found{(string.IsNullOrEmpty(m.SourcePath) ? "" : " at " + m.SourcePath)}. Load the GR again from its file, or open it in Inventor.");
-        }
-
-        // The edited GR as a NEW assembly: the source GR is saved under newName (same folder),
-        // every new profile length becomes "<prefix> P150 1700mm.ipt" next to the original
-        // profile, the occurrences are replaced, the divider offsets set, the new GR saved and opened.
-        public static void ApplyGr(GrModel m, string newName, string prefix)
-        {
-            newName = (newName ?? "").Trim(); prefix = (prefix ?? "").Trim();
-            if (newName == "") throw new SizerException("Enter the name of the new GR assembly (e.g. 5794 GR).");
-            if (newName.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0) throw new SizerException($"'{newName}' is not a valid file name.");
-            if (newName == m.Name) throw new SizerException("The new GR needs a new name; the original stays as it is.");
-            var todo = Gr.Pending(m);
-            if (todo.Blocked.Count > 0) throw new SizerException("Not written:\n" + string.Join("\n", todo.Blocked) + "\nUndo those (load the GR again) or make them in Inventor.");
-            var src = OpenGrSource(m);
-            dynamic asm = src.Doc;
-            string name = Path.GetFileNameWithoutExtension((string)asm.FullFileName);
-            string newPath = Path.Combine(Path.GetDirectoryName((string)asm.FullFileName), newName + Path.GetExtension((string)asm.FullFileName));
-            if (File.Exists(newPath)) throw new SizerException($"{newPath} already exists.");
-            dynamic inv = asm.Parent;
-            Log.Measure($"Save the GR as {newName}", () => { asm.SaveAs(newPath, false); });
-            Log.Write($"  saved {newPath} (the new GR; {name} stays as it was)");
-            dynamic occs = asm.ComponentDefinition.Occurrences;
-            foreach (var g in todo.Profiles)
-            {
-                Log.Measure($"Profile {g.From} -> {g.To} ({g.Names.Count} x)", () =>
-                {
-                    dynamic srcPart = occs.ItemByName(g.Names[0]).Definition.Document;
-                    string ext = Path.GetExtension((string)srcPart.FullFileName);
-                    string partName = prefix != "" ? $"{prefix} {g.To}" : g.To;
-                    string partPath = Path.Combine(Path.GetDirectoryName((string)srcPart.FullFileName), partName + ext);
-                    if (File.Exists(partPath)) Log.Write($"  {partName}{ext} exists - used as it is");
-                    else
-                    {
-                        dynamic p = FindLengthParameter(srcPart, g.Kind, Gr.LengthOf(g.From));
-                        string old = p.Expression;
-                        inv.SilentOperation = true;
-                        try { p.Value = g.Length / 10; srcPart.Update(); srcPart.SaveAs(partPath, true); }
-                        finally { p.Expression = old; srcPart.Update(); inv.SilentOperation = false; }
-                        Log.Write($"  created {partPath} ({p.Name} = {U.F(g.Length)} mm)");
-                    }
-                    foreach (var n in g.Names) occs.ItemByName(n).Replace(partPath, false);
-                    Log.Write($"  {g.Names.Count} x {g.From} -> {partName}");
-                    foreach (var n in g.Names) m.Components[n].OrigBase = g.To;
-                });
-            }
-            if (todo.Dividers.Count > 0)
-            {
-                dynamic cons = asm.ComponentDefinition.Constraints;
-                foreach (var d in todo.Dividers)
-                {
-                    try { cons.Item(d.Constraint).Offset.Expression = $"{U.F(d.To)} mm"; Log.Write($"  {d.Name}: {U.F(d.From)} -> {U.F(d.To)} mm"); m.Components[d.Name].OrigPosition = d.To; }
-                    catch (Exception e) { Log.Write($"  could not move {d.Name} (constraint {d.Constraint}: {e.Message})"); }
-                }
-            }
-            Log.Measure("Update and save the new GR", () => { asm.Update(); asm.Save2(true); });
-            foreach (var p in todo.Panels) Log.Write($"  panel {p.Name}: needs size {p.To} (now {p.From}) - make it with the panel tool and replace it");
-            m.Name = newName; m.Source = "Inventor"; m.SourcePath = newPath; m.Edited = false;
-            Show(src);
-            Log.Write($"New GR {newName} saved and opened.");
         }
     }
 }
