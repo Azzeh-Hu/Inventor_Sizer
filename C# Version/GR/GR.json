@@ -87,10 +87,8 @@
       "End_A",
       "End_B",
       "Out",
-      "Side_A",
-      "Side_B",
-      "Seat_A",
-      "Seat_B"
+      "Seat_Side_A",
+      "Seat_Side_B"
     ],
     "corner": [
       "Leg_X",
@@ -102,7 +100,7 @@
     ],
     "joint": [
       "Base",
-      "Leg",
+      "End",
       "Out"
     ],
     "panelAu": [

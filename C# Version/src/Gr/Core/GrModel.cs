@@ -175,9 +175,9 @@ namespace InventorSizer.Core
         public static Dictionary<string, string[]> FaceNames = new Dictionary<string, string[]>
         {
             ["frameProfile"] = new[] { "End_A", "End_B", "Out_1", "Out_2", "Seat_1", "Seat_2" },
-            ["divider"] = new[] { "End_A", "End_B", "Out", "Side_A", "Side_B", "Seat_A", "Seat_B" },
+            ["divider"] = new[] { "End_A", "End_B", "Out", "Seat_Side_A", "Seat_Side_B" },
             ["corner"] = new[] { "Leg_X", "Leg_Y", "Leg_Z", "Out_X", "Out_Y", "Out_Z" },
-            ["joint"] = new[] { "Base", "Leg", "Out" },
+            ["joint"] = new[] { "Base", "End", "Out" },
             ["panelAu"] = new[] { "Top", "Edge_W0", "Edge_W1", "Edge_L0", "Edge_L1" },
         };
 
