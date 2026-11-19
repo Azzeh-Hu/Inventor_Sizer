@@ -252,7 +252,7 @@ namespace InventorSizer.Core
             var lines = new List<string>
             {
                 $"{m.Name}: {m.Frames.Count} box(es), outer about {U.F(m.Length)} {x} {U.F(m.OuterWidth)} {x} {U.F(m.OuterHeight)} mm (L {x} W {x} H)",
-                $"Box sizes are profile lengths (L {x} W {x} H); outer size = profile + {U.F(Gr.CornerAdd)} mm (2 corners of 130).",
+                $"Box sizes are profile lengths (L {x} W {x} H); outer size = profile + {U.F(Gr.CornerAdd)} mm (2 corners).",
                 m.RealMap != null ? "Positions from Inventor (range boxes)." : "Layout inferred from the constraints (no positions in the export); dividers drawn schematically."
             };
             lines.AddRange(m.Warnings);

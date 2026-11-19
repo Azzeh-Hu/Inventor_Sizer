@@ -16,7 +16,8 @@ namespace InventorSizer
     public partial class MainForm
     {
         // GR controls built in BuildUi and wired here
-        FlatButton btnAddR, btnAddL, btnAddF, btnRemove;
+        FlatButton btnAddR, btnAddL, btnAddF, btnRemove, btnUp;
+        GrData grData;   // the export / Inventor data the GR was built from, to build it again with another up axis
         RibbonButton btnGrApply;
         RibbonGroup gGrSource;
 
@@ -52,13 +53,13 @@ namespace InventorSizer
             grFiles.Add("Load GR export...", (s, e) => Step("Load GR export", () =>
             {
                 using (var d = new OpenFileDialog { Filter = "GR export (*.xml)|*.xml", Title = "GR export: select the tree and the constraints file (or one export that has both)", Multiselect = true })
-                    if (d.ShowDialog(this) == DialogResult.OK) SetGr(Gr.Build(Gr.ReadExportFiles(d.FileNames)));
+                    if (d.ShowDialog(this) == DialogResult.OK) SetGr(BuildGr(Gr.ReadExportFiles(d.FileNames)));
             }));
             grFiles.Separator();
             grFiles.Add("Load GR design...", (s, e) => Step("Load GR design", () =>
             {
                 using (var d = new OpenFileDialog { InitialDirectory = GrPresetDir, Filter = "GR design (*.json)|*.json" })
-                    if (d.ShowDialog(this) == DialogResult.OK) SetGr(Gr.ReadDesign(d.FileName));
+                    if (d.ShowDialog(this) == DialogResult.OK) { grData = null; SetGr(Gr.ReadDesign(d.FileName)); }
             }));
             grFiles.Add("Save GR design...", (s, e) => Step("Save GR design", () =>
             {
@@ -74,18 +75,25 @@ namespace InventorSizer
                 using (var d = new SaveFileDialog { Filter = "Cut list (*.csv)|*.csv", FileName = gr.Name + "-cut-list.csv" })
                     if (d.ShowDialog(this) == DialogResult.OK) { Gr.ExportCutList(gr, d.FileName); Log.Write($"Saved cut list {d.FileName}"); }
             }));
+            grFiles.Separator();
+            grFiles.Add("Check named faces (Inventor)", (s, e) => Step("Check named faces", () =>
+            {
+                var lines = Inv.CheckNamedFaces();
+                foreach (var l in lines) Log.Write(l);
+                Toast.Show(this, lines.Any(l => l.Contains("MISSING")) ? ToastKind.Error : ToastKind.Done, "Named faces", lines[0]);
+            }, true));
             gGrSource.Fit();   // the Files button grew its menu arrow
-            btnGrInv.Click += (s, e) => Step("Read GR from Inventor", () => SetGr(Log.Measure("Build the GR model", () => Gr.Build(Inv.ReadGr()))), true);
+            btnGrInv.Click += (s, e) => Step("Read GR from Inventor", () => SetGr(Log.Measure("Build the GR model", () => BuildGr(Inv.ReadGr()))), true);
             btnOpenGr.Click += (s, e) => Step("Open GR", () =>
             {
                 using (var d = new OpenFileDialog { Filter = "Inventor assembly (*.iam)|*.iam", Title = "Open a GR assembly" })
-                    if (d.ShowDialog(this) == DialogResult.OK) { Inv.OpenVisible(d.FileName); SetGr(Log.Measure("Build the GR model", () => Gr.Build(Inv.ReadGr()))); }
+                    if (d.ShowDialog(this) == DialogResult.OK) { Inv.OpenVisible(d.FileName); SetGr(Log.Measure("Build the GR model", () => BuildGr(Inv.ReadGr()))); }
             }, true);
             presetBox.SelectedIndexChanged += (s, e) =>
             {
                 if (syncing || presetBox.SelectedIndex < 0) return;
                 var file = Path.Combine(GrPresetDir, presetBox.SelectedItem + ".json");
-                Step("Load GR preset", () => SetGr(Gr.ReadDesign(file)));
+                Step("Load GR preset", () => { grData = null; SetGr(Gr.ReadDesign(file)); });
             };
             grGrid.DataBindingComplete += (s, e) =>
             {
@@ -127,13 +135,34 @@ namespace InventorSizer
                     var f = Gr.AddFrame(gr, refNo, side);
                     Log.Write($"GR: added {f.Label} ({side.ToLower()} of Box {refNo - 1}), outer {U.F(f.Lx + Gr.CornerAdd)} x {U.F(f.Wy + Gr.CornerAdd)} x {U.F(f.Hz + Gr.CornerAdd)} mm");
                 });
+            // Up axis: Z for the standard GR; another axis for a GR modelled lying down. Builds the GR
+            // again from its data, so it is changed before editing.
+            btnUp = new FlatButton("Up: Z", ButtonKind.Ghost, 0, 30) { Margin = new Padding(2, 0, 0, 0) };
+            var actions = btnAddR.Parent;
+            actions.Controls.Add(btnUp); actions.Controls.SetChildIndex(btnUp, 0);
+            actions.Parent?.PerformLayout();
+            btnUp.Click += (s, e) => GrEdit("Change up", () =>
+            {
+                if (grData == null) throw new SizerException("Up can be changed for a GR read from Inventor or an export, not for a saved design.");
+                if (gr.Edited) throw new SizerException("Change up before editing: load the GR again, then change up.");
+                int up = (gr.Up + 2) % 3;   // Z -> Y -> X -> Z
+                gr = Gr.Build(grData, up);
+                Log.Write($"GR: up = {Gr.AxisName(up)}" + (gr.RealMap == null ? " (no real positions: the sizes stay a guess)" : $", length along {Gr.AxisName(gr.RealMap[0])}"));
+            });
             btnRemove.Click += (s, e) => GrEdit("Remove box", () => { int no = SelectedBox(); Gr.RemoveFrame(gr, no); Log.Write($"GR: removed Box {no - 1} with its panels and dividers"); });
             btnGrApply.Click += (s, e) => Step("Write new GR to Inventor", () =>
             {
                 if (gr == null) throw new SizerException("Load a GR first.");
                 Inv.ApplyGr(gr, grNewName.Text, grPrefix.Text);
+                grData = null;   // the new GR differs from the data it was read from
                 UpdateGrGrid();
             }, true);
+        }
+
+        GrModel BuildGr(GrData d)
+        {
+            grData = d;
+            return Gr.Build(d);
         }
 
         void SetGr(GrModel m)
@@ -171,6 +200,7 @@ namespace InventorSizer
                 grTable.AcceptChanges(); grDivTable.AcceptChanges();
             }
             finally { syncing = false; }
+            if (btnUp != null) btnUp.Text = "Up: " + Gr.AxisName(gr?.Up ?? 2);
             grInfo.Text = gr == null ? "Choose a preset, load a GR export, or read a GR from Inventor." :
                 $"{gr.Name}{(gr.Edited ? " (edited)" : "")}: outer {U.F(gr.Length)} x {U.F(gr.OuterWidth)} x {U.F(gr.OuterHeight)} mm. Edit the outer sizes (incl. corners); the P150 profiles are outer - {U.F(Gr.CornerAdd)}. Select a box to add a box next to it.";
         }

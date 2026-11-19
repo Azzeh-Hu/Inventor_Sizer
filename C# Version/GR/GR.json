@@ -40,6 +40,77 @@
     "frameProfile": "d89",
     "divider": "d0"
   },
-  "cornerAdd": 260,
-  "panelAdd": 36
+  "cornerAdd": 140,
+  "cornerNotes": "Outer size = profile + 2 x the corner's perSide (its 130 mm leg sits inside the profile). cornerAdd is used when no corner type matches.",
+  "corners": [
+    {
+      "pattern": "^APS Ecke Gu",
+      "perSide": 70
+    },
+    {
+      "pattern": "^APS Ecke Kunststoff",
+      "perSide": 75
+    }
+  ],
+  "panelAdd": 36,
+  "panels": {
+    "notes": "Panel = seat-to-seat - 2 x clearance; seat-to-seat = clear space between the profiles + 2 x seatDepth. W = the shorter side. height = panel height (depth in the seat). A side over maxSize needs a divider. An opening (seat to seat) below oneInnerPanelBelow gets the 1T master, otherwise 2T.",
+    "seatDepth": 20,
+    "maxSize": 2400,
+    "oneInnerPanelBelow": 500,
+    "types": {
+      "FP": {
+        "clearance": 2,
+        "height": 47
+      },
+      "TP": {
+        "clearance": 3,
+        "height": 42
+      },
+      "RP": {
+        "clearance": 2,
+        "height": 44
+      }
+    }
+  },
+  "faceNamesNotes": "Faces each part must have named (iLogic Assign Name) so the app can mate it. panelAu = the -Au tray part of a panel. Checked by Files > Check named faces.",
+  "faceNames": {
+    "frameProfile": [
+      "End_A",
+      "End_B",
+      "Out_1",
+      "Out_2",
+      "Seat_1",
+      "Seat_2"
+    ],
+    "divider": [
+      "End_A",
+      "End_B",
+      "Out",
+      "Side_A",
+      "Side_B",
+      "Seat_A",
+      "Seat_B"
+    ],
+    "corner": [
+      "Leg_X",
+      "Leg_Y",
+      "Leg_Z",
+      "Out_X",
+      "Out_Y",
+      "Out_Z"
+    ],
+    "joint": [
+      "Base",
+      "Leg",
+      "Out"
+    ],
+    "panelAu": [
+      "Top",
+      "Edge_W0",
+      "Edge_W1",
+      "Edge_L0",
+      "Edge_L1"
+    ]
+  }
 }

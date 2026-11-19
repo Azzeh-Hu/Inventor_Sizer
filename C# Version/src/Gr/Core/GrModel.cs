@@ -67,7 +67,8 @@ namespace InventorSizer.Core
         public int Corners, Joints, ConstraintCount;
         public List<string> Unplaced = new List<string>(), Warnings = new List<string>(), Removed = new List<string>();
         public bool Edited;
-        public int[] RealMap;
+        public int[] RealMap;   // assembly axis (0 X, 1 Y, 2 Z) of GR length, width, height
+        public int Up = 2;       // assembly axis that is up (Z unless the user changes it)
         public GrFrame Frame(int no) => Frames.FirstOrDefault(f => f.No == no) ?? throw new SizerException($"There is no Box {no - 1}.");
         public GrFrame ById(int id) => Frames.FirstOrDefault(f => f.Id == id);
     }
@@ -82,8 +83,23 @@ namespace InventorSizer.Core
 
     public static class Gr
     {
-        public static double CornerAdd = 260;   // outer = profile + 2 corners of 130
+        // Outer size = profile + CornerAdd (2 corners). Each corner type adds its own amount per side
+        // (APS Ecke Guss 70, Kunststoff 75; its 130 mm leg sits inside the profile). Set from the
+        // corners of the loaded GR; CornerAdd is the default when no corner type matches.
+        public static double CornerAdd = 140;
+        public static List<(Regex Pattern, double PerSide)> CornerTypes = new List<(Regex, double)> { (new Regex("^APS Ecke Gu"), 70), (new Regex("^APS Ecke Kunststoff"), 75) };
         public static double PanelAdd = 36;
+
+        // Panel sizing: panel = seat-to-seat - 2 x clearance, seat-to-seat = clear space between
+        // the profiles + 2 x SeatDepth. W = the shorter side. A side over MaxPanel needs a divider.
+        public class PanelRule { public string Type; public double Clearance, Height; }
+        public static double SeatDepth = 20, MaxPanel = 2400, SplitBelow = 500;
+        public static Dictionary<string, PanelRule> PanelRules = new Dictionary<string, PanelRule>
+        {
+            ["FP"] = new PanelRule { Type = "FP", Clearance = 2, Height = 47 },
+            ["TP"] = new PanelRule { Type = "TP", Clearance = 3, Height = 42 },
+            ["RP"] = new PanelRule { Type = "RP", Clearance = 2, Height = 44 },
+        };
         public static Dictionary<string, string> LengthParams = new Dictionary<string, string> { ["frameProfile"] = "d89", ["divider"] = "d0" };
         public static List<(string Kind, Regex Pattern)> PartRules = new List<(string, Regex)>
         {
@@ -103,6 +119,22 @@ namespace InventorSizer.Core
                 var lp = j.Obj("lengthParameters");
                 if (lp != null) foreach (var k in lp.OrderedKeys) LengthParams[k] = lp.Str(k);
                 CornerAdd = j.Num("cornerAdd", CornerAdd); PanelAdd = j.Num("panelAdd", PanelAdd);
+                var corners = j.Arr("corners").OfType<JsonObject>().Select(r => (new Regex(r.Str("pattern")), r.Num("perSide", 70))).ToList();
+                if (corners.Count > 0) CornerTypes = corners;
+                var fn = j.Obj("faceNames");
+                if (fn != null) foreach (var k in fn.OrderedKeys) FaceNames[k] = fn.Arr(k).Select(x => Convert.ToString(x, U.Inv)).ToArray();
+                var pn = j.Obj("panels");
+                if (pn != null)
+                {
+                    SeatDepth = pn.Num("seatDepth", SeatDepth); MaxPanel = pn.Num("maxSize", MaxPanel); SplitBelow = pn.Num("oneInnerPanelBelow", SplitBelow);
+                    var types = pn.Obj("types");
+                    if (types != null)
+                        foreach (var k in types.OrderedKeys)
+                        {
+                            var t = types.Obj(k);
+                            if (t != null) PanelRules[k] = new PanelRule { Type = k, Clearance = t.Num("clearance", 2), Height = t.Num("height", 0) };
+                        }
+                }
                 Log.Write($"GR part rules: {PartRules.Count} from {path}");
             }
             catch (Exception e) { Log.Write($"GR part rules in {path} could not be read: {e.Message}"); }
@@ -112,6 +144,55 @@ namespace InventorSizer.Core
         {
             foreach (var r in PartRules) if (r.Pattern.IsMatch(baseName)) return r.Kind;
             return "other";
+        }
+
+        // CornerAdd for the corner type the GR uses (the first corner that matches a corner type).
+        public static void SetCornerAdd(IEnumerable<GrComponent> comps)
+        {
+            foreach (var c in comps.Where(c => c.Kind == "corner"))
+                foreach (var t in CornerTypes)
+                    if (t.Pattern.IsMatch(c.Base)) { CornerAdd = 2 * t.PerSide; Log.Dev($"GR: corner {c.Base} adds {U.F(t.PerSide)} mm per side"); return; }
+        }
+
+        public class PanelSize { public string Type, Name, Inner; public double W, L, H, OpenW, OpenL; public string Problem; }
+
+        // The panel for an opening, from the clear space between its profiles (mm, either order).
+        public static PanelSize PanelFor(string type, double clearA, double clearB)
+        {
+            if (!PanelRules.TryGetValue(type ?? "", out var r)) throw new SizerException($"No panel rule for '{type}' in GR.json.");
+            double oa = clearA + 2 * SeatDepth, ob = clearB + 2 * SeatDepth;
+            double openW = Math.Min(oa, ob), openL = Math.Max(oa, ob);
+            var p = new PanelSize { Type = type, OpenW = openW, OpenL = openL, W = openW - 2 * r.Clearance, L = openL - 2 * r.Clearance, H = r.Height };
+            p.Inner = openW < SplitBelow ? "1T" : "2T";
+            p.Name = $"{type}-{U.F(p.W)}x{U.F(p.L)}x{U.F(p.H)}";
+            if (p.W <= 0) p.Problem = "the opening is too small for a panel";
+            else if (p.L > MaxPanel) p.Problem = $"{U.F(p.L)} mm is over the {U.F(MaxPanel)} mm maximum: add a divider";
+            return p;
+        }
+
+        // Faces each library part must have named (iLogic "Assign Name") so the app can mate it.
+        // "panelAu" = the -Au tray part of a panel. From GR.json "faceNames".
+        public static Dictionary<string, string[]> FaceNames = new Dictionary<string, string[]>
+        {
+            ["frameProfile"] = new[] { "End_A", "End_B", "Out_1", "Out_2", "Seat_1", "Seat_2" },
+            ["divider"] = new[] { "End_A", "End_B", "Out", "Side_A", "Side_B", "Seat_A", "Seat_B" },
+            ["corner"] = new[] { "Leg_X", "Leg_Y", "Leg_Z", "Out_X", "Out_Y", "Out_Z" },
+            ["joint"] = new[] { "Base", "Leg", "Out" },
+            ["panelAu"] = new[] { "Top", "Edge_W0", "Edge_W1", "Edge_L0", "Edge_L1" },
+        };
+
+        public static string FaceKind(string fileLeaf) => Regex.IsMatch(fileLeaf ?? "", @"-Au$") ? "panelAu" : Kind(fileLeaf ?? "");
+
+        // One line per part: the names it has and the ones it is missing (null = a part that needs no names).
+        public static string NameReport(string fileLeaf, IEnumerable<string> have, out bool ok)
+        {
+            ok = true;
+            if (!FaceNames.TryGetValue(FaceKind(fileLeaf), out var want)) return null;
+            var got = new HashSet<string>(have ?? Enumerable.Empty<string>());
+            var missing = want.Where(n => !got.Contains(n)).ToList();
+            var extra = got.Where(n => !want.Contains(n)).OrderBy(n => n, StringComparer.Ordinal).ToList();
+            ok = missing.Count == 0;
+            return $"{fileLeaf}: " + (ok ? "all " + want.Length + " names" : "missing " + string.Join(", ", missing)) + (extra.Count > 0 ? $" (other names: {string.Join(", ", extra)})" : "");
         }
 
         public static double LengthOf(string baseName)
@@ -180,6 +261,9 @@ namespace InventorSizer.Core
                             });
                         }
                         break;
+                    case "InventorReader":
+                        ReadInventorReader(root, d);
+                        break;
                     default: throw new SizerException($"{Path.GetFileName(path)} is not a GR export (root element '{root.Name}').");
                 }
             }
@@ -189,6 +273,56 @@ namespace InventorSizer.Core
                     if (!string.IsNullOrEmpty(n) && !d.Components.ContainsKey(n)) d.Components[n] = NewComponent(n, "");
             d.Source = string.Join(", ", names);
             return d;
+        }
+
+        // InventorReader export (test data): a tree of <Node Text=...> with <Property Name=...>.
+        // The GR is the assembly, top level or a sub-assembly (e.g. 8185 GR inside 8185 ZB), whose
+        // own components hold the most corners. Range boxes are "a x b x c mm, from (x, y, z) mm".
+        static void ReadInventorReader(XmlElement root, GrData d)
+        {
+            string Prop(XmlNode n, string name) => n.SelectSingleNode($"Property[@Name='{name}']")?.InnerText;
+            var listRx = new Regex(@"^(Components|Constraints) \(\d+\)$");
+            XmlNode Section(XmlNode asm, string what) => asm.SelectNodes("Node").Cast<XmlNode>().FirstOrDefault(n => (n.Attributes?["Text"]?.Value ?? "").StartsWith(what + " (") && listRx.IsMatch(n.Attributes["Text"].Value));
+            XmlNode best = null; int bestCorners = 0;
+            foreach (XmlNode n in root.SelectNodes("//Node"))
+            {
+                var comps = Section(n, "Components");
+                if (comps == null) continue;
+                int corners = comps.SelectNodes("Node").Cast<XmlNode>().Count(c => Kind(Regex.Replace(c.Attributes?["Text"]?.Value ?? "", @":\d+$", "")) == "corner");
+                if (Section(n, "Constraints") != null) corners += 10000;   // the assembly's own definition, with its constraints
+                if (corners > bestCorners) { best = n; bestCorners = corners; }
+            }
+            if (best == null) throw new SizerException("No assembly with corners (APS Ecke) found in the InventorReader export.");
+            string text = Regex.Replace(best.Attributes["Text"].Value, "^File: ", "");
+            if (d.Name == "") d.Name = Regex.Replace(Path.GetFileNameWithoutExtension(text), @":\d+$", "");
+            if (d.SourcePath == "") d.SourcePath = Prop(best, "File") ?? Prop(best.ParentNode, "File") ?? "";
+            var num = new Regex(@"-?\d+(?:\.\d+)?");
+            foreach (XmlNode c in Section(best, "Components").SelectNodes("Node"))
+            {
+                string name = c.Attributes["Text"].Value.Trim();
+                var comp = NewComponent(name, Prop(c, "File"));
+                var rb = Prop(c, "RangeBox");
+                if (rb != null)
+                {
+                    var v = num.Matches(rb).Cast<Match>().Select(x => U.P(x.Value)).ToArray();
+                    if (v.Length == 6 && v.Take(3).Any(x => x != 0)) comp.Box = new[] { v[3], v[4], v[5], v[3] + v[0], v[4] + v[1], v[5] + v[2] };
+                }
+                d.Components[name] = comp;
+            }
+            var cons = Section(best, "Constraints");
+            if (cons == null) return;
+            foreach (XmlNode k in cons.SelectNodes("Node"))
+            {
+                string t = k.Attributes["Text"].Value;
+                var tm = Regex.Match(t, @"\[(\w+?)(?:Constraint)?\]");
+                string offset = k.SelectNodes("Property[@Name='Offset']").Cast<XmlNode>().Select(x => x.InnerText).FirstOrDefault(x => Mm(x) != null)
+                                ?? k.SelectNodes("Property[@Name='Angle']").Cast<XmlNode>().Select(x => x.InnerText).FirstOrDefault() ?? "";
+                d.Constraints.Add(new GrConstraint
+                {
+                    Name = Prop(k, "Name") ?? Regex.Match(t, @"^\S+").Value, Type = tm.Success ? tm.Groups[1].Value : "",
+                    A = Prop(k, "Component one") ?? "", B = Prop(k, "Component two") ?? "", Value = offset, Suppressed = Prop(k, "Suppressed") == "True"
+                });
+            }
         }
 
         // ------------------------------------------------------------------ building the model
@@ -205,9 +339,13 @@ namespace InventorSizer.Core
             var l = values.ToList(); int i = l.IndexOf(v); if (i >= 0) l.RemoveAt(i); return l.ToArray();
         }
 
-        public static GrModel Build(GrData data)
+        public static string AxisName(int axis) => "XYZ"[axis].ToString();
+
+        // up = the assembly axis that is up: 0 X, 1 Y, 2 Z (the standard GR has Z up).
+        public static GrModel Build(GrData data, int up = 2)
         {
             var comps = data.Components;
+            SetCornerAdd(comps.Values);
             string KindOf(string n) => comps.TryGetValue(n, out var c) ? c.Kind : "other";
             var active = data.Constraints.Where(c => !c.Suppressed && !string.IsNullOrEmpty(c.A) && !string.IsNullOrEmpty(c.B)).ToList();
             var warnings = new List<string>();
@@ -319,6 +457,10 @@ namespace InventorSizer.Core
                 else { f.Lx = r.Min(); f.Hz = r.Max(); }
             }
 
+            // With real positions: height along the up axis, length along the horizontal axis the GR
+            // is longest on, width across. Replaces the guess above.
+            var realMap = OrientFromReal(frames, comps, owner, up);
+
             // Placement relations (kept, so edits re-use them).
             var root = frames.OrderByDescending(f => f.Neighbours.Count).ThenBy(f => f.Id).First();
             root.Place = "root"; root.Dir = 0;
@@ -346,7 +488,7 @@ namespace InventorSizer.Core
             var model = new GrModel
             {
                 Name = data.Name, Source = data.Source, SourcePath = data.SourcePath, Frames = frames, Components = comps, Order = order,
-                Unplaced = unplaced, Warnings = warnings, ConstraintCount = active.Count
+                Unplaced = unplaced, Warnings = warnings, ConstraintCount = active.Count, RealMap = realMap, Up = up
             };
             SetRealGeometry(model);
             UpdateLayout(model);
@@ -355,6 +497,38 @@ namespace InventorSizer.Core
             UpdateLayout(model);
             Log.Dev("GR build: layout done" + (model.RealMap != null ? " (from the real part positions)" : " (inferred from the constraints)"));
             return model;
+        }
+
+        static int[] OrientFromReal(List<GrFrame> frames, Dictionary<string, GrComponent> comps, Dictionary<string, int> owner, int up)
+        {
+            var real = new Dictionary<int, (double[] Min, double[] Max)>();
+            foreach (var f in frames)
+            {
+                var boxes = owner.Where(o => o.Value == f.Id && comps[o.Key].Box != null).Select(o => comps[o.Key].Box).ToList();
+                if (boxes.Count < 8) continue;
+                real[f.Id] = (Enumerable.Range(0, 3).Select(k => boxes.Min(b => b[k])).ToArray(), Enumerable.Range(0, 3).Select(k => boxes.Max(b => b[k + 3])).ToArray());
+            }
+            if (real.Count == 0) return null;
+            var flat = new[] { 0, 1, 2 }.Where(a => a != up).ToArray();
+            double Span(int a) => real.Values.Max(r => r.Max[a]) - real.Values.Min(r => r.Min[a]);
+            int lenAxis = Span(flat[0]) >= Span(flat[1]) ? flat[0] : flat[1];
+            var map = new[] { lenAxis, flat[0] == lenAxis ? flat[1] : flat[0], up };
+            var sizes = new Dictionary<int, double[]>();
+            foreach (var f in frames.Where(f => real.ContainsKey(f.Id)))
+            {
+                var left = f.Sizes.ToList(); var s = new double[3];
+                for (int g = 0; g < 3; g++)
+                {
+                    double want = real[f.Id].Max[map[g]] - real[f.Id].Min[map[g]] - CornerAdd;
+                    var best = left.OrderBy(v => Math.Abs(v - want)).First();
+                    if (Math.Abs(best - want) > 5) { Log.Dev($"GR: frame {f.Id} real size does not match its profiles + corners - the sizes are a guess"); return null; }
+                    s[g] = best; left.Remove(best);
+                }
+                sizes[f.Id] = s;
+            }
+            foreach (var kv in sizes) { var f = frames.First(x => x.Id == kv.Key); f.Lx = kv.Value[0]; f.Wy = kv.Value[1]; f.Hz = kv.Value[2]; }
+            Log.Dev($"GR: up = {AxisName(up)}, length along {AxisName(map[0])}, width along {AxisName(map[1])}");
+            return map;
         }
 
         static Follow Nearest(GrFrame f, double len, double tol)
@@ -404,17 +578,21 @@ namespace InventorSizer.Core
             }
             var first = m.Frames.FirstOrDefault(f => real.ContainsKey(f.Id));
             if (first == null) return;
-            var ext = Enumerable.Range(0, 3).Select(k => real[first.Id].Max[k] - real[first.Id].Min[k]).ToArray();
-            var want = new[] { first.Lx + CornerAdd, first.Wy + CornerAdd, first.Hz + CornerAdd };
-            var map = new[] { -1, -1, -1 }; var used = new bool[3];
-            foreach (int g in new[] { 2, 0, 1 })
+            var map = m.RealMap;
+            if (map == null)
             {
-                int best = -1; double diff = double.MaxValue;
-                for (int a = 0; a < 3; a++) if (!used[a] && Math.Abs(ext[a] - want[g]) < diff) { best = a; diff = Math.Abs(ext[a] - want[g]); }
-                if (diff > 5) { Log.Dev($"GR: real frame size {string.Join(" x ", ext.Select(U.F))} does not match profile + corners - using the inferred layout"); return; }
-                map[g] = best; used[best] = true;
+                var ext = Enumerable.Range(0, 3).Select(k => real[first.Id].Max[k] - real[first.Id].Min[k]).ToArray();
+                var want = new[] { first.Lx + CornerAdd, first.Wy + CornerAdd, first.Hz + CornerAdd };
+                map = new[] { -1, -1, -1 }; var used = new bool[3];
+                foreach (int g in new[] { 2, 0, 1 })
+                {
+                    int best = -1; double diff = double.MaxValue;
+                    for (int a = 0; a < 3; a++) if (!used[a] && Math.Abs(ext[a] - want[g]) < diff) { best = a; diff = Math.Abs(ext[a] - want[g]); }
+                    if (diff > 5) { Log.Dev($"GR: real frame size {string.Join(" x ", ext.Select(U.F))} does not match profile + corners - using the inferred layout"); return; }
+                    map[g] = best; used[best] = true;
+                }
+                m.RealMap = map;
             }
-            m.RealMap = map;
             double[] ToGr(double[] p) => new[] { p[map[0]], p[map[1]], p[map[2]] };
             double[] Centre(int id) => ToGr(Enumerable.Range(0, 3).Select(k => (real[id].Min[k] + real[id].Max[k]) / 2).ToArray());
             foreach (var f in m.Frames)
@@ -665,7 +843,7 @@ namespace InventorSizer.Core
                     return (object)o;
                 }).ToList(),
                 ["warnings"] = m.Warnings.Cast<object>().ToList(), ["unplaced"] = m.Unplaced.Cast<object>().ToList(), ["removed"] = m.Removed.Cast<object>().ToList(),
-                ["realMap"] = m.RealMap == null ? null : m.RealMap.Select(x => (object)(double)x).ToList()
+                ["realMap"] = m.RealMap == null ? null : m.RealMap.Select(x => (object)(double)x).ToList(), ["up"] = (double)m.Up
             };
             File.WriteAllText(path, Json.Write(j), new UTF8Encoding(false));
         }
@@ -703,6 +881,9 @@ namespace InventorSizer.Core
                 m.Frames.Add(f);
             }
             m.Warnings = Strs(j["warnings"]); m.Unplaced = Strs(j["unplaced"]); m.Removed = Strs(j["removed"]);
+            if (j["cornerAdd"] != null) CornerAdd = j.Num("cornerAdd", CornerAdd);
+            SetCornerAdd(m.Components.Values);
+            m.Up = j["up"] == null ? 2 : (int)j.Num("up");
             var rm = Ints(j["realMap"]);
             if (rm.Count == 3) m.RealMap = rm.ToArray();
             UpdateLayout(m);
