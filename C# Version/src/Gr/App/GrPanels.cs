@@ -32,11 +32,22 @@ namespace InventorSizer
             return list;
         }
 
+        // The entity (a face of the part) as seen in the GR: ComponentOccurrence.CreateGeometryProxy.
+        // Its result is an out argument, which late-bound (dynamic) COM calls cannot pass; called
+        // through IDispatch with the second argument marked by-reference.
         static dynamic Proxy(dynamic occ, dynamic entity)
         {
-            object result = null;
-            occ.CreateGeometryProxy(entity, out result);
-            return result;
+            object o = occ;
+            var args = new object[] { (object)entity, null };
+            var byRef = new System.Reflection.ParameterModifier(2);
+            byRef[1] = true;
+            try
+            {
+                o.GetType().InvokeMember("CreateGeometryProxy", System.Reflection.BindingFlags.InvokeMethod, null, o, args, new[] { byRef }, null, null);
+            }
+            catch (System.Reflection.TargetInvocationException e) when (e.InnerException != null) { throw e.InnerException; }
+            if (args[1] == null) throw new SizerException("Inventor returned no face in the GR for a named face.");
+            return args[1];
         }
 
         // A planar face's outward normal and a point on it (assembly cm).
