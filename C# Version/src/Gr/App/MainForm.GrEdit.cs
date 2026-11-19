@@ -295,12 +295,23 @@ namespace InventorSizer
             string target = Path.Combine(folder, name + ".iam");
             if (File.Exists(target)) { Log.Write($"  {name}.iam exists in {Path.GetFileName(folder)} - used as it is"); return target; }
             var s = Standards.ForName(standards, name) ?? throw new SizerException($"No panel type for '{name}'.");
+            // The stored panel values as the base (hole edge, diameters, clearance ...), but what the
+            // panel window would set itself for a new size: the type's defaults, the default hinge /
+            // handle counts, automatic hole counts, and the inner split from the width (not the 1T /
+            // 2T picked in the Types browser).
             var ps = File.Exists(ParamPath) ? ParamFile.Read(ParamPath) : GridParams();
-            void Set(string n, double v) { var p = ps.FirstOrDefault(x => x.Name == n); if (p != null) p.Value = v; else ps.Add(new Param(n, v, "mm")); }
+            void Set(string n, double v, string unit = "mm") { var p = ps.FirstOrDefault(x => x.Name == n); if (p != null) p.Value = v; else ps.Add(new Param(n, v, unit)); }
+            foreach (var d in ParamFile.Defaults.Where(d => d[0] == "HingeCount" || d[0] == "HandleCount" || d[0] == "HandleDir")) Set(d[0], U.P(d[1]), d[2]);
             foreach (var kv in s.Defaults) Set(kv.Key, kv.Value);
             var m = U.SizeRegex.Match(name);
             for (int i = 0; i < 3; i++) Set(U.SizeParams[i], U.P(m.Groups[i + 1].Value));
-            var set = settings.Clone(); set.OutputFolder = folder;
+            var set = settings.Clone(); set.OutputFolder = folder; set.ForceSplit = 0;
+            double pitch = set.MaxHolePitch > 0 ? set.MaxHolePitch : 400;
+            var v = ps.ToDictionary(p => p.Name, p => p.Value);
+            double edge = v.TryGetValue("HoleEdge", out var he) ? he : 50, mid = edge - set.Thickness - (v.TryGetValue("Clearance", out var cl) ? cl : 0.5);
+            bool split = HoleRules.InnerSplit(v["Width"], set) >= 2;
+            Set("HolesL", Math.Max(s.MinHolesL, HoleRules.AutoCount(v["Length"], edge, pitch, false)), "ul");
+            Set("HolesW", split ? HoleRules.AutoCountSplitW(v["Width"], edge, mid, pitch, s.EvenSplitHolesW) : HoleRules.AutoCount(v["Width"], edge, pitch, false), "ul");
             string paramCopy = Path.Combine(Path.GetTempPath(), "InventorSizer-GR-panel-params.xml");   // the panel tool's own Parameters.xml stays as it is
             Inv.ApplyPanel(name, ps, set, paramCopy, standards, s);
             Inv.CloseIfOpen(target);

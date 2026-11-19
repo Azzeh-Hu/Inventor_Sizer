@@ -133,14 +133,18 @@ namespace InventorSizer
             Directory.CreateDirectory(job.Folder);
 
             // 1. the panel files, one per size
-            var files = new Dictionary<string, string>();
+            var files = new Dictionary<string, string>(); var failed = new Dictionary<string, string>();
             foreach (var name in planned.Select(o => (job.Prefix != "" ? job.Prefix + " " : "") + o.Panel.Name).Distinct())
-                Log.Measure($"Panel {name}", () => { files[name] = job.MakePanel(name, job.Folder); });
+                {
+                    try { Log.Measure($"Panel {name}", () => { files[name] = job.MakePanel(name, job.Folder); }); }
+                    catch (Exception e) { failed[name] = e.Message; Log.Write($"  {name} could not be made: {e.Message}"); }
+                }
 
             int placed = 0, mated = 0; var problems = new List<string>();
             foreach (var o in planned)
             {
                 string name = (job.Prefix != "" ? job.Prefix + " " : "") + o.Panel.Name;
+                if (!files.ContainsKey(name)) { problems.Add($"{o.Label} ({name}): not placed, the panel could not be made ({(failed.TryGetValue(name, out var why) ? why : "?")})"); continue; }
                 try
                 {
                     Log.Measure($"Place {name} in {o.Label}", () =>
