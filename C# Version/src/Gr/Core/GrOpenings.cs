@@ -20,6 +20,7 @@ namespace InventorSizer.Core
         public double Plane, U0, U1, V0, V1;       // layout coordinates of the face plane and the clear space
         public double ClearU => U1 - U0;
         public double ClearV => V1 - V0;
+        public string[] Support = new string[4];   // the profile / divider on each side: U min, U max, V min, V max
         public string Type = "";                   // chosen panel type for an empty opening, or a replacement for a filled one
         public Gr.PanelSize Panel;                 // the panel the rules give for Type (or the existing type)
         public string Label => $"{Frame.Label} {Face} {GrOpenings.Pos(this)}";
@@ -111,6 +112,18 @@ namespace InventorSizer.Core
                         int u = a == 0 ? 1 : 0, v = a == 2 ? 1 : 2;
                         double plane = o[a] + (side == 0 ? 0 : outer[a]);
                         var rects = new List<double[]> { new[] { o[u] + ProfileWidth, o[u] + outer[u] - ProfileWidth, o[v] + ProfileWidth, o[v] + outer[v] - ProfileWidth } };
+                        // the frame profiles around the face: U min / max run along V, V min / max along U
+                        var profs = m.Components.Values.Where(c => c.Kind == "frameProfile" && c.Frame == f.Id && c.Follow.Count > 0)
+                            .Select(c => (c.Name, Dim: DimIndex(c.Follow[0].Dim))).ToList();
+                        string ProfileAt(int along, int across, double at) => profs.Where(p => p.Dim == along)
+                            .Select(p => (p.Name, B: ProfileBox(m, f, p.Name, p.Dim)))
+                            .Where(p => p.B != null && Math.Abs(p.B.Value.Min[a] - (plane - (side == 0 ? 0 : ProfileWidth))) < 5 && Math.Abs(p.B.Value.Min[across] - at) < 5)
+                            .Select(p => p.Name).FirstOrDefault();
+                        var sup = new Dictionary<double[], string[]>
+                        {
+                            [rects[0]] = new[] { ProfileAt(v, u, o[u]), ProfileAt(v, u, o[u] + outer[u] - ProfileWidth), ProfileAt(u, v, o[v]), ProfileAt(u, v, o[v] + outer[v] - ProfileWidth) }
+                        };
+                        var divNames = m.Components.Values.Where(c => c.Kind == "divider" && c.Frame == f.Id && boxes.ContainsKey(c.Name)).ToDictionary(c => boxes[c.Name].Min, c => c.Name);
                         // dividers lying on this face: thin across the face, at the plane
                         var divs = m.Components.Values.Where(c => c.Kind == "divider" && c.Frame == f.Id && boxes.ContainsKey(c.Name))
                             .Select(c => boxes[c.Name]).Where(b => OnPlane(b, a, plane, 120))
@@ -127,6 +140,9 @@ namespace InventorSizer.Core
                                 if (!crosses) { next.Add(r); continue; }
                                 var lo = (double[])r.Clone(); lo[ci + 1] = d.Min[ca];
                                 var hi = (double[])r.Clone(); hi[ci] = d.Max[ca];
+                                divNames.TryGetValue(d.Min, out var dn);
+                                var sl = (string[])sup[r].Clone(); sl[ci + 1] = dn; sup[lo] = sl;
+                                var sh = (string[])sup[r].Clone(); sh[ci] = dn; sup[hi] = sh;
                                 if (lo[ci + 1] - lo[ci] > 20) next.Add(lo);
                                 if (hi[ci + 1] - hi[ci] > 20) next.Add(hi);
                             }
@@ -135,7 +151,7 @@ namespace InventorSizer.Core
                         string face = FaceName(m, a, side);
                         foreach (var r in rects.Where(r => r[1] - r[0] >= MinOpening && r[3] - r[2] >= MinOpening).OrderBy(r => r[2]).ThenBy(r => r[0]))
                         {
-                            var op = new GrOpening { Frame = f, Axis = a, Side = side, U = u, V = v, Plane = plane, U0 = r[0], U1 = r[1], V0 = r[2], V1 = r[3], Face = face };
+                            var op = new GrOpening { Frame = f, Axis = a, Side = side, U = u, V = v, Plane = plane, U0 = r[0], U1 = r[1], V0 = r[2], V1 = r[3], Face = face, Support = sup[r] };
                             op.Key = $"{f.Id}|{a}{side}|{Math.Round(r[0] - o[u])}|{Math.Round(r[2] - o[v])}";
                             Classify(m, op, boxes);
                             list.Add(op);
@@ -144,6 +160,22 @@ namespace InventorSizer.Core
             }
             foreach (var op in list) { m.PanelChoice.TryGetValue(op.Key, out var t); op.Type = t ?? ""; Size(op); }
             return list;
+        }
+
+        // A frame profile's box in layout coordinates: from its real position when there is one,
+        // else from the frame size (its length along dim, 70 x 70 at its edge).
+        static (double[] Min, double[] Max)? ProfileBox(GrModel m, GrFrame f, string name, int dim)
+        {
+            var c = m.Components[name];
+            if (c.Box == null || m.RealMap == null || f.RealOrigin == null) return null;
+            var mn = new double[3]; var mx = new double[3];
+            for (int g = 0; g < 3; g++)
+            {
+                double a0 = Math.Min(c.Box[m.RealMap[g]], c.Box[m.RealMap[g] + 3]) - f.RealOrigin[g], a1 = Math.Max(c.Box[m.RealMap[g]], c.Box[m.RealMap[g] + 3]) - f.RealOrigin[g];
+                if (g != dim && a0 > (f.Size0 ?? f.Size)[g] / 2) { a0 += f.Size[g] - (f.Size0 ?? f.Size)[g]; a1 += f.Size[g] - (f.Size0 ?? f.Size)[g]; }
+                mn[g] = f.Pos[g] + a0; mx[g] = f.Pos[g] + a1;
+            }
+            return (mn, mx);
         }
 
         static bool OnPlane((double[] Min, double[] Max) b, int a, double plane, double depth) =>

@@ -5,6 +5,7 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.IO;
 using System.Linq;
 using System.Windows.Forms;
 using InventorSizer.Core;
@@ -39,7 +40,8 @@ namespace InventorSizer
             var btnDefaults = new FlatButton("Defaults", ButtonKind.Ghost, 0, 30) { Margin = new Padding(2, 0, 0, 0) };
             var btnSides = new FlatButton("Swap sides", ButtonKind.Ghost, 0, 30) { Margin = new Padding(2, 0, 0, 0) };
             var btnList = new FlatButton("Panel list...", ButtonKind.Ghost, 0, 30) { Margin = new Padding(2, 0, 0, 0) };
-            openingsCard.Actions.Controls.AddRange(new Control[] { btnDefaults, btnSides, btnList });
+            var btnPlace = new FlatButton("Place in Inventor", ButtonKind.Ghost, 0, 30) { Margin = new Padding(2, 0, 0, 0) };
+            openingsCard.Actions.Controls.AddRange(new Control[] { btnDefaults, btnSides, btnList, btnPlace });
             openingsCard.Controls.Add(grOpGrid);
             grColumn.Controls.Add(Spacer(DockStyle.Bottom, Theme.Gap));
             grColumn.Controls.Add(openingsCard);
@@ -63,6 +65,15 @@ namespace InventorSizer
                     if (d.ShowDialog(this) == DialogResult.OK) { GrOpenings.ExportPanelList(gr, ops, d.FileName); Log.Write($"Saved panel list {d.FileName}"); }
             });
 
+            btnPlace.Click += (s, e) => Step("Place panels in Inventor", () =>
+            {
+                if (gr == null) throw new SizerException("Load a GR first.");
+                var said = Inv.PlaceGrPanels(gr, new Inv.PanelJob { Prefix = grPrefix.Text.Trim(), MakePanel = MakeGrPanel });
+                Log.Write(said);
+                grData = null;   // the GR in Inventor now differs from the data it was read from
+                foreach (var k in GrOpenings.Planned(GrOpenings.Find(gr)).Select(o => o.Key).ToList()) gr.PanelChoice.Remove(k);
+                Log.Write("  read the GR from Inventor again to see the new panels in the openings");
+            }, true);
             grOpGrid.CurrentCellDirtyStateChanged += (s, e) => { if (grOpGrid.IsCurrentCellDirty && grOpGrid.CurrentCell is DataGridViewComboBoxCell) grOpGrid.CommitEdit(DataGridViewDataErrorContexts.Commit); };
             grOpGrid.EditingControlShowing += (s, e) => { if (e.Control is ComboBox c) { c.BackColor = Theme.Paper; c.ForeColor = Theme.Ink; } };
             grOpGrid.DataError += (s, e) => { e.ThrowException = false; };
@@ -136,6 +147,27 @@ namespace InventorSizer
                 openingsCard.Invalidate();
             }
             finally { syncing = was; }
+        }
+
+        // One GR panel made with the panel tool (unchanged): the stored panel values with the type's
+        // defaults and this size, into Einzelteile\ next to the GR. A file of that name is used as it is.
+        string MakeGrPanel(string name)
+        {
+            string folder = Path.Combine(Path.GetDirectoryName(gr.SourcePath) ?? "", "Einzelteile");
+            Directory.CreateDirectory(folder);
+            string target = Path.Combine(folder, name + ".iam");
+            if (File.Exists(target)) { Log.Write($"  {name}.iam exists in Einzelteile - used as it is"); return target; }
+            var s = Standards.ForName(standards, name) ?? throw new SizerException($"No panel type for '{name}'.");
+            var ps = File.Exists(ParamPath) ? ParamFile.Read(ParamPath) : GridParams();
+            void Set(string n, double v) { var p = ps.FirstOrDefault(x => x.Name == n); if (p != null) p.Value = v; else ps.Add(new Param(n, v, "mm")); }
+            foreach (var kv in s.Defaults) Set(kv.Key, kv.Value);
+            var m = U.SizeRegex.Match(name);
+            for (int i = 0; i < 3; i++) Set(U.SizeParams[i], U.P(m.Groups[i + 1].Value));
+            var set = settings.Clone(); set.OutputFolder = folder;
+            string paramCopy = Path.Combine(Path.GetTempPath(), "InventorSizer-GR-panel-params.xml");   // the panel tool's own Parameters.xml stays as it is
+            Inv.ApplyPanel(name, ps, set, paramCopy, standards, s);
+            Inv.CloseIfOpen(target);
+            return target;
         }
 
         static string Short(string name) => System.Text.RegularExpressions.Regex.Replace(name ?? "", @":\d+$", "");

@@ -50,6 +50,7 @@ namespace InventorSizer.Core
         public double Lx, Wy, Hz, X, Y, Z;
         public List<string> Panels = new List<string>(), Dividers = new List<string>(), Other = new List<string>();
         public List<int> Neighbours = new List<int>();
+        public double[] RealOrigin, Size0;   // with real positions: the box's min corner in GR axes (assembly mm) and its sizes then
         public double[] Pos => new[] { X, Y, Z };
         public double[] Size => new[] { Lx, Wy, Hz };
         public double Get(string dim) => dim == "L" ? Lx : dim == "W" ? Wy : Hz;
@@ -596,6 +597,10 @@ namespace InventorSizer.Core
                     map[g] = best; used[best] = true;
                 }
                 m.RealMap = map;
+            }
+            foreach (var f in m.Frames.Where(f => real.ContainsKey(f.Id)))
+            {
+                var mn = real[f.Id].Min; f.RealOrigin = new[] { mn[map[0]], mn[map[1]], mn[map[2]] }; f.Size0 = f.Size;
             }
             double[] ToGr(double[] p) => new[] { p[map[0]], p[map[1]], p[map[2]] };
             double[] Centre(int id) => ToGr(Enumerable.Range(0, 3).Select(k => (real[id].Min[k] + real[id].Max[k]) / 2).ToArray());
