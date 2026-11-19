@@ -75,6 +75,13 @@ namespace InventorSizer
                 using (var d = new SaveFileDialog { Filter = "Cut list (*.csv)|*.csv", FileName = gr.Name + "-cut-list.csv" })
                     if (d.ShowDialog(this) == DialogResult.OK) { Gr.ExportCutList(gr, d.FileName); Log.Write($"Saved cut list {d.FileName}"); }
             }));
+            grFiles.Separator();
+            grFiles.Add("Check named faces (Inventor)", (s, e) => Step("Check named faces", () =>
+            {
+                var lines = Inv.CheckNamedFaces();
+                foreach (var l in lines) Log.Write(l);
+                Toast.Show(this, lines.Any(l => l.Contains("MISSING")) ? ToastKind.Error : ToastKind.Done, "Named faces", lines[0]);
+            }, true));
             gGrSource.Fit();   // the Files button grew its menu arrow
             btnGrInv.Click += (s, e) => Step("Read GR from Inventor", () => SetGr(Log.Measure("Build the GR model", () => BuildGr(Inv.ReadGr()))), true);
             btnOpenGr.Click += (s, e) => Step("Open GR", () =>

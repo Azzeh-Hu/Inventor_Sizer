@@ -72,5 +72,45 @@
         "height": 44
       }
     }
+  },
+  "faceNamesNotes": "Faces each part must have named (iLogic Assign Name) so the app can mate it. panelAu = the -Au tray part of a panel. Checked by Files > Check named faces.",
+  "faceNames": {
+    "frameProfile": [
+      "End_A",
+      "End_B",
+      "Out_1",
+      "Out_2",
+      "Seat_1",
+      "Seat_2"
+    ],
+    "divider": [
+      "End_A",
+      "End_B",
+      "Out",
+      "Side_A",
+      "Side_B",
+      "Seat_A",
+      "Seat_B"
+    ],
+    "corner": [
+      "Leg_X",
+      "Leg_Y",
+      "Leg_Z",
+      "Out_X",
+      "Out_Y",
+      "Out_Z"
+    ],
+    "joint": [
+      "Base",
+      "Leg",
+      "Out"
+    ],
+    "panelAu": [
+      "Top",
+      "Edge_W0",
+      "Edge_W1",
+      "Edge_L0",
+      "Edge_L1"
+    ]
   }
 }

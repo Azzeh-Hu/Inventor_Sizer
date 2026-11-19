@@ -121,6 +121,8 @@ namespace InventorSizer.Core
                 CornerAdd = j.Num("cornerAdd", CornerAdd); PanelAdd = j.Num("panelAdd", PanelAdd);
                 var corners = j.Arr("corners").OfType<JsonObject>().Select(r => (new Regex(r.Str("pattern")), r.Num("perSide", 70))).ToList();
                 if (corners.Count > 0) CornerTypes = corners;
+                var fn = j.Obj("faceNames");
+                if (fn != null) foreach (var k in fn.OrderedKeys) FaceNames[k] = fn.Arr(k).Select(x => Convert.ToString(x, U.Inv)).ToArray();
                 var pn = j.Obj("panels");
                 if (pn != null)
                 {
@@ -166,6 +168,31 @@ namespace InventorSizer.Core
             if (p.W <= 0) p.Problem = "the opening is too small for a panel";
             else if (p.L > MaxPanel) p.Problem = $"{U.F(p.L)} mm is over the {U.F(MaxPanel)} mm maximum: add a divider";
             return p;
+        }
+
+        // Faces each library part must have named (iLogic "Assign Name") so the app can mate it.
+        // "panelAu" = the -Au tray part of a panel. From GR.json "faceNames".
+        public static Dictionary<string, string[]> FaceNames = new Dictionary<string, string[]>
+        {
+            ["frameProfile"] = new[] { "End_A", "End_B", "Out_1", "Out_2", "Seat_1", "Seat_2" },
+            ["divider"] = new[] { "End_A", "End_B", "Out", "Side_A", "Side_B", "Seat_A", "Seat_B" },
+            ["corner"] = new[] { "Leg_X", "Leg_Y", "Leg_Z", "Out_X", "Out_Y", "Out_Z" },
+            ["joint"] = new[] { "Base", "Leg", "Out" },
+            ["panelAu"] = new[] { "Top", "Edge_W0", "Edge_W1", "Edge_L0", "Edge_L1" },
+        };
+
+        public static string FaceKind(string fileLeaf) => Regex.IsMatch(fileLeaf ?? "", @"-Au$") ? "panelAu" : Kind(fileLeaf ?? "");
+
+        // One line per part: the names it has and the ones it is missing (null = a part that needs no names).
+        public static string NameReport(string fileLeaf, IEnumerable<string> have, out bool ok)
+        {
+            ok = true;
+            if (!FaceNames.TryGetValue(FaceKind(fileLeaf), out var want)) return null;
+            var got = new HashSet<string>(have ?? Enumerable.Empty<string>());
+            var missing = want.Where(n => !got.Contains(n)).ToList();
+            var extra = got.Where(n => !want.Contains(n)).OrderBy(n => n, StringComparer.Ordinal).ToList();
+            ok = missing.Count == 0;
+            return $"{fileLeaf}: " + (ok ? "all " + want.Length + " names" : "missing " + string.Join(", ", missing)) + (extra.Count > 0 ? $" (other names: {string.Join(", ", extra)})" : "");
         }
 
         public static double LengthOf(string baseName)

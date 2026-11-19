@@ -57,6 +57,33 @@ namespace InventorSizer
             return d;
         }
 
+        // Named faces (iLogic "Assign Name") in every part of the active GR, or in the active part:
+        // one line per part file with the names it is missing.
+        public static List<string> CheckNamedFaces()
+        {
+            dynamic doc = App().ActiveDocument;
+            if (doc == null) throw new SizerException("Open a GR assembly, or one library part, in Inventor first.");
+            var docs = new List<dynamic>();
+            if ((int)doc.DocumentType == kAssemblyDocumentObject) { foreach (var d in Items(doc.AllReferencedDocuments)) docs.Add(d); }
+            else docs.Add(doc);
+            var lines = new List<string>(); int bad = 0, checkedParts = 0;
+            foreach (var d in docs)
+            {
+                string leaf = U.LeafName((string)d.FullFileName);
+                var names = new List<string>();
+                try { foreach (var a in Items(d.AttributeManager.FindAttributes("iLogicEntityNameSet", "iLogicEntityName"))) names.Add(Convert.ToString(a.Value)); }
+                catch (Exception e) { Log.Dev($"  {leaf}: names could not be read ({e.Message})"); }
+                var line = Gr.NameReport(leaf, names, out bool ok);
+                if (line == null) continue;
+                checkedParts++;
+                if (!ok) bad++;
+                lines.Add((ok ? "  ok   " : "  MISSING ") + line);
+            }
+            lines.Sort(StringComparer.OrdinalIgnoreCase);
+            lines.Insert(0, $"Named faces: {checkedParts} part file(s) checked, {bad} with missing names.");
+            return lines;
+        }
+
         static dynamic FindLengthParameter(dynamic doc, string kind, double oldLength)
         {
             dynamic ps = doc.ComponentDefinition.Parameters;
