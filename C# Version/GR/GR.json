@@ -110,5 +110,8 @@
       "Edge_L0",
       "Edge_L1"
     ]
-  }
+  },
+  "openingsNotes": "Openings: the clear space on a box face starts profileWidth in from the outer edge (the P150); gaps narrower than minOpening (e.g. beside a damper) are not offered.",
+  "profileWidth": 70,
+  "minOpening": 100
 }

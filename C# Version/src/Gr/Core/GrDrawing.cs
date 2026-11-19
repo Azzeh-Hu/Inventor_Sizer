@@ -81,6 +81,7 @@ namespace InventorSizer.Core
                     var mn = (double[])c.Geo.Min.Clone(); var mx = (double[])c.Geo.Max.Clone();
                     var ext = Enumerable.Range(0, 3).Select(i => mx[i] - mn[i]).ToArray();
                     k = Array.IndexOf(ext, ext.Max());
+                    GrOpenings.ShiftWithSize(c.Geo, size, k, mn, mx);
                     foreach (var r in c.Follow) if (DimIndex(r.Dim) == k) mx[k] += size[k] - c.Geo.Size0[k];
                     if (c.Position != null && c.Geo.Pos0 != null && c.Position != c.Geo.Pos0)
                     {
@@ -125,7 +126,9 @@ namespace InventorSizer.Core
             {
                 var f = m.ById(c.Frame);
                 if (f == null) continue;
-                list.Add(Enumerable.Range(0, 3).Select(i => f.Pos[i] + (c.Geo.Min[i] + c.Geo.Max[i]) / 2).ToArray());
+                var mn = (double[])c.Geo.Min.Clone(); var mx = (double[])c.Geo.Max.Clone();
+                GrOpenings.ShiftWithSize(c.Geo, f.Size, -1, mn, mx);
+                list.Add(Enumerable.Range(0, 3).Select(i => f.Pos[i] + (mn[i] + mx[i]) / 2).ToArray());
             }
             return list;
         }
@@ -135,23 +138,32 @@ namespace InventorSizer.Core
         static void Chains(Draw d, ViewT t, List<DividerLine> lines)
         {
             const double prof = 70;
-            foreach (var g in lines.GroupBy(l => l.Frame.Id + "|" + l.Axis))
+            // The face a divider lies on: of its two cross axes, the one where it sits at the box's
+            // outside (within 120 mm). The spacing runs along the other cross axis. One chain per
+            // box and spacing axis: side dividers and the gefraest ones of the same ring share it.
+            int SpacingAxis(DividerLine l)
             {
-                var ls = g.ToList(); int k = ls[0].Axis; var f = ls[0].Frame;
+                var f = l.Frame; var o = f.Pos; var size = f.Size;
+                var others = Enumerable.Range(0, 3).Where(i => i != l.Axis).ToArray();
+                bool AtFace(int i) => l.A[i] - o[i] < 120 || o[i] + size[i] + Gr.CornerAdd - l.A[i] < 120;
+                if (AtFace(others[0]) && !AtFace(others[1])) return others[1];
+                if (AtFace(others[1]) && !AtFace(others[0])) return others[0];
+                return -1;
+            }
+            foreach (var g in lines.Select(l => (L: l, S: SpacingAxis(l))).Where(x => x.S >= 0).GroupBy(x => x.L.Frame.Id + "|" + x.S))
+            {
+                int s = g.First().S;
+                var all = g.Select(x => x.L).ToList();
+                int k = all.Select(l => l.Axis).OrderByDescending(x => x).First();   // drawn beside the vertical dividers when there are any
+                var ls = all.Where(l => l.Axis == k).ToList(); var f = ls[0].Frame;
                 var o = f.Pos; var size = f.Size;
-                var others = Enumerable.Range(0, 3).Where(i => i != k).ToArray();
-                var spread = others.Select(i => ls.Max(l => l.A[i]) - ls.Min(l => l.A[i])).ToArray();
-                int s = spread[0] >= spread[1] ? others[0] : others[1];
-                if (ls.Count == 1)
-                {
-                    var mid = others.Select(i => Math.Abs(ls[0].A[i] - (o[i] + (size[i] + Gr.CornerAdd) / 2))).ToArray();
-                    s = mid[0] >= mid[1] ? others[0] : others[1];
-                }
-                int third = others.First(i => i != s);
+                int third = Enumerable.Range(0, 3).First(i => i != k && i != s);
                 var vals = new List<double> { o[s] + prof };
-                vals.AddRange(ls.Select(l => l.A[s]).Distinct().OrderBy(v => v));
+                foreach (var v in all.Select(l => Math.Round(l.A[s], 1)).OrderBy(v => v)) if (vals.All(x => Math.Abs(x - v) > 1)) vals.Add(v);
+                vals.Sort();
                 vals.Add(o[s] + size[s] + Gr.CornerAdd - prof);
-                double atK = ls.Min(l => Math.Min(l.A[k], l.B[k])) - 80, atT = ls.Average(l => l.A[third]);
+                var firstFace = ls.OrderBy(l => l.A[third]).First();
+                double atK = ls.Min(l => Math.Min(l.A[k], l.B[k])) - 80, atT = firstFace.A[third];
                 for (int i = 1; i < vals.Count; i++)
                 {
                     var p = new double[3]; var q = new double[3];
@@ -171,8 +183,31 @@ namespace InventorSizer.Core
             if (lines.Count > 0) Chains(d, t, lines);
         }
 
+        public static string OpeningKind(GrOpening o)
+        {
+            if (o.State == "blocked") return "openBlocked";
+            string t = o.Type != "" && o.Type != "keep" ? o.Type : "";
+            if (t != "") return "open" + t;
+            return o.State == "filled" ? "openFilled" : "openEmpty";
+        }
+
+        // Openings as see-through areas on the box faces; the selected one outlined.
+        static void Openings(Draw d, ViewT t, GrModel m)
+        {
+            foreach (var o in GrOpenings.Find(m))
+            {
+                var pts = new[] { (o.U0, o.V0), (o.U1, o.V0), (o.U1, o.V1), (o.U0, o.V1) }.Select(p =>
+                {
+                    var q = new double[3]; q[o.Axis] = o.Plane; q[o.U] = p.Item1; q[o.V] = p.Item2; return ToDraw(q);
+                }).ToList();
+                d.Poly3(OpeningKind(o), t, pts, true);
+                if (o.Key == m.SelectedOpening) d.Poly3("openSelected", t, pts, true);
+            }
+        }
+
         static void Legend(Draw d, double x, double y)
         {
+            double x0 = x;
             foreach (var it in new[] { ("profile", "P150 frame"), ("divider", "P350"), ("dividerMilled", "P350 gefräst"), ("dividerMoved", "moved") })
             {
                 d.Line(it.Item1, x, y, x + 22, y);
@@ -182,6 +217,12 @@ namespace InventorSizer.Core
             x += 6;
             d.Rect("corner", x - 2.5, y - 2.5, x + 2.5, y + 2.5); d.Text("sub", x + 7, y, "corner", 0, 0, "left"); x += 56;
             d.Rect("joint", x - 2.5, y - 2.5, x + 2.5, y + 2.5); d.Text("sub", x + 7, y, "joint", 0, 0, "left");
+            x = x0; y += 18;
+            foreach (var it in new[] { ("openEmpty", "empty"), ("openFP", "FP"), ("openTP", "TP"), ("openRP", "RP"), ("openFilled", "has panel"), ("openBlocked", "blocked") })
+            {
+                d.Rect(it.Item1, x, y - 5, x + 14, y + 5); d.Text("sub", x + 18, y, it.Item2, 0, 0, "left");
+                x += 26 + 7 * it.Item2.Length;
+            }
         }
 
         static void Iso(Draw d, GrModel m, double[] rect)
@@ -190,7 +231,7 @@ namespace InventorSizer.Core
             double L = m.Length, W = m.OuterWidth, H = m.OuterHeight, off = Math.Max(W, L) * 0.07;
             var pts = AllPoints(boxes); pts.Add(new[] { W + off * 1.4, 0, 0 }); pts.Add(new[] { 0, L + off * 1.4, 0 }); pts.Add(new[] { -off, L, H });
             var t = Draw.Fit("Isometric", pts, rect, new double[] { 30, 34, 30, 30 });
-            Frames(d, t, boxes); Dividers(d, t, m); Labels(d, t, boxes, "Isometric");
+            Openings(d, t, m); Frames(d, t, boxes); Dividers(d, t, m); Labels(d, t, boxes, "Isometric");
             d.IsoDim(t, new[] { 0, L, 0 }, new[] { W, L, 0 }, new[] { 0, off, 0 }, U.F(W), "width");
             d.IsoDim(t, new[] { W, 0, 0 }, new[] { W, L, 0 }, new[] { off, 0, 0 }, U.F(L), "length");
             d.IsoDim(t, new[] { 0, L, 0 }, new[] { 0, L, H }, new[] { -off * 0.55, 0, 0 }, U.F(H), "");
@@ -200,7 +241,7 @@ namespace InventorSizer.Core
         {
             var boxes = Boxes(m);
             var t = Draw.Fit(view, AllPoints(boxes), rect, new double[] { 64, 34, 24, 70 });
-            Frames(d, t, boxes); Dividers(d, t, m); Labels(d, t, boxes, view);
+            Openings(d, t, m); Frames(d, t, boxes); Dividers(d, t, m); Labels(d, t, boxes, view);
             double minX = double.MaxValue, maxX = double.MinValue, minY = double.MaxValue, maxY = double.MinValue;
             foreach (var p in AllPoints(boxes)) { var s = Draw.Screen(t, p); minX = Math.Min(minX, s[0]); maxX = Math.Max(maxX, s[0]); minY = Math.Min(minY, s[1]); maxY = Math.Max(maxY, s[1]); }
             if (view == "Front" || view == "Back" || view == "Top" || view == "Bottom")
