@@ -67,7 +67,8 @@ namespace InventorSizer.Core
         public int Corners, Joints, ConstraintCount;
         public List<string> Unplaced = new List<string>(), Warnings = new List<string>(), Removed = new List<string>();
         public bool Edited;
-        public int[] RealMap;
+        public int[] RealMap;   // assembly axis (0 X, 1 Y, 2 Z) of GR length, width, height
+        public int Up = 2;       // assembly axis that is up (Z unless the user changes it)
         public GrFrame Frame(int no) => Frames.FirstOrDefault(f => f.No == no) ?? throw new SizerException($"There is no Box {no - 1}.");
         public GrFrame ById(int id) => Frames.FirstOrDefault(f => f.Id == id);
     }
@@ -311,7 +312,10 @@ namespace InventorSizer.Core
             var l = values.ToList(); int i = l.IndexOf(v); if (i >= 0) l.RemoveAt(i); return l.ToArray();
         }
 
-        public static GrModel Build(GrData data)
+        public static string AxisName(int axis) => "XYZ"[axis].ToString();
+
+        // up = the assembly axis that is up: 0 X, 1 Y, 2 Z (the standard GR has Z up).
+        public static GrModel Build(GrData data, int up = 2)
         {
             var comps = data.Components;
             SetCornerAdd(comps.Values);
@@ -426,6 +430,10 @@ namespace InventorSizer.Core
                 else { f.Lx = r.Min(); f.Hz = r.Max(); }
             }
 
+            // With real positions: height along the up axis, length along the horizontal axis the GR
+            // is longest on, width across. Replaces the guess above.
+            var realMap = OrientFromReal(frames, comps, owner, up);
+
             // Placement relations (kept, so edits re-use them).
             var root = frames.OrderByDescending(f => f.Neighbours.Count).ThenBy(f => f.Id).First();
             root.Place = "root"; root.Dir = 0;
@@ -453,7 +461,7 @@ namespace InventorSizer.Core
             var model = new GrModel
             {
                 Name = data.Name, Source = data.Source, SourcePath = data.SourcePath, Frames = frames, Components = comps, Order = order,
-                Unplaced = unplaced, Warnings = warnings, ConstraintCount = active.Count
+                Unplaced = unplaced, Warnings = warnings, ConstraintCount = active.Count, RealMap = realMap, Up = up
             };
             SetRealGeometry(model);
             UpdateLayout(model);
@@ -462,6 +470,38 @@ namespace InventorSizer.Core
             UpdateLayout(model);
             Log.Dev("GR build: layout done" + (model.RealMap != null ? " (from the real part positions)" : " (inferred from the constraints)"));
             return model;
+        }
+
+        static int[] OrientFromReal(List<GrFrame> frames, Dictionary<string, GrComponent> comps, Dictionary<string, int> owner, int up)
+        {
+            var real = new Dictionary<int, (double[] Min, double[] Max)>();
+            foreach (var f in frames)
+            {
+                var boxes = owner.Where(o => o.Value == f.Id && comps[o.Key].Box != null).Select(o => comps[o.Key].Box).ToList();
+                if (boxes.Count < 8) continue;
+                real[f.Id] = (Enumerable.Range(0, 3).Select(k => boxes.Min(b => b[k])).ToArray(), Enumerable.Range(0, 3).Select(k => boxes.Max(b => b[k + 3])).ToArray());
+            }
+            if (real.Count == 0) return null;
+            var flat = new[] { 0, 1, 2 }.Where(a => a != up).ToArray();
+            double Span(int a) => real.Values.Max(r => r.Max[a]) - real.Values.Min(r => r.Min[a]);
+            int lenAxis = Span(flat[0]) >= Span(flat[1]) ? flat[0] : flat[1];
+            var map = new[] { lenAxis, flat[0] == lenAxis ? flat[1] : flat[0], up };
+            var sizes = new Dictionary<int, double[]>();
+            foreach (var f in frames.Where(f => real.ContainsKey(f.Id)))
+            {
+                var left = f.Sizes.ToList(); var s = new double[3];
+                for (int g = 0; g < 3; g++)
+                {
+                    double want = real[f.Id].Max[map[g]] - real[f.Id].Min[map[g]] - CornerAdd;
+                    var best = left.OrderBy(v => Math.Abs(v - want)).First();
+                    if (Math.Abs(best - want) > 5) { Log.Dev($"GR: frame {f.Id} real size does not match its profiles + corners - the sizes are a guess"); return null; }
+                    s[g] = best; left.Remove(best);
+                }
+                sizes[f.Id] = s;
+            }
+            foreach (var kv in sizes) { var f = frames.First(x => x.Id == kv.Key); f.Lx = kv.Value[0]; f.Wy = kv.Value[1]; f.Hz = kv.Value[2]; }
+            Log.Dev($"GR: up = {AxisName(up)}, length along {AxisName(map[0])}, width along {AxisName(map[1])}");
+            return map;
         }
 
         static Follow Nearest(GrFrame f, double len, double tol)
@@ -511,17 +551,21 @@ namespace InventorSizer.Core
             }
             var first = m.Frames.FirstOrDefault(f => real.ContainsKey(f.Id));
             if (first == null) return;
-            var ext = Enumerable.Range(0, 3).Select(k => real[first.Id].Max[k] - real[first.Id].Min[k]).ToArray();
-            var want = new[] { first.Lx + CornerAdd, first.Wy + CornerAdd, first.Hz + CornerAdd };
-            var map = new[] { -1, -1, -1 }; var used = new bool[3];
-            foreach (int g in new[] { 2, 0, 1 })
+            var map = m.RealMap;
+            if (map == null)
             {
-                int best = -1; double diff = double.MaxValue;
-                for (int a = 0; a < 3; a++) if (!used[a] && Math.Abs(ext[a] - want[g]) < diff) { best = a; diff = Math.Abs(ext[a] - want[g]); }
-                if (diff > 5) { Log.Dev($"GR: real frame size {string.Join(" x ", ext.Select(U.F))} does not match profile + corners - using the inferred layout"); return; }
-                map[g] = best; used[best] = true;
+                var ext = Enumerable.Range(0, 3).Select(k => real[first.Id].Max[k] - real[first.Id].Min[k]).ToArray();
+                var want = new[] { first.Lx + CornerAdd, first.Wy + CornerAdd, first.Hz + CornerAdd };
+                map = new[] { -1, -1, -1 }; var used = new bool[3];
+                foreach (int g in new[] { 2, 0, 1 })
+                {
+                    int best = -1; double diff = double.MaxValue;
+                    for (int a = 0; a < 3; a++) if (!used[a] && Math.Abs(ext[a] - want[g]) < diff) { best = a; diff = Math.Abs(ext[a] - want[g]); }
+                    if (diff > 5) { Log.Dev($"GR: real frame size {string.Join(" x ", ext.Select(U.F))} does not match profile + corners - using the inferred layout"); return; }
+                    map[g] = best; used[best] = true;
+                }
+                m.RealMap = map;
             }
-            m.RealMap = map;
             double[] ToGr(double[] p) => new[] { p[map[0]], p[map[1]], p[map[2]] };
             double[] Centre(int id) => ToGr(Enumerable.Range(0, 3).Select(k => (real[id].Min[k] + real[id].Max[k]) / 2).ToArray());
             foreach (var f in m.Frames)
@@ -772,7 +816,7 @@ namespace InventorSizer.Core
                     return (object)o;
                 }).ToList(),
                 ["warnings"] = m.Warnings.Cast<object>().ToList(), ["unplaced"] = m.Unplaced.Cast<object>().ToList(), ["removed"] = m.Removed.Cast<object>().ToList(),
-                ["realMap"] = m.RealMap == null ? null : m.RealMap.Select(x => (object)(double)x).ToList()
+                ["realMap"] = m.RealMap == null ? null : m.RealMap.Select(x => (object)(double)x).ToList(), ["up"] = (double)m.Up
             };
             File.WriteAllText(path, Json.Write(j), new UTF8Encoding(false));
         }
@@ -812,6 +856,7 @@ namespace InventorSizer.Core
             m.Warnings = Strs(j["warnings"]); m.Unplaced = Strs(j["unplaced"]); m.Removed = Strs(j["removed"]);
             if (j["cornerAdd"] != null) CornerAdd = j.Num("cornerAdd", CornerAdd);
             SetCornerAdd(m.Components.Values);
+            m.Up = j["up"] == null ? 2 : (int)j.Num("up");
             var rm = Ints(j["realMap"]);
             if (rm.Count == 3) m.RealMap = rm.ToArray();
             UpdateLayout(m);
