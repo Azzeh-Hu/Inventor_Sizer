@@ -98,7 +98,7 @@ namespace InventorSizer
             grGrid.DataBindingComplete += (s, e) =>
             {
                 foreach (var c in new[] { "Box", "P150 L / W / H", "Panels", "Dividers" }) if (grGrid.Columns[c] != null) grGrid.Columns[c].ReadOnly = true;
-                foreach (var c in new[] { "Outer L", "Outer W", "Outer H" }) if (grGrid.Columns[c] != null) { grGrid.Columns[c].HeaderText = c + " (mm)"; Glass.InputColumn(grGrid, c); }
+                foreach (var c in new[] { "Outer L", "Outer W", "Outer H" }) if (grGrid.Columns[c] != null) { grGrid.Columns[c].HeaderText = c + " (mm)"; Glass.DarkInputColumn(grGrid, c); }
             };
             grGrid.DataError += (s, e) => { Log.Write("Enter a number in mm."); Toast.Show(this, ToastKind.Error, "Enter a number in mm"); e.Cancel = true; };
             grTable.ColumnChanged += (s, e) =>
@@ -117,9 +117,9 @@ namespace InventorSizer
             grDivGrid.DataBindingComplete += (s, e) =>
             {
                 foreach (var c in new[] { "Divider", "Box", "Length", "Placed by" }) if (grDivGrid.Columns[c] != null) grDivGrid.Columns[c].ReadOnly = true;
-                Glass.InputColumn(grDivGrid, "Position");
+                Glass.DarkInputColumn(grDivGrid, "Position");
                 foreach (DataGridViewRow r in grDivGrid.Rows)
-                    if (!Convert.ToString(r.Cells["Placed by"].Value).StartsWith("offset")) { r.Cells["Position"].ReadOnly = true; r.Cells["Position"].Style.BackColor = Theme.Card; r.Cells["Position"].Style.ForeColor = Theme.Muted; }
+                    if (!Convert.ToString(r.Cells["Placed by"].Value).StartsWith("offset")) { r.Cells["Position"].ReadOnly = true; r.Cells["Position"].Style.BackColor = Theme.Glass; r.Cells["Position"].Style.ForeColor = Theme.GlassMuted; }
             };
             grDivGrid.DataError += (s, e) => { Log.Write("Enter a number in mm."); Toast.Show(this, ToastKind.Error, "Enter a number in mm"); e.Cancel = true; };
             grDivTable.ColumnChanged += (s, e) =>
@@ -143,20 +143,18 @@ namespace InventorSizer
             actions.Parent?.PerformLayout();
             btnUp.Click += (s, e) => GrEdit("Change up", () =>
             {
-                if (grData == null) throw new SizerException("Up can be changed for a GR read from Inventor or an export, not for a saved design.");
+                if (grData == null) throw new SizerException("Up can be changed right after reading a GR (from Inventor or an export): read it again, then change up.");
                 if (gr.Edited) throw new SizerException("Change up before editing: load the GR again, then change up.");
                 int up = (gr.Up + 2) % 3;   // Z -> Y -> X -> Z
                 gr = Gr.Build(grData, up);
                 Log.Write($"GR: up = {Gr.AxisName(up)}" + (gr.RealMap == null ? " (no real positions: the sizes stay a guess)" : $", length along {Gr.AxisName(gr.RealMap[0])}"));
             });
             btnRemove.Click += (s, e) => GrEdit("Remove box", () => { int no = SelectedBox(); Gr.RemoveFrame(gr, no); Log.Write($"GR: removed Box {no - 1} with its panels and dividers"); });
-            BuildOpeningsUi();
+            BuildGrEditUi();
             btnGrApply.Click += (s, e) => Step("Write new GR to Inventor", () =>
             {
                 if (gr == null) throw new SizerException("Load a GR first.");
-                int planned = GrOpenings.Planned(GrOpenings.Find(gr)).Count;
-                if (planned > 0) Log.Write($"  note: {planned} planned panel(s) are not placed by this step yet - use Openings > Panel list for now");
-                Inv.ApplyGr(gr, grNewName.Text, grPrefix.Text);
+                Inv.ApplyGr(gr, grNewName.Text, grPrefix.Text, new Inv.PanelJob { Prefix = grPrefix.Text.Trim(), MakePanel = MakeGrPanel });
                 grData = null;   // the new GR differs from the data it was read from
                 UpdateGrGrid();
             }, true);
@@ -198,7 +196,8 @@ namespace InventorSizer
                     foreach (var f in gr.Frames.OrderBy(f => f.No))
                         grTable.Rows.Add(f.Label, f.Lx + Gr.CornerAdd, f.Wy + Gr.CornerAdd, f.Hz + Gr.CornerAdd, $"{U.F(f.Lx)} / {U.F(f.Wy)} / {U.F(f.Hz)}", f.Panels.Count, f.Dividers.Count);
                     foreach (var c in gr.Components.Values.Where(c => c.Kind == "divider").OrderBy(c => gr.ById(c.Frame)?.No ?? 0).ThenBy(c => c.Name))
-                        grDivTable.Rows.Add(c.Name, gr.ById(c.Frame)?.Label ?? "", c.Length, c.Position.HasValue ? (object)c.Position.Value : DBNull.Value, c.PosConstraint != "" ? $"offset ({c.PosConstraint})" : "joints");
+                        grDivTable.Rows.Add(c.Name, gr.ById(c.Frame)?.Label ?? "", c.Length, c.Position.HasValue ? (object)c.Position.Value : DBNull.Value,
+                            c.PosConstraint != "" ? $"offset from {Short(c.PosPartner)} ({c.PosConstraint})" : c.Leader != "" ? $"moves with {Short(c.Leader)}" : "joints");
                 }
                 grTable.AcceptChanges(); grDivTable.AcceptChanges();
             }

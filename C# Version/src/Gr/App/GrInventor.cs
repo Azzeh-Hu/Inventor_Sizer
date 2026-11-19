@@ -106,9 +106,10 @@ namespace InventorSizer
         }
 
         // The edited GR as a NEW assembly: the source GR is saved under newName (same folder),
-        // every new profile length becomes "<prefix> P150 1700mm.ipt" next to the original
-        // profile, the occurrences are replaced, the divider offsets set, the new GR saved and opened.
-        public static void ApplyGr(GrModel m, string newName, string prefix)
+        // every new profile length becomes "<prefix> P150 1700mm.ipt" in Einzelteile\ next to the
+        // new GR, the occurrences are replaced (the model takes the names Inventor gives them), the
+        // divider offsets set, the planned panels made and placed (job), the new GR saved and opened.
+        public static void ApplyGr(GrModel m, string newName, string prefix, PanelJob job = null)
         {
             newName = (newName ?? "").Trim(); prefix = (prefix ?? "").Trim();
             if (newName == "") throw new SizerException("Enter the name of the new GR assembly (e.g. 5794 GR).");
@@ -122,9 +123,15 @@ namespace InventorSizer
             string newPath = Path.Combine(Path.GetDirectoryName((string)asm.FullFileName), newName + Path.GetExtension((string)asm.FullFileName));
             if (File.Exists(newPath)) throw new SizerException($"{newPath} already exists.");
             dynamic inv = asm.Parent;
+            var planned = job == null ? new List<GrOpening>() : GrOpenings.Planned(GrOpenings.Find(m));
+            var bad = planned.Where(o => o.Panel.Problem != null).ToList();
+            if (bad.Count > 0) throw new SizerException("Not written - fix these openings first (or set them to -):\n" + string.Join("\n", bad.Select(o => $"{o.Label}: {o.Panel.Problem}")));
+            if (planned.Count > 0 && m.Frames.Any(f => f.RealOrigin == null)) throw new SizerException("Placing panels needs the GR read from Inventor (real part positions): read it again, then write.");
+            string parts = Path.Combine(Path.GetDirectoryName(newPath), "Einzelteile");
             Log.Measure($"Save the GR as {newName}", () => { asm.SaveAs(newPath, false); });
             Log.Write($"  saved {newPath} (the new GR; {name} stays as it was)");
             dynamic occs = asm.ComponentDefinition.Occurrences;
+            var renamed = new Dictionary<string, string>();
             foreach (var g in todo.Profiles)
             {
                 Log.Measure($"Profile {g.From} -> {g.To} ({g.Names.Count} x)", () =>
@@ -132,7 +139,8 @@ namespace InventorSizer
                     dynamic srcPart = occs.ItemByName(g.Names[0]).Definition.Document;
                     string ext = Path.GetExtension((string)srcPart.FullFileName);
                     string partName = prefix != "" ? $"{prefix} {g.To}" : g.To;
-                    string partPath = Path.Combine(Path.GetDirectoryName((string)srcPart.FullFileName), partName + ext);
+                    Directory.CreateDirectory(parts);
+                    string partPath = Path.Combine(parts, partName + ext);
                     if (File.Exists(partPath)) Log.Write($"  {partName}{ext} exists - used as it is");
                     else
                     {
@@ -143,9 +151,16 @@ namespace InventorSizer
                         finally { p.Expression = old; srcPart.Update(); inv.SilentOperation = false; }
                         Log.Write($"  created {partPath} ({p.Name} = {U.F(g.Length)} mm)");
                     }
-                    foreach (var n in g.Names) occs.ItemByName(n).Replace(partPath, false);
+                    foreach (var n in g.Names)
+                    {
+                        dynamic occ = occs.ItemByName(n);
+                        occ.Replace(partPath, false);
+                        m.Components[n].OrigBase = g.To;
+                        string now = n;
+                        try { now = occ.Name; } catch { }
+                        if (now != n) { Gr.RenameComponent(m, n, now); renamed[n] = now; }
+                    }
                     Log.Write($"  {g.Names.Count} x {g.From} -> {partName}");
-                    foreach (var n in g.Names) m.Components[n].OrigBase = g.To;
                 });
             }
             if (todo.Dividers.Count > 0)
@@ -153,12 +168,20 @@ namespace InventorSizer
                 dynamic cons = asm.ComponentDefinition.Constraints;
                 foreach (var d in todo.Dividers)
                 {
-                    try { cons.Item(d.Constraint).Offset.Expression = $"{U.F(d.To)} mm"; Log.Write($"  {d.Name}: {U.F(d.From)} -> {U.F(d.To)} mm"); m.Components[d.Name].OrigPosition = d.To; }
+                    string dn = renamed.TryGetValue(d.Name, out var r) ? r : d.Name;
+                    try { cons.Item(d.Constraint).Offset.Expression = $"{U.F(d.To)} mm"; Log.Write($"  {dn}: {U.F(d.From)} -> {U.F(d.To)} mm"); m.Components[dn].OrigPosition = d.To; }
                     catch (Exception e) { Log.Write($"  could not move {d.Name} (constraint {d.Constraint}: {e.Message})"); }
                 }
             }
             Log.Measure("Update and save the new GR", () => { asm.Update(); asm.Save2(true); });
-            foreach (var p in todo.Panels) Log.Write($"  panel {p.Name}: needs size {p.To} (now {p.From}) - make it with the panel tool and replace it");
+            if (planned.Count > 0)
+            {
+                planned = GrOpenings.Planned(GrOpenings.Find(m));   // again: the profiles may have new occurrence names now
+                job.Folder = parts;
+                Log.Write(PlacePanels(m, asm, planned, job));
+                Log.Measure("Save the new GR with its panels", () => { asm.Update(); asm.Save2(true); });
+            }
+            foreach (var p in todo.Panels.Where(p => !planned.Any(o => o.Existing == p.Name))) Log.Write($"  panel {p.Name}: needs size {p.To} (now {p.From}) - set its opening to a panel type to replace it");
             m.Name = newName; m.Source = "Inventor"; m.SourcePath = newPath; m.Edited = false;
             Show(src);
             Log.Write($"New GR {newName} saved and opened.");

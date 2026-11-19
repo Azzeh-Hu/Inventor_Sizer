@@ -18,6 +18,7 @@ namespace InventorSizer.Core
         public bool Closed;
         public double X, Y, Angle, Dy;
         public string Text, Align = "center";
+        public string Tag;        // what the shape stands for, for clicks on the drawing (e.g. a GR opening); not drawn
         public bool IsText => Points == null;
     }
 
@@ -51,7 +52,7 @@ namespace InventorSizer.Core
             ["openEmpty"] = new Style { Fill = "#f2b632", Opacity = 0.30 }, ["openFP"] = new Style { Fill = "#3d7cc9", Opacity = 0.35 },
             ["openTP"] = new Style { Fill = "#2f9e64", Opacity = 0.38 }, ["openRP"] = new Style { Fill = "#b25bc8", Opacity = 0.35 },
             ["openFilled"] = new Style { Fill = "#8a8a8a", Opacity = 0.18 }, ["openBlocked"] = new Style { Fill = "#d9534f", Opacity = 0.22 },
-            ["openSelected"] = new Style { Stroke = "#e8590c", Width = 2.6 },
+            ["openSelected"] = new Style { Stroke = "#e8590c", Width = 2.6 }, ["openLabel"] = new Style { TextColor = "#1c1c1c", FontSize = 11, Bold = true },
             ["partAu"] = new Style { Fill = "#3d7cc9", Opacity = 0.20 }, ["partIn"] = new Style { Fill = "#2f9e64", Opacity = 0.26 }, ["partHw"] = new Style { Fill = "#f08c1e", Opacity = 0.55 },
             ["bomHead"] = T("#000000", 12, true), ["bomTitle"] = T("#000000", 14, true), ["axisLabel"] = T("#000000", 11, true), ["note"] = T("#000000", 12), ["empty"] = T("#808080", 15),
         };

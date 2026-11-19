@@ -1036,6 +1036,7 @@ namespace InventorSizer
             btnParamsView.Enabled = !g;
             grColumn.Visible = g;
             split.SplitterDistance = g ? Math.Min(560, split.Width / 2) : 290;
+            GrModeChanged(g);   // GR: the twin takes the whole width, editing is in floating windows
             if (g) paramPop.Dismiss();
             if (g) { UpdatePresets(); UpdateGrGrid(); UpdateDrawing(); } else UpdatePreview();
         }

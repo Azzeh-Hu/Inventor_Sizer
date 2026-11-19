@@ -29,6 +29,9 @@ namespace InventorSizer.Core
         public List<Follow> Follow = new List<Follow>();
         public double? Position, OrigPosition;
         public string PosConstraint = "", PosPartner = "";
+        public string Leader = "";        // a divider without its own position follows this divider (flush to it)
+        public int MoveAxis = -1;         // GR axis a positioned divider moves along; MoveSign: + = away from its partner
+        public double MoveSign = 1;
         public double[] Box;   // range box from Inventor, assembly axes, mm: min xyz, max xyz
         public Geo Geo;
     }
@@ -446,6 +449,26 @@ namespace InventorSizer.Core
                     d.Position = mm; d.OrigPosition = mm; d.PosConstraint = c.Name; d.PosPartner = pair.Item2;
                 }
             }
+            // ... or to another divider (a second section ring placed from the first, e.g. Mate 700 mm).
+            for (int round = 0; round < 5; round++)
+            {
+                bool any = false;
+                foreach (var c in active.Where(c => Regex.IsMatch(c.Type, "Mate|Flush")))
+                {
+                    var mm = Mm(c.Value);
+                    if (mm == null || mm == -25 || mm == 0 || !comps.TryGetValue(c.A, out var a) || !comps.TryGetValue(c.B, out var b)) continue;
+                    if (a.Kind != "divider" || b.Kind != "divider" || a.PosConstraint == c.Name || b.PosConstraint == c.Name) continue;
+                    var (d, o) = a.PosConstraint == "" && b.PosConstraint != "" ? (a, b) : b.PosConstraint == "" ? (b, a) : (null, null);
+                    if (d == null || (o.PosConstraint == "" && round < 4)) continue;   // place from a divider that is placed itself
+                    d.Position = mm; d.OrigPosition = mm; d.PosConstraint = c.Name; d.PosPartner = o.Name; any = true;
+                }
+                if (!any && round > 0) break;
+            }
+            // Dividers without a position of their own follow the divider they are flush with (its ring).
+            foreach (var c in active.Where(c => Regex.IsMatch(c.Type, "Flush|Mate") && (Mm(c.Value) ?? 0) == 0))
+                foreach (var pair in new[] { (c.A, c.B), (c.B, c.A) })
+                    if (comps.TryGetValue(pair.Item1, out var d) && comps.TryGetValue(pair.Item2, out var o) && d.Kind == "divider" && o.Kind == "divider" && d.PosConstraint == "" && d.Leader == "" && o.Leader != d.Name)
+                        d.Leader = o.Name;
 
             // Orientation: width = the size most frames share, height = the next most shared one.
             double width = frames.Count == 1 ? frames[0].Sizes.OrderBy(x => x).ElementAt(1) : CommonSize(frames.Select(f => f.Sizes));
@@ -627,6 +650,44 @@ namespace InventorSizer.Core
                     Size0 = f.Size, Pos0 = c.Kind == "divider" ? c.Position : null
                 };
             }
+            // The axis a positioned divider moves along: across its length, where it is furthest from its partner.
+            foreach (var c in m.Components.Values.Where(c => c.Kind == "divider" && c.PosConstraint != "" && c.Box != null))
+            {
+                if (!m.Components.TryGetValue(c.PosPartner, out var p) || p.Box == null) continue;
+                var ca = ToGr(new[] { (c.Box[0] + c.Box[3]) / 2, (c.Box[1] + c.Box[4]) / 2, (c.Box[2] + c.Box[5]) / 2 });
+                var pa = ToGr(new[] { (p.Box[0] + p.Box[3]) / 2, (p.Box[1] + p.Box[4]) / 2, (p.Box[2] + p.Box[5]) / 2 });
+                var ext = Enumerable.Range(0, 3).Select(i => c.Geo.Max[i] - c.Geo.Min[i]).ToArray();
+                int along = Array.IndexOf(ext, ext.Max());
+                int axis = Enumerable.Range(0, 3).Where(i => i != along).OrderByDescending(i => Math.Abs(ca[i] - pa[i])).First();
+                c.MoveAxis = axis; c.MoveSign = ca[axis] >= pa[axis] ? 1 : -1;
+            }
+        }
+
+        // How far a divider has moved from where it was read (its own offset change plus the moves of
+        // the divider it is placed from or follows), and along which GR axis.
+        public static (int Axis, double Delta) DividerShift(GrModel m, GrComponent c, int depth = 0)
+        {
+            if (c == null || depth > 20) return (-1, 0);
+            int axis = c.MoveAxis; double delta = 0;
+            if (c.PosConstraint != "" && c.Position != null && c.Geo?.Pos0 != null) delta = (c.Position.Value - c.Geo.Pos0.Value) * c.MoveSign;
+            string up = c.PosConstraint != "" ? c.PosPartner : c.Leader;
+            if (up != "" && m.Components.TryGetValue(up, out var u) && u.Kind == "divider")
+            {
+                var s = DividerShift(m, u, depth + 1);
+                if (axis < 0) axis = s.Axis;
+                if (s.Axis == axis) delta += s.Delta;
+            }
+            return (axis, delta);
+        }
+
+        // A part got a new occurrence name in Inventor (Replace names it after the new file).
+        public static void RenameComponent(GrModel m, string old, string now)
+        {
+            if (old == now || string.IsNullOrEmpty(now) || !m.Components.TryGetValue(old, out var c) || m.Components.ContainsKey(now)) return;
+            m.Components.Remove(old); c.Name = now; m.Components[now] = c;
+            foreach (var f in m.Frames) foreach (var l in new[] { f.Panels, f.Dividers, f.Other }) { int i = l.IndexOf(old); if (i >= 0) l[i] = now; }
+            foreach (var o in m.Components.Values) { if (o.PosPartner == old) o.PosPartner = now; if (o.Leader == old) o.Leader = now; }
+            int u = m.Unplaced.IndexOf(old); if (u >= 0) m.Unplaced[u] = now;
         }
 
         // Positions (mm) from the frame sizes and placement relations; also the overall size.
@@ -846,7 +907,8 @@ namespace InventorSizer.Core
                     {
                         ["name"] = c.Name, ["file"] = c.File, ["base"] = c.Base, ["origBase"] = c.OrigBase, ["kind"] = c.Kind, ["length"] = c.Length, ["frame"] = (double)c.Frame,
                         ["follow"] = c.Follow.Select(r => (object)new JsonObject { ["dim"] = r.Dim, ["offset"] = r.Offset, ["part"] = (double)r.Part }).ToList(),
-                        ["position"] = c.Position, ["origPosition"] = c.OrigPosition, ["posConstraint"] = c.PosConstraint, ["posPartner"] = c.PosPartner
+                        ["position"] = c.Position, ["origPosition"] = c.OrigPosition, ["posConstraint"] = c.PosConstraint, ["posPartner"] = c.PosPartner,
+                        ["leader"] = c.Leader, ["moveAxis"] = (double)c.MoveAxis, ["moveSign"] = c.MoveSign
                     };
                     if (c.Geo != null) o["geo"] = new JsonObject { ["Min"] = Nums(c.Geo.Min), ["Max"] = Nums(c.Geo.Max), ["Size0"] = Nums(c.Geo.Size0), ["Pos0"] = c.Geo.Pos0 };
                     return (object)o;
@@ -873,6 +935,7 @@ namespace InventorSizer.Core
                     Name = co.Str("name"), File = co.Str("file"), Base = co.Str("base"), OrigBase = co.ContainsKey("origBase") ? co.Str("origBase") : co.Str("base"),
                     Kind = co.Str("kind"), Length = co.Num("length"), Frame = (int)co.Num("frame"), Position = NumOrNull(co, "position"), OrigPosition = NumOrNull(co, "origPosition"),
                     PosConstraint = co.Str("posConstraint"), PosPartner = co.Str("posPartner"),
+                    Leader = co.Str("leader"), MoveAxis = co.ContainsKey("moveAxis") ? (int)co.Num("moveAxis") : -1, MoveSign = co.Num("moveSign", 1),
                     Follow = co.Arr("follow").OfType<JsonObject>().Select(r => new Follow { Dim = r.Str("dim"), Offset = r.Num("offset"), Part = (int)r.Num("part") }).ToList()
                 };
                 var g = co.Obj("geo");
