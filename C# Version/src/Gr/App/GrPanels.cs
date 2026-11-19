@@ -20,8 +20,8 @@ namespace InventorSizer
 
         public class PanelJob
         {
-            public Func<string, string> MakePanel;   // panel name (with prefix) -> made in this folder; returns the .iam path
-            public string Prefix = "";
+            public Func<string, string, string> MakePanel;   // (panel name with prefix, folder) -> made there; returns the .iam path
+            public string Prefix = "", Folder = "";
         }
 
         // Named faces of a part, by name.
@@ -122,30 +122,20 @@ namespace InventorSizer
             return (w, l, h, c);
         }
 
-        // Makes, places and mates the planned panels in the open GR. The GR is left open and
-        // unsaved, so the result can be checked before saving. Returns a short summary.
-        public static string PlaceGrPanels(GrModel m, PanelJob job)
+        // Makes, places and mates the planned panels in the GR assembly asm (part of Write new GR,
+        // after the sizes and dividers are in Inventor). Returns a short summary.
+        static string PlacePanels(GrModel m, dynamic asm, List<GrOpening> planned, PanelJob job)
         {
-            if (m.RealMap == null || m.Frames.Any(f => f.RealOrigin == null)) throw new SizerException("Placing panels needs the GR read from Inventor (real part positions).");
-            var pending = Gr.Pending(m);
-            if (pending.Profiles.Count > 0 || pending.Dividers.Count > 0 || pending.Blocked.Count > 0 || m.Frames.Any(f => !f.Size.SequenceEqual(f.Size0)))
-                throw new SizerException("The GR has size or divider changes that are not in Inventor yet. Write the new GR first, read it from Inventor again, then place the panels.");
-            var planned = GrOpenings.Planned(GrOpenings.Find(m));
-            if (planned.Count == 0) throw new SizerException("No panels planned: pick a panel type for some openings (or press Defaults).");
-            var bad = planned.Where(o => o.Panel.Problem != null).ToList();
-            if (bad.Count > 0) throw new SizerException("Not placed - fix these openings first:\n" + string.Join("\n", bad.Select(o => $"{o.Label}: {o.Panel.Problem}")));
-
-            var src = OpenGrSource(m);
-            dynamic asm = src.Doc;
             dynamic inv = asm.Parent;
             dynamic tg = inv.TransientGeometry;
             dynamic occs = asm.ComponentDefinition.Occurrences;
             dynamic cons = asm.ComponentDefinition.Constraints;
+            Directory.CreateDirectory(job.Folder);
 
             // 1. the panel files, one per size
             var files = new Dictionary<string, string>();
             foreach (var name in planned.Select(o => (job.Prefix != "" ? job.Prefix + " " : "") + o.Panel.Name).Distinct())
-                Log.Measure($"Panel {name}", () => { files[name] = job.MakePanel(name); });
+                Log.Measure($"Panel {name}", () => { files[name] = job.MakePanel(name, job.Folder); });
 
             int placed = 0, mated = 0; var problems = new List<string>();
             foreach (var o in planned)
@@ -203,10 +193,9 @@ namespace InventorSizer
                 }
                 catch (Exception e) { problems.Add($"{o.Label} ({name}): {e.Message}"); Log.Write($"  problem: {e.Message}"); }
             }
-            Log.Measure("Update the GR", () => { asm.Update(); });
-            Show(src);
             foreach (var p in problems) Log.Write("  not finished: " + p);
-            return $"{placed} of {planned.Count} panel(s) placed, {mated} constraints" + (problems.Count > 0 ? $", {problems.Count} problem(s) - see the log" : "") + ". The GR is not saved: check it, then save it in Inventor.";
+            foreach (var o in planned) m.PanelChoice.Remove(o.Key);
+            return $"  {placed} of {planned.Count} panel(s) placed, {mated} constraints" + (problems.Count > 0 ? $", {problems.Count} problem(s) - see the log" : "");
         }
 
         static dynamic Vec(dynamic tg, double[] v) => tg.CreateVector(v[0], v[1], v[2]);

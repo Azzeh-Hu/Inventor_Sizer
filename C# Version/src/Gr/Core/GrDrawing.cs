@@ -36,7 +36,7 @@ namespace InventorSizer.Core
             foreach (var b in boxes)
             {
                 var c = Corners(b);
-                foreach (var e in Edges) d.Poly3("profile", t, new[] { c[e[0]], c[e[1]] }, false);
+                foreach (var e in Edges) { d.Poly3("profile", t, new[] { c[e[0]], c[e[1]] }, false); d.Shapes[d.Shapes.Count - 1].Tag = "box:" + b.F.No; }
                 foreach (var p in c) { var s = Draw.Screen(t, p); d.Rect("corner", s[0] - 2.5, s[1] - 2.5, s[0] + 2.5, s[1] + 2.5); }
             }
         }
@@ -50,7 +50,7 @@ namespace InventorSizer.Core
                 var p = Draw.Screen(t, mx, (b.Y0 + b.Y1) / 2, z);
                 var e0 = Draw.Screen(t, mx, b.Y0, z); var e1 = Draw.Screen(t, mx, b.Y1, z);
                 double span = view == "Left" || view == "Right" ? 999 : Math.Sqrt(Math.Pow(e1[0] - e0[0], 2) + Math.Pow(e1[1] - e0[1], 2));
-                d.Text("label", p[0], p[1], f.Label);
+                d.Text("label", p[0], p[1], f.Label); d.Shapes[d.Shapes.Count - 1].Tag = "box:" + f.No;
                 if (span < 80) continue;
                 var extra = new List<string>();
                 if (f.Panels.Count > 0) extra.Add($"{f.Panels.Count} pan.");
@@ -62,8 +62,8 @@ namespace InventorSizer.Core
         static int DimIndex(string dim) => dim == "L" ? 0 : dim == "W" ? 1 : 2;
         static double[] ToDraw(double[] p) => new[] { p[1], p[0], p[2] };   // GR (L, W, H) -> drawing (x = W, y = L, z = H)
 
-        static string DividerKind(GrComponent c) =>
-            c.Position != null && c.Position != c.OrigPosition ? "dividerMoved" : c.Base.Contains("gefr") ? "dividerMilled" : "divider";
+        static string DividerKind(GrModel m, GrComponent c) =>
+            (c.Position != null && c.Position != c.OrigPosition) || Gr.DividerShift(m, c).Delta != 0 ? "dividerMoved" : c.Base.Contains("gefr") ? "dividerMilled" : "divider";
 
         // Dividers from their real position (following edits), or schematically from their offset.
         public static List<DividerLine> DividerLines(GrModel m)
@@ -83,14 +83,8 @@ namespace InventorSizer.Core
                     k = Array.IndexOf(ext, ext.Max());
                     GrOpenings.ShiftWithSize(c.Geo, size, k, mn, mx);
                     foreach (var r in c.Follow) if (DimIndex(r.Dim) == k) mx[k] += size[k] - c.Geo.Size0[k];
-                    if (c.Position != null && c.Geo.Pos0 != null && c.Position != c.Geo.Pos0)
-                    {
-                        m.Components.TryGetValue(c.PosPartner ?? "", out var partner);
-                        int pk = partner != null && partner.Follow.Count > 0 ? DimIndex(partner.Follow[0].Dim) : -1;
-                        int s = Enumerable.Range(0, 3).First(i => i != k && i != pk);
-                        double delta = c.Position.Value - c.Geo.Pos0.Value;
-                        mn[s] += delta; mx[s] += delta;
-                    }
+                    var sh = Gr.DividerShift(m, c);
+                    if (sh.Axis >= 0 && sh.Delta != 0) { mn[sh.Axis] += sh.Delta; mx[sh.Axis] += sh.Delta; }
                     p0 = Enumerable.Range(0, 3).Select(i => o[i] + (mn[i] + mx[i]) / 2).ToArray(); p1 = (double[])p0.Clone();
                     p0[k] = o[k] + mn[k]; p1[k] = o[k] + mx[k];
                 }
@@ -114,7 +108,7 @@ namespace InventorSizer.Core
                     p0[k] = o[k] + half; p1[k] = len != null ? p0[k] + len.Value : o[k] + size[k] + half;
                 }
                 else continue;
-                list.Add(new DividerLine { A = p0, B = p1, Axis = k, Name = c.Name, Kind = DividerKind(c), Frame = f, Real = c.Geo != null });
+                list.Add(new DividerLine { A = p0, B = p1, Axis = k, Name = c.Name, Kind = DividerKind(m, c), Frame = f, Real = c.Geo != null });
             }
             return list;
         }
@@ -178,7 +172,7 @@ namespace InventorSizer.Core
         static void Dividers(Draw d, ViewT t, GrModel m)
         {
             var lines = DividerLines(m);
-            foreach (var l in lines) d.Poly3(l.Kind, t, new[] { ToDraw(l.A), ToDraw(l.B) }, false);
+            foreach (var l in lines) { d.Poly3(l.Kind, t, new[] { ToDraw(l.A), ToDraw(l.B) }, false); d.Shapes[d.Shapes.Count - 1].Tag = "div:" + l.Name; }
             foreach (var p in JointPoints(m)) { var s = Draw.Screen(t, ToDraw(p)); d.Rect("joint", s[0] - 2.5, s[1] - 2.5, s[0] + 2.5, s[1] + 2.5); }
             if (lines.Count > 0) Chains(d, t, lines);
         }
@@ -186,23 +180,54 @@ namespace InventorSizer.Core
         public static string OpeningKind(GrOpening o)
         {
             if (o.State == "blocked") return "openBlocked";
-            string t = o.Type != "" && o.Type != "keep" ? o.Type : "";
-            if (t != "") return "open" + t;
+            if (o.HasType) return "open" + o.Type;
             return o.State == "filled" ? "openFilled" : "openEmpty";
         }
 
-        // Openings as see-through areas on the box faces; the selected one outlined.
+        // Openings as see-through areas on the box faces, the selected one outlined. The faces
+        // turned to the viewer carry their number and a tag, so a click on the drawing finds them.
         static void Openings(Draw d, ViewT t, GrModel m)
         {
-            foreach (var o in GrOpenings.Find(m))
+            var list = GrOpenings.Find(m);
+            GrOpenings.AutoDefaults(m, list);
+            foreach (var o in list)
             {
                 var pts = new[] { (o.U0, o.V0), (o.U1, o.V0), (o.U1, o.V1), (o.U0, o.V1) }.Select(p =>
                 {
                     var q = new double[3]; q[o.Axis] = o.Plane; q[o.U] = p.Item1; q[o.V] = p.Item2; return ToDraw(q);
                 }).ToList();
                 d.Poly3(OpeningKind(o), t, pts, true);
+                var shape = d.Shapes[d.Shapes.Count - 1];
+                if (Facing(o, shape.Points, t.View)) shape.Tag = "open:" + o.Key;
                 if (o.Key == m.SelectedOpening) d.Poly3("openSelected", t, pts, true);
             }
+            foreach (var o in list)
+            {
+                var c = new double[3]; c[o.Axis] = o.Plane; c[o.U] = (o.U0 + o.U1) / 2; c[o.V] = (o.V0 + o.V1) / 2;
+                var poly = d.Shapes.FirstOrDefault(s => s.Tag == "open:" + o.Key);
+                if (poly == null || Area(poly.Points) < 900) continue;   // turned away, or too small to label
+                var p = Draw.Screen(t, ToDraw(c));
+                d.Text("openLabel", p[0], p[1], o.Id);
+            }
+        }
+
+        static double Area(double[] p)
+        {
+            double a = 0; int n = p.Length / 2;
+            for (int i = 0; i < n; i++) { int j = (i + 1) % n; a += p[2 * i] * p[2 * j + 1] - p[2 * j] * p[2 * i + 1]; }
+            return Math.Abs(a / 2);
+        }
+
+        // Is the face turned to the viewer? From the winding of its corners on the screen (the
+        // isometric is drawn mirrored to the straight views, seen from above: it winds the other way).
+        public static bool Facing(GrOpening o, double[] p, string view)
+        {
+            double a = 0; int n = p.Length / 2;
+            for (int i = 0; i < n; i++) { int j = (i + 1) % n; a += p[2 * i] * p[2 * j + 1] - p[2 * j] * p[2 * i + 1]; }
+            if (Math.Abs(a) < 1) return false;   // seen edge-on
+            int perm = o.Axis == 1 ? -1 : 1;     // (U, V, normal) is right-handed for L and H faces, left-handed for W faces
+            int side = o.Side == 0 ? -1 : 1;
+            return a * perm * side * (view == "Isometric" ? -1 : 1) > 0;
         }
 
         static void Legend(Draw d, double x, double y)

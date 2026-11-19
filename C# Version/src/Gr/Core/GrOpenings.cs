@@ -14,16 +14,17 @@ namespace InventorSizer.Core
 {
     public class GrOpening
     {
-        public string Key, Face, State = "empty", Existing = "", ExistingType = "";
+        public string Key, Id = "", Face, State = "empty", Existing = "", ExistingType = "";
         public GrFrame Frame;
         public int Axis, Side, U, V;               // face normal (GR axis), side 0 = min / 1 = max, the two in-face axes
         public double Plane, U0, U1, V0, V1;       // layout coordinates of the face plane and the clear space
         public double ClearU => U1 - U0;
         public double ClearV => V1 - V0;
         public string[] Support = new string[4];   // the profile / divider on each side: U min, U max, V min, V max
-        public string Type = "";                   // chosen panel type for an empty opening, or a replacement for a filled one
+        public string Type = "";                   // FP / TP / RP for a panel (a replacement where one exists), "none", "keep" or "" (not chosen)
         public Gr.PanelSize Panel;                 // the panel the rules give for Type (or the existing type)
-        public string Label => $"{Frame.Label} {Face} {GrOpenings.Pos(this)}";
+        public string Label => $"{Id} ({Frame.Label} {Face})";
+        public bool HasType => Type == "FP" || Type == "TP" || Type == "RP";
     }
 
     public static class GrOpenings
@@ -60,14 +61,8 @@ namespace InventorSizer.Core
                 int k = Array.IndexOf(ext, ext.Max());
                 ShiftWithSize(c.Geo, f.Size, k, mn, mx);
                 foreach (var r in c.Follow) if (DimIndex(r.Dim) == k) mx[k] += f.Size[k] - c.Geo.Size0[k];
-                if (c.Position != null && c.Geo.Pos0 != null && c.Position != c.Geo.Pos0)
-                {
-                    m.Components.TryGetValue(c.PosPartner ?? "", out var partner);
-                    int pk = partner != null && partner.Follow.Count > 0 ? DimIndex(partner.Follow[0].Dim) : -1;
-                    int s = Enumerable.Range(0, 3).First(i => i != k && i != pk);
-                    double delta = c.Position.Value - c.Geo.Pos0.Value;
-                    mn[s] += delta; mx[s] += delta;
-                }
+                var sh = Gr.DividerShift(m, c);
+                if (sh.Axis >= 0 && sh.Delta != 0) { mn[sh.Axis] += sh.Delta; mx[sh.Axis] += sh.Delta; }
             }
             return (Enumerable.Range(0, 3).Select(i => f.Pos[i] + mn[i]).ToArray(), Enumerable.Range(0, 3).Select(i => f.Pos[i] + mx[i]).ToArray());
         }
@@ -159,7 +154,14 @@ namespace InventorSizer.Core
                     }
             }
             foreach (var op in list) { m.PanelChoice.TryGetValue(op.Key, out var t); op.Type = t ?? ""; Size(op); }
-            return list;
+            // numbers: U0, U1 ... bottom (unten), D0 ... top (Decke), S0 ... the sides and ends
+            var count = new Dictionary<string, int>();
+            foreach (var op in list.OrderBy(o => o.Frame.No).ThenBy(o => SideOrder(o.Face)).ThenBy(o => o.U0).ThenBy(o => o.V0))
+            {
+                string p = op.Face == "Bottom" ? "U" : op.Face == "Top" ? "D" : "S";
+                count.TryGetValue(p, out var n); op.Id = p + n; count[p] = n + 1;
+            }
+            return list.OrderBy(o => "UDS".IndexOf(o.Id[0])).ThenBy(o => int.Parse(o.Id.Substring(1))).ToList();
         }
 
         // A frame profile's box in layout coordinates: from its real position when there is one,
@@ -177,6 +179,8 @@ namespace InventorSizer.Core
             }
             return (mn, mx);
         }
+
+        static int SideOrder(string face) => Array.IndexOf(new[] { "Bottom", "Top", "Service side", "End 2", "Back side", "End 1" }, face);
 
         static bool OnPlane((double[] Min, double[] Max) b, int a, double plane, double depth) =>
             b.Max[a] - b.Min[a] < depth && b.Max[a] > plane - depth && b.Min[a] < plane + depth;
@@ -218,22 +222,36 @@ namespace InventorSizer.Core
         // The panel the rules give: the chosen type, or for a filled opening its existing type.
         public static void Size(GrOpening op)
         {
-            string t = op.Type != "" && op.Type != "keep" ? op.Type : op.State == "filled" ? op.ExistingType : "";
+            string t = op.HasType ? op.Type : op.State == "filled" && op.Type != "none" ? op.ExistingType : "";
             op.Panel = t == "" || op.State == "blocked" ? null : Gr.PanelFor(t, op.ClearU, op.ClearV);
         }
 
+        // A type for an opening: FP / TP / RP, "none" (an empty opening stays empty) or "keep"
+        // (an existing panel stays). "" forgets the choice: the default comes back.
         public static void Choose(GrModel m, GrOpening op, string type)
         {
             type = type ?? "";
-            if (type == "") m.PanelChoice.Remove(op.Key); else m.PanelChoice[op.Key] = type;
-            op.Type = type; Size(op); m.Edited = true;
+            if (type == "" || (type == "keep" && op.State == "filled")) m.PanelChoice.Remove(op.Key); else m.PanelChoice[op.Key] = type;
+            op.Type = m.PanelChoice.TryGetValue(op.Key, out var t) ? t : ""; Size(op); m.Edited = true;
         }
 
-        // The default type on every empty opening that has no choice yet.
+        // The default type on every empty opening (Defaults button: also where "none" was chosen).
         public static int FillDefaults(GrModel m, List<GrOpening> list)
         {
             int n = 0;
-            foreach (var op in list.Where(o => o.State == "empty" && o.Type == "")) { Choose(m, op, DefaultType(op.Face)); n++; }
+            foreach (var op in list.Where(o => o.State == "empty" && !o.HasType)) { Choose(m, op, DefaultType(op.Face)); n++; }
+            return n;
+        }
+
+        // The default type on empty openings that have no choice at all (new GR, new openings after
+        // an edit). Not an edit: it does not mark the GR as changed.
+        public static int AutoDefaults(GrModel m, List<GrOpening> list)
+        {
+            int n = 0;
+            foreach (var op in list.Where(o => o.State == "empty" && o.Type == ""))
+            {
+                m.PanelChoice[op.Key] = DefaultType(op.Face); op.Type = m.PanelChoice[op.Key]; Size(op); n++;
+            }
             return n;
         }
 
@@ -250,16 +268,16 @@ namespace InventorSizer.Core
         // The panels to make: new ones for chosen empty openings, replacements where a filled one is
         // set to a type ("keep" or no choice leaves it).
         public static List<GrOpening> Planned(List<GrOpening> list) =>
-            list.Where(o => o.Panel != null && o.Type != "" && o.Type != "keep" && (o.State == "empty" || o.State == "filled")).ToList();
+            list.Where(o => o.Panel != null && o.HasType && (o.State == "empty" || o.State == "filled")).ToList();
 
         public static void ExportPanelList(GrModel m, List<GrOpening> list, string path)
         {
             var culture = System.Globalization.CultureInfo.CurrentCulture; string sep = culture.TextInfo.ListSeparator;
             string Q(string s) => "\"" + (s ?? "").Replace("\"", "\"\"") + "\"";
             var sb = new StringBuilder();
-            sb.AppendLine(string.Join(sep, new[] { "Box", "Face", "Opening (clear, mm)", "Position", "State", "Panel", "Master", "Note" }.Select(Q)));
+            sb.AppendLine(string.Join(sep, new[] { "Opening", "Box", "Face", "Opening (clear, mm)", "Position", "State", "Panel", "Master", "Note" }.Select(Q)));
             foreach (var o in Planned(list))
-                sb.AppendLine(string.Join(sep, new[] { o.Frame.Label, o.Face, $"{U.F(o.ClearU)} x {U.F(o.ClearV)}", Pos(o), o.State == "filled" ? "replaces " + o.Existing : "new", o.Panel.Name, o.Panel.Inner, o.Panel.Problem ?? "" }.Select(Q)));
+                sb.AppendLine(string.Join(sep, new[] { o.Id, o.Frame.Label, o.Face, $"{U.F(o.ClearU)} x {U.F(o.ClearV)}", Pos(o), o.State == "filled" ? "replaces " + o.Existing : "new", o.Panel.Name, o.Panel.Inner, o.Panel.Problem ?? "" }.Select(Q)));
             System.IO.File.WriteAllText(path, sb.ToString(), new UTF8Encoding(true));
         }
     }
