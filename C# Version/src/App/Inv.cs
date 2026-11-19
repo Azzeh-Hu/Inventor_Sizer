@@ -78,17 +78,27 @@ namespace InventorSizer
         }
 
         // Opens a file in the background (no window, faster), or uses it when it is open already.
-        // A master the app pre-loaded (hidden, see PreloadMasters) counts as opened by the app:
-        // it is the app's to change, and to close again when the change fails.
+        // A hidden copy (pre-loaded, see PreloadMasters) counts as opened by the app: it is the
+        // app's to change, and to close again when the change fails; one with changes left over is
+        // closed and opened again from disk. A copy open in a window with unsaved changes is
+        // refused: Apply works on the master as it is on disk.
         public static OpenedDoc Open(string path)
         {
             dynamic inv = App(true);
             dynamic d = FindOpen(inv, path);
             if (d != null)
             {
-                bool ours = TakePreloaded(path) && (int)d.Views.Count == 0;
-                Log.Dev(ours ? $"{path} was pre-loaded in the background - used without opening" : $"{path} is already open in Inventor - used as it is");
-                return new OpenedDoc { Doc = d, Opened = ours, App = inv };
+                TakePreloaded(path);
+                bool hidden = (int)d.Views.Count == 0, dirty = false;
+                try { dirty = (bool)d.Dirty; } catch { }
+                if (!hidden && dirty)
+                    throw new SizerException($"{Path.GetFileName(path)} is open in Inventor with unsaved changes. Close it without saving, then Apply again: Apply works on the master as it is on disk.");
+                if (hidden && dirty) { Log.Dev($"{path}: the hidden copy had changes - closed and opened again"); try { d.Close(true); } catch { } d = null; }
+                else
+                {
+                    Log.Dev(hidden ? $"{path} is loaded hidden - used without opening" : $"{path} is open in a window (no changes) - used as it is");
+                    return new OpenedDoc { Doc = d, Opened = hidden, App = inv };
+                }
             }
             dynamic doc = Log.Measure($"Open {Path.GetFileName(path)} in the background", () => (object)inv.Documents.Open(path, false));
             return new OpenedDoc { Doc = doc, Opened = true, App = inv };
@@ -128,7 +138,20 @@ namespace InventorSizer
         static Thread preloadThread;
         static volatile bool preloadStop;
 
-        static bool PreloadRunning { get { var t = preloadThread; return t != null && t.IsAlive; } }
+        public static bool PreloadRunning { get { var t = preloadThread; return t != null && t.IsAlive; } }
+        // True once the background thread emptied its queue with Inventor running.
+        public static volatile bool PreloadDone;
+        public static int PreloadedCount { get { lock (preloadLock) return preloaded.Count; } }
+
+        // Inventor is running (asks Windows, not Inventor).
+        public static bool InventorRunning()
+        {
+            try { var o = Marshal.GetActiveObject("Inventor.Application"); try { Marshal.ReleaseComObject(o); } catch { } return true; }
+            catch { return false; }
+        }
+
+        // Inventor was closed: the hidden copies are gone with it.
+        public static void ForgetPreloaded() { lock (preloadLock) preloaded.Clear(); PreloadDone = false; }
 
         // Queues the masters (first ones first) and starts the background thread. Does nothing
         // when Inventor is not running: the app never starts Inventor just to pre-load.
@@ -143,7 +166,7 @@ namespace InventorSizer
                     preloadQueue.Insert(0, p);
                 }
                 if (preloadQueue.Count == 0 || PreloadRunning) return;
-                preloadStop = false;
+                preloadStop = false; PreloadDone = false;
                 preloadThread = new Thread(() => PreloadLoop(report)) { IsBackground = true, Name = "Pre-load masters" };
                 preloadThread.SetApartmentState(ApartmentState.STA);
                 preloadThread.Start();
@@ -167,7 +190,7 @@ namespace InventorSizer
                 string path;
                 lock (preloadLock)
                 {
-                    if (preloadQueue.Count == 0) return;
+                    if (preloadQueue.Count == 0) { PreloadDone = true; return; }
                     path = preloadQueue[0]; preloadQueue.RemoveAt(0);
                 }
                 try

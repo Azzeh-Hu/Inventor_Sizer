@@ -392,11 +392,47 @@ namespace InventorSizer
                 EnsureSizeRows();
                 ClearPanelSize();
             });
-            Log.Write("Ready. Pick 1T or 2T in the Types browser to open that master, or load a panel assembly to get its starting size.");
-            Toast.Show(this, ToastKind.Info, "Ready", "Pick 1T or 2T in the Types browser to open the master, or load a panel assembly.");
+            Log.Write("Ready. Pick 1T or 2T in the Types browser (the master stays hidden in Inventor), or load a panel assembly to get its starting size.");
+            Toast.Show(this, ToastKind.Info, "Ready", "Pick 1T or 2T in the Types browser, or load a panel assembly.");
             UpdatePreview();
             ShowParams();   // the parameter editor opens with the window
             PreloadMasters();
+            inventorWasRunning = Inv.InventorRunning();
+            StartInventorWatch();
+        }
+
+        // Every few seconds: when Inventor is (newly) running and masters are not loaded yet, load
+        // them hidden; the status bar shows how many are loaded. Only asks Windows whether Inventor
+        // runs, so it costs nothing while Inventor is busy.
+        Timer inventorWatch;
+        bool inventorWasRunning;
+        string watchText = "";
+
+        void StartInventorWatch()
+        {
+            inventorWatch = new Timer { Interval = 6000 };
+            inventorWatch.Tick += (s, e) =>
+            {
+                if (!Enabled || mode == "GR") return;   // a step is running, or GR editing
+                bool running = Inv.InventorRunning();
+                if (!running && inventorWasRunning) Inv.ForgetPreloaded();
+                if (running && !Inv.PreloadRunning && (!inventorWasRunning || !Inv.PreloadDone)) PreloadMasters();
+                inventorWasRunning = running;
+                int total = MasterPaths().Count, loaded = Math.Min(Inv.PreloadedCount, total);
+                string text = !running ? "Inventor: not running - start it, the masters load hidden in the background"
+                    : Inv.PreloadRunning ? $"Inventor: loading masters hidden ({loaded} / {total})"
+                    : $"Inventor: {loaded} / {total} masters loaded hidden";
+                if (text != watchText) { watchText = text; statusLabel.Text = text; }
+            };
+            inventorWatch.Start();
+        }
+
+        List<string> MasterPaths()
+        {
+            var paths = new List<string>();
+            if (std != null) paths.AddRange(Standards.SubTypes.Select(sub => std.MasterFor(sub)));
+            foreach (var s in standards) paths.AddRange(Standards.SubTypes.Select(sub => s.MasterFor(sub)));
+            return paths.Where(p => !string.IsNullOrEmpty(p) && File.Exists(p)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         }
 
         // Opens every master hidden in Inventor in the background (when Inventor is running), the
@@ -405,15 +441,12 @@ namespace InventorSizer
         // master is loaded again for the next Apply.
         void PreloadMasters()
         {
-            var paths = new List<string>();
-            if (std != null) paths.AddRange(Standards.SubTypes.Select(sub => std.MasterFor(sub)));
-            foreach (var s in standards) paths.AddRange(Standards.SubTypes.Select(sub => s.MasterFor(sub)));
-            Inv.PreloadMasters(paths.Distinct(StringComparer.OrdinalIgnoreCase), msg =>
+            Inv.PreloadMasters(MasterPaths(), msg =>
             {
                 try
                 {
                     if (IsHandleCreated && !IsDisposed)
-                        BeginInvoke((Action)(() => { if (msg != null) Log.Write(msg); else if (Enabled) statusLabel.Text = Inv.Status(); }));
+                        BeginInvoke((Action)(() => { if (msg != null) Log.Write(msg); else if (Enabled) { statusLabel.Text = Inv.Status(); watchText = ""; } }));
                 }
                 catch { }
             });
@@ -458,7 +491,7 @@ namespace InventorSizer
             {
                 Log.Written -= grab;
                 Enabled = true; Cursor = Cursors.Default;
-                if (inventor) { try { PreloadMasters(); } catch { } statusLabel.Text = Inv.Status(); }
+                if (inventor) { try { PreloadMasters(); } catch { } statusLabel.Text = Inv.Status(); watchText = ""; }
             }
             if (failed != null) { GlassDialog.Error(this, title, failed.Message); return; }
             if (QuietSteps.Contains(title)) return;
@@ -522,9 +555,13 @@ namespace InventorSizer
         {
             if (std == null || !std.HasMaster(sub)) { Log.Write($"No {std?.Id} {sub} master to open."); return; }
             string file = std.MasterFor(sub);
-            Step($"Open {std.Id} {sub} master", () =>
+            // The master is not opened in a window: it stays loaded hidden in Inventor (users cannot
+            // edit it), and Apply works on that hidden copy. Dev run: Master > Open master shows it.
+            Step($"{std.Id} {sub} master", () =>
             {
-                Inv.OpenVisible(file);
+                Log.Write($"{std.Id} {sub} master: {Path.GetFileName(file)} - kept hidden in Inventor, Apply works on it in the background.");
+                PreloadMasters();
+                if (!Inv.InventorRunning()) Log.Write("  note: Inventor is not running. Start it: the masters load hidden as soon as it runs.");
                 var m = U.SizeRegex.Match(Path.GetFileNameWithoutExtension(file));
                 if (SizeToken() != null || !m.Success) return;
                 syncing = true;
@@ -536,7 +573,7 @@ namespace InventorSizer
                 }
                 finally { syncing = false; }
                 Log.Write($"Panel size from the {sub} master: {SizeToken()}");
-            }, true);
+            });
             UpdatePreview();
         }
 

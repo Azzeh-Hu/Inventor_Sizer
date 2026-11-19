@@ -460,10 +460,15 @@ The master on disk is never changed, and whatever is open in Inventor is not use
 
 To make this faster:
 
-- While Inventor is running, the app opens every master hidden in Inventor in the background
-  (the selected type's first), so **Open master** and **Apply** find it already loaded instead of
-  waiting 10-40 s. After an Apply the master is loaded again for the next one. Masters it loaded
-  and nobody used are closed when the app closes. The app never starts Inventor just for this.
+- The masters are never shown in Inventor: while Inventor is running, the app loads every master
+  **hidden** in the background (the selected type's first), so users cannot edit them, and **Open
+  master** / **Apply** find them loaded instead of waiting 10-40 s. Picking 1T or 2T only selects the
+  type and takes the starting size from the master's name. When Inventor is started after the app,
+  the masters load as soon as it runs; the status bar shows how many are loaded. After an Apply the
+  master is loaded again for the next one. Masters it loaded and nobody used are closed when the app
+  closes. The app never starts Inventor just for this. A master someone opened in a window with
+  unsaved changes is refused (close it without saving); Apply always works on the master as it is on
+  disk. The dev run's *Master > Open master* still shows a master, for setting it up.
 - During Apply, Inventor does not redraw, ignores clicks and keys, and shows no dialogs; it
   redraws once at the end.
 - Values are only written to the panel's own files (the assembly and its `-Au` / `-In` parts),
