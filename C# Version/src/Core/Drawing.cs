@@ -47,6 +47,11 @@ namespace InventorSizer.Core
             ["divider"] = L("#9370db", 2), ["dividerMilled"] = L("#2e8b57", 2), ["dividerMoved"] = L("#ff8c00", 2.4),
             ["label"] = T("#000000", 13, true), ["sub"] = T("#696969", 11), ["caption"] = T("#696969", 14, true), ["bom"] = T("#000000", 12),
             // the sub parts, each its own see-through colour: outer tray (-Au), inner panel(s) (-In / -In-2T), door hardware
+            // GR openings: empty (a hue to fill), planned panel per type, existing panel, blocked, the selected one
+            ["openEmpty"] = new Style { Fill = "#f2b632", Opacity = 0.30 }, ["openFP"] = new Style { Fill = "#3d7cc9", Opacity = 0.35 },
+            ["openTP"] = new Style { Fill = "#2f9e64", Opacity = 0.38 }, ["openRP"] = new Style { Fill = "#b25bc8", Opacity = 0.35 },
+            ["openFilled"] = new Style { Fill = "#8a8a8a", Opacity = 0.18 }, ["openBlocked"] = new Style { Fill = "#d9534f", Opacity = 0.22 },
+            ["openSelected"] = new Style { Stroke = "#e8590c", Width = 2.6 },
             ["partAu"] = new Style { Fill = "#3d7cc9", Opacity = 0.20 }, ["partIn"] = new Style { Fill = "#2f9e64", Opacity = 0.26 }, ["partHw"] = new Style { Fill = "#f08c1e", Opacity = 0.55 },
             ["bomHead"] = T("#000000", 12, true), ["bomTitle"] = T("#000000", 14, true), ["axisLabel"] = T("#000000", 11, true), ["note"] = T("#000000", 12), ["empty"] = T("#808080", 15),
         };

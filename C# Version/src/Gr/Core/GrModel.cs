@@ -50,6 +50,7 @@ namespace InventorSizer.Core
         public double Lx, Wy, Hz, X, Y, Z;
         public List<string> Panels = new List<string>(), Dividers = new List<string>(), Other = new List<string>();
         public List<int> Neighbours = new List<int>();
+        public double[] RealOrigin, Size0;   // with real positions: the box's min corner in GR axes (assembly mm) and its sizes then
         public double[] Pos => new[] { X, Y, Z };
         public double[] Size => new[] { Lx, Wy, Hz };
         public double Get(string dim) => dim == "L" ? Lx : dim == "W" ? Wy : Hz;
@@ -67,6 +68,9 @@ namespace InventorSizer.Core
         public int Corners, Joints, ConstraintCount;
         public List<string> Unplaced = new List<string>(), Warnings = new List<string>(), Removed = new List<string>();
         public bool Edited;
+        public int ServiceSide = 1;   // the service side (TP) is the width side at +1 = max / -1 = min; the other is the back (RP)
+        public Dictionary<string, string> PanelChoice = new Dictionary<string, string>();   // opening key -> FP / TP / RP / keep
+        public string SelectedOpening;   // opening key highlighted in the drawing (not saved)
         public int[] RealMap;   // assembly axis (0 X, 1 Y, 2 Z) of GR length, width, height
         public int Up = 2;       // assembly axis that is up (Z unless the user changes it)
         public GrFrame Frame(int no) => Frames.FirstOrDefault(f => f.No == no) ?? throw new SizerException($"There is no Box {no - 1}.");
@@ -119,6 +123,7 @@ namespace InventorSizer.Core
                 var lp = j.Obj("lengthParameters");
                 if (lp != null) foreach (var k in lp.OrderedKeys) LengthParams[k] = lp.Str(k);
                 CornerAdd = j.Num("cornerAdd", CornerAdd); PanelAdd = j.Num("panelAdd", PanelAdd);
+                GrOpenings.ProfileWidth = j.Num("profileWidth", GrOpenings.ProfileWidth); GrOpenings.MinOpening = j.Num("minOpening", GrOpenings.MinOpening);
                 var corners = j.Arr("corners").OfType<JsonObject>().Select(r => (new Regex(r.Str("pattern")), r.Num("perSide", 70))).ToList();
                 if (corners.Count > 0) CornerTypes = corners;
                 var fn = j.Obj("faceNames");
@@ -175,9 +180,9 @@ namespace InventorSizer.Core
         public static Dictionary<string, string[]> FaceNames = new Dictionary<string, string[]>
         {
             ["frameProfile"] = new[] { "End_A", "End_B", "Out_1", "Out_2", "Seat_1", "Seat_2" },
-            ["divider"] = new[] { "End_A", "End_B", "Out", "Side_A", "Side_B", "Seat_A", "Seat_B" },
+            ["divider"] = new[] { "End_A", "End_B", "Out", "Seat_Side_A", "Seat_Side_B" },
             ["corner"] = new[] { "Leg_X", "Leg_Y", "Leg_Z", "Out_X", "Out_Y", "Out_Z" },
-            ["joint"] = new[] { "Base", "Leg", "Out" },
+            ["joint"] = new[] { "Base", "End", "Out" },
             ["panelAu"] = new[] { "Top", "Edge_W0", "Edge_W1", "Edge_L0", "Edge_L1" },
         };
 
@@ -593,6 +598,10 @@ namespace InventorSizer.Core
                 }
                 m.RealMap = map;
             }
+            foreach (var f in m.Frames.Where(f => real.ContainsKey(f.Id)))
+            {
+                var mn = real[f.Id].Min; f.RealOrigin = new[] { mn[map[0]], mn[map[1]], mn[map[2]] }; f.Size0 = f.Size;
+            }
             double[] ToGr(double[] p) => new[] { p[map[0]], p[map[1]], p[map[2]] };
             double[] Centre(int id) => ToGr(Enumerable.Range(0, 3).Select(k => (real[id].Min[k] + real[id].Max[k]) / 2).ToArray());
             foreach (var f in m.Frames)
@@ -607,7 +616,7 @@ namespace InventorSizer.Core
             }
             foreach (var c in m.Components.Values)
             {
-                if ((c.Kind != "divider" && c.Kind != "joint") || c.Box == null || !real.ContainsKey(c.Frame)) continue;
+                if ((c.Kind != "divider" && c.Kind != "joint" && c.Kind != "panel" && c.Kind != "damper" && c.Kind != "stub") || c.Box == null || !real.ContainsKey(c.Frame)) continue;
                 var f = m.ById(c.Frame);
                 var o = ToGr(real[c.Frame].Min);
                 var a = ToGr(new[] { c.Box[0], c.Box[1], c.Box[2] }); var b = ToGr(new[] { c.Box[3], c.Box[4], c.Box[5] });
@@ -843,7 +852,8 @@ namespace InventorSizer.Core
                     return (object)o;
                 }).ToList(),
                 ["warnings"] = m.Warnings.Cast<object>().ToList(), ["unplaced"] = m.Unplaced.Cast<object>().ToList(), ["removed"] = m.Removed.Cast<object>().ToList(),
-                ["realMap"] = m.RealMap == null ? null : m.RealMap.Select(x => (object)(double)x).ToList(), ["up"] = (double)m.Up
+                ["realMap"] = m.RealMap == null ? null : m.RealMap.Select(x => (object)(double)x).ToList(), ["up"] = (double)m.Up, ["serviceSide"] = (double)m.ServiceSide,
+                ["panelChoice"] = m.PanelChoice.OrderBy(kv => kv.Key, StringComparer.Ordinal).Select(kv => (object)new JsonObject { ["key"] = kv.Key, ["type"] = kv.Value }).ToList()
             };
             File.WriteAllText(path, Json.Write(j), new UTF8Encoding(false));
         }
@@ -884,6 +894,8 @@ namespace InventorSizer.Core
             if (j["cornerAdd"] != null) CornerAdd = j.Num("cornerAdd", CornerAdd);
             SetCornerAdd(m.Components.Values);
             m.Up = j["up"] == null ? 2 : (int)j.Num("up");
+            m.ServiceSide = j["serviceSide"] == null ? 1 : (int)j.Num("serviceSide");
+            foreach (var pc in j.Arr("panelChoice").OfType<JsonObject>()) m.PanelChoice[pc.Str("key")] = pc.Str("type");
             var rm = Ints(j["realMap"]);
             if (rm.Count == 3) m.RealMap = rm.ToArray();
             UpdateLayout(m);

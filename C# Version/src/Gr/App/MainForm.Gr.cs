@@ -150,9 +150,12 @@ namespace InventorSizer
                 Log.Write($"GR: up = {Gr.AxisName(up)}" + (gr.RealMap == null ? " (no real positions: the sizes stay a guess)" : $", length along {Gr.AxisName(gr.RealMap[0])}"));
             });
             btnRemove.Click += (s, e) => GrEdit("Remove box", () => { int no = SelectedBox(); Gr.RemoveFrame(gr, no); Log.Write($"GR: removed Box {no - 1} with its panels and dividers"); });
+            BuildOpeningsUi();
             btnGrApply.Click += (s, e) => Step("Write new GR to Inventor", () =>
             {
                 if (gr == null) throw new SizerException("Load a GR first.");
+                int planned = GrOpenings.Planned(GrOpenings.Find(gr)).Count;
+                if (planned > 0) Log.Write($"  note: {planned} planned panel(s) are not placed by this step yet - use Openings > Panel list for now");
                 Inv.ApplyGr(gr, grNewName.Text, grPrefix.Text);
                 grData = null;   // the new GR differs from the data it was read from
                 UpdateGrGrid();
@@ -201,6 +204,7 @@ namespace InventorSizer
             }
             finally { syncing = false; }
             if (btnUp != null) btnUp.Text = "Up: " + Gr.AxisName(gr?.Up ?? 2);
+            UpdateOpenings();
             grInfo.Text = gr == null ? "Choose a preset, load a GR export, or read a GR from Inventor." :
                 $"{gr.Name}{(gr.Edited ? " (edited)" : "")}: outer {U.F(gr.Length)} x {U.F(gr.OuterWidth)} x {U.F(gr.OuterHeight)} mm. Edit the outer sizes (incl. corners); the P150 profiles are outer - {U.F(Gr.CornerAdd)}. Select a box to add a box next to it.";
         }
