@@ -113,5 +113,7 @@
   },
   "openingsNotes": "Openings: the clear space on a box face starts profileWidth in from the outer edge (the P150); gaps narrower than minOpening (e.g. beside a damper) are not offered.",
   "profileWidth": 70,
-  "minOpening": 100
+  "minOpening": 100,
+  "serviceSideNotes": "Which width side is the service side (TP) when a GR is read: 1 = the side at W max, -1 = the side at W 0. The other is the back (RP). Swap sides in the Openings window changes it for one GR.",
+  "serviceSide": -1
 }

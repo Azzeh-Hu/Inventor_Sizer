@@ -114,6 +114,7 @@ namespace InventorSizer.Core
         // the profiles + 2 x SeatDepth. W = the shorter side. A side over MaxPanel needs a divider.
         public class PanelRule { public string Type; public double Clearance, Height; }
         public static double SeatDepth = 20, MaxPanel = 2400, SplitBelow = 500;
+        public static int DefaultServiceSide = 1;   // GR.json "serviceSide": +1 = the width side at W max is the service side (TP), -1 = the one at W 0
         public static Dictionary<string, PanelRule> PanelRules = new Dictionary<string, PanelRule>
         {
             ["FP"] = new PanelRule { Type = "FP", Clearance = 2, Height = 47 },
@@ -139,6 +140,7 @@ namespace InventorSizer.Core
                 var lp = j.Obj("lengthParameters");
                 if (lp != null) foreach (var k in lp.OrderedKeys) LengthParams[k] = lp.Str(k);
                 CornerAdd = j.Num("cornerAdd", CornerAdd); PanelAdd = j.Num("panelAdd", PanelAdd);
+                DefaultServiceSide = j.Num("serviceSide", DefaultServiceSide) < 0 ? -1 : 1;
                 GrOpenings.ProfileWidth = j.Num("profileWidth", GrOpenings.ProfileWidth); GrOpenings.MinOpening = j.Num("minOpening", GrOpenings.MinOpening);
                 var corners = j.Arr("corners").OfType<JsonObject>().Select(r => (new Regex(r.Str("pattern")), r.Num("perSide", 70))).ToList();
                 if (corners.Count > 0) CornerTypes = corners;
@@ -529,7 +531,7 @@ namespace InventorSizer.Core
             var model = new GrModel
             {
                 Name = data.Name, Source = data.Source, SourcePath = data.SourcePath, Frames = frames, Components = comps, Order = order,
-                Unplaced = unplaced, Warnings = warnings, ConstraintCount = active.Count, RealMap = realMap, Up = up
+                Unplaced = unplaced, Warnings = warnings, ConstraintCount = active.Count, RealMap = realMap, Up = up, ServiceSide = DefaultServiceSide
             };
             SetRealGeometry(model);
             UpdateLayout(model);
