@@ -183,7 +183,9 @@ namespace InventorSizer
             Log.Measure("Update and save the new GR", () => { asm.Update(); asm.Save2(true); });
             if (planned.Count > 0)
             {
-                planned = GrOpenings.Planned(GrOpenings.Find(m));   // again: the profiles may have new occurrence names now
+                var now = GrOpenings.Find(m);   // again: sizes, rings and names may have changed above
+                GrOpenings.AutoDefaults(m, now);   // openings made by the edits get their default type
+                planned = GrOpenings.Planned(now);
                 job.Folder = parts;
                 Log.Write(PlacePanels(m, asm, planned, job));
                 Log.Measure("Save the new GR with its panels", () => { asm.Update(); asm.Save2(true); });

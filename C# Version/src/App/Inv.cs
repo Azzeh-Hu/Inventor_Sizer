@@ -642,7 +642,7 @@ namespace InventorSizer
         // saved under the new name into outDir, and the new panel is opened. The master on disk
         // is never changed; what is open in Inventor is not used. An existing panel of that name
         // is only replaced with overwrite; confirm is asked when only part files exist already.
-        public static string ApplyPanel(string name, List<Param> ps, Settings set, string paramPath, List<Standard> standards, Standard s, bool overwrite = false, Func<List<string>, bool> confirm = null)
+        public static string ApplyPanel(string name, List<Param> ps, Settings set, string paramPath, List<Standard> standards, Standard s, bool overwrite = false, Func<List<string>, bool> confirm = null, bool show = true)
         {
             PanelLock.RequireUnchanged(s.Id);
             string newName = name.Trim();
@@ -689,7 +689,8 @@ namespace InventorSizer
                 else Log.Write($"  warning: the master open in Inventor ({Path.GetFileName(master)}) was changed by this Apply. Close it WITHOUT saving before the next Apply.");
                 throw;
             }
-            Show(src);
+            if (show) Show(src);
+            else if (src.Opened) { try { src.Doc.Close(true); } catch { } }   // GR panels: saved, not shown
             Log.Write($"New panel: {target} (the master is unchanged)");
             return newName;
         }

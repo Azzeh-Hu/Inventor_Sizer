@@ -197,6 +197,8 @@ namespace InventorSizer
 
             int placed = 0, mated = 0; var problems = new List<string>();
             var placedOccs = new List<(GrOpening O, string Occ)>();
+            var axesOf = new Dictionary<string, PanelAxes>(StringComparer.OrdinalIgnoreCase);
+            Quietly((object)inv, (Action)(() => {   // no redraw while placing: Inventor draws once at the end
             foreach (var o in planned)
             {
                 string step = "";   // the step that failed goes into the problem line
@@ -218,9 +220,12 @@ namespace InventorSizer
                         var lT = AxisVec(m, longAx); var wT = Cross(lT, hOut);
                         // panel axes from its named faces (the file is opened in the background)
                         step = "panel axes from its named faces (Top, Edge_W1, Edge_L1)";
-                        var pd = Open(files[name]);
-                        PanelAxes pf;
-                        try { pf = PanelFrame((object)pd.Doc, o.Panel.W, o.Panel.L); } finally { if (pd.Opened) try { pd.Doc.Close(true); } catch { } }
+                        if (!axesOf.TryGetValue(files[name], out var pf))
+                        {
+                            var pd = Open(files[name]);
+                            try { pf = PanelFrame((object)pd.Doc, o.Panel.W, o.Panel.L); } finally { if (pd.Opened) try { pd.Doc.Close(true); } catch { } }
+                            axesOf[files[name]] = pf;   // read once per panel file
+                        }
                         double[] R(double[] x) => Add(Add(Scale(wT, Dot(pf.W, x)), Scale(lT, Dot(pf.L, x))), Scale(hOut, Dot(pf.H, x)));
                         // centre of the opening on the face, the panel's height inside
                         step = "placing the panel";
@@ -263,6 +268,7 @@ namespace InventorSizer
                 }
                 catch (Exception e) { problems.Add($"{o.Label} ({name}), {step}: {e.Message}"); Log.Write($"  problem at {step}: {e.Message}"); }
             }
+            }));
             // after the constraints are solved: is every panel in its opening?
             try { asm.Update(); } catch { }
             foreach (var (o, occName) in placedOccs)
