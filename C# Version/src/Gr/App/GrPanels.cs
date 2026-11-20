@@ -268,8 +268,7 @@ namespace InventorSizer
                 }
                 catch (Exception e) { problems.Add($"{o.Label} ({name}), {step}: {e.Message}"); Log.Write($"  problem at {step}: {e.Message}"); }
             }
-            }));
-            // after the constraints are solved: is every panel in its opening?
+            // after the constraints are solved: is every panel in its opening? (still quiet)
             try { asm.Update(); } catch { }
             foreach (var (o, occName) in placedOccs)
             {
@@ -284,22 +283,12 @@ namespace InventorSizer
                 }
                 catch (Exception e) { Log.Dev($"  check of {occName}: {e.Message}"); }
             }
+            }));
             foreach (var p in problems) Log.Write("  not finished: " + p);
             foreach (var o in planned) m.PanelChoice.Remove(o.Key);
             return $"  {placed} of {planned.Count} panel(s) placed, {mated} constraints" + (problems.Count > 0 ? $", {problems.Count} problem(s) - see the log" : "");
         }
 
         static dynamic Vec(dynamic tg, double[] v) => tg.CreateVector(v[0], v[1], v[2]);
-
-        // Closes a saved document the app opened (e.g. a new panel), so a batch leaves no windows.
-        public static void CloseIfOpen(string path)
-        {
-            try
-            {
-                dynamic d = FindOpen(App(), path);
-                if (d != null && !(bool)d.Dirty) d.Close(true);
-            }
-            catch (Exception e) { Log.Dev($"  {Path.GetFileName(path)} stays open ({e.Message})"); }
-        }
     }
 }

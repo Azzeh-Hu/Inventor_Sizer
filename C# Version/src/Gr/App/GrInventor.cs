@@ -20,6 +20,9 @@ namespace InventorSizer
             var d = new GrData { Source = "Inventor", SourcePath = asm.FullFileName };
             d.Name = U.LeafName(d.SourcePath);
             int skipped = 0;
+            // Quiet (no redraw, no input) while reading: with the GR drawn in a window each call
+            // waited for Inventor (about 50 ms), many times faster quiet.
+            Quietly((object)asm.Parent, () => {
             Log.Measure("Read components from Inventor", () =>
             {
                 foreach (var occ in Items(asm.ComponentDefinition.Occurrences))
@@ -51,6 +54,7 @@ namespace InventorSizer
                     try { k.Value = c.Offset.Expression; } catch { try { k.Value = c.Angle.Expression; } catch { } }
                     d.Constraints.Add(k);
                 }
+            });
             });
             Log.Dev($"  {d.Components.Count} components, {d.Constraints.Count} constraints, {skipped} skipped");
             if (skipped > 0) Log.Write($"  note: {skipped} item(s) Inventor could not return were skipped");
@@ -134,8 +138,13 @@ namespace InventorSizer
             dynamic occs = asm.ComponentDefinition.Occurrences;
             var renamed = new Dictionary<string, string>();
             // boxes first: a new box is a copy at the old size, its profiles get their own size below
-            RemoveBoxes(m, (object)asm);
-            if (m.Frames.Any(f => f.CloneOf != 0)) { AddBoxes(m, (object)asm); todo = Gr.Pending(m); }
+            // Quiet (no redraw, no input) while parts are removed, copied and moved; not around the
+            // Save As / Save calls (an assembly's save writes its view and fails with the screen off).
+            Quietly((object)inv, () =>
+            {
+                RemoveBoxes(m, (object)asm);
+                if (m.Frames.Any(f => f.CloneOf != 0)) { AddBoxes(m, (object)asm); todo = Gr.Pending(m); }
+            });
             foreach (var g in todo.Profiles)
             {
                 Log.Measure($"Profile {g.From} -> {g.To} ({g.Names.Count} x)", () =>
@@ -168,19 +177,23 @@ namespace InventorSizer
                 });
             }
             // P350 rings: removed, then new ones copied from rings that already have their final length
-            if (m.RingRemoves.Count > 0) RemoveRings(m, (object)asm);
-            if (m.RingAdds.Count > 0) { AddRings(m, (object)asm); todo = Gr.Pending(m); }
-            if (todo.Dividers.Count > 0)
+            Quietly((object)inv, () =>
             {
-                dynamic cons = asm.ComponentDefinition.Constraints;
-                foreach (var d in todo.Dividers)
+                if (m.RingRemoves.Count > 0) RemoveRings(m, (object)asm);
+                if (m.RingAdds.Count > 0) { AddRings(m, (object)asm); todo = Gr.Pending(m); }
+                if (todo.Dividers.Count > 0)
                 {
-                    string dn = renamed.TryGetValue(d.Name, out var r) ? r : d.Name;
-                    try { cons.Item(d.Constraint).Offset.Expression = $"{U.F(d.To)} mm"; Log.Write($"  {dn}: {U.F(d.From)} -> {U.F(d.To)} mm"); m.Components[dn].OrigPosition = d.To; }
-                    catch (Exception e) { Log.Write($"  could not move {d.Name} (constraint {d.Constraint}: {e.Message})"); }
+                    dynamic cons = asm.ComponentDefinition.Constraints;
+                    foreach (var d in todo.Dividers)
+                    {
+                        string dn = renamed.TryGetValue(d.Name, out var r) ? r : d.Name;
+                        try { cons.Item(d.Constraint).Offset.Expression = $"{U.F(d.To)} mm"; Log.Write($"  {dn}: {U.F(d.From)} -> {U.F(d.To)} mm"); m.Components[dn].OrigPosition = d.To; }
+                        catch (Exception e) { Log.Write($"  could not move {d.Name} (constraint {d.Constraint}: {e.Message})"); }
+                    }
                 }
-            }
-            Log.Measure("Update and save the new GR", () => { asm.Update(); asm.Save2(true); });
+                Log.Measure("Update the new GR", () => { asm.Update(); });
+            });
+            Log.Measure("Save the new GR", () => { asm.Save2(true); });
             if (planned.Count > 0)
             {
                 var now = GrOpenings.Find(m);   // again: sizes, rings and names may have changed above

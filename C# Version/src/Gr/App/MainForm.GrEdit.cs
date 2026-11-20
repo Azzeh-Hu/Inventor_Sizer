@@ -364,8 +364,7 @@ namespace InventorSizer
             Set("HolesL", Math.Max(s.MinHolesL, HoleRules.AutoCount(v["Length"], edge, pitch, false)), "ul");
             Set("HolesW", split ? HoleRules.AutoCountSplitW(v["Width"], edge, mid, pitch, s.EvenSplitHolesW) : HoleRules.AutoCount(v["Width"], edge, pitch, false), "ul");
             string paramCopy = Path.Combine(Path.GetTempPath(), "InventorSizer-GR-panel-params.xml");   // the panel tool's own Parameters.xml stays as it is
-            Inv.ApplyPanel(name, ps, set, paramCopy, standards, s, show: false);
-            Inv.CloseIfOpen(target);
+            Inv.ApplyPanel(name, ps, set, paramCopy, standards, s, show: false);   // saved and closed there
             return target;
         }
 

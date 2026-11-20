@@ -67,9 +67,31 @@ namespace InventorSizer
             return list;
         }
 
+        // The document of that file when Inventor has it loaded (in a window or hidden), else null.
+        // One call by name instead of reading the file name of every loaded document: with a GR
+        // open, that walk took 5-50 s each time. Not found by name: only the documents in a window
+        // are walked, so one open there with unsaved changes is still found (Open refuses it).
+        // An Inventor without Documents.ItemByName gets the old walk over every document.
+        static bool walkAllDocuments;
+
         static dynamic FindOpen(dynamic inv, string path)
         {
-            foreach (var d in Items(inv.Documents))
+            if (walkAllDocuments) return FindIn(Items(inv.Documents), path);
+            try
+            {
+                dynamic d = inv.Documents.ItemByName(path);
+                if (d != null && string.Equals((string)d.FullFileName, path, StringComparison.OrdinalIgnoreCase)) return d;
+            }
+            catch (Microsoft.CSharp.RuntimeBinder.RuntimeBinderException) { walkAllDocuments = true; return FindIn(Items(inv.Documents), path); }
+            catch (COMException e) when (e.ErrorCode == unchecked((int)0x80020003) || e.ErrorCode == unchecked((int)0x80020006))   // no such member
+            { walkAllDocuments = true; return FindIn(Items(inv.Documents), path); }
+            catch { }   // not loaded under that name
+            try { return FindIn(Items(inv.Documents.VisibleDocuments), path); } catch { return null; }
+        }
+
+        static dynamic FindIn(List<dynamic> docs, string path)
+        {
+            foreach (var d in docs)
             {
                 string f; try { f = (string)d.FullFileName; } catch { continue; }
                 if (string.Equals(f, path, StringComparison.OrdinalIgnoreCase)) return d;
