@@ -119,7 +119,7 @@ Nothing to install. The tool uses:
    (`6357-3 TP-519x1194x42`); the **Type** follows the prefix in front of the size, or the
    height if there is none, and brings its own `HoleZ`.
 5. The drawing updates as you type (View tab of the ribbon):
-   - **View**: Isometric, Front, Back, Left, Right, Top or Bottom.
+   - **View**: Isometric, Front, Back, Left, Right, Top or Bottom (GR: Front = the service side; drag to turn the GR freely).
    - **Show hidden edges**: back edges, back-wall holes, floor and wall thickness as dashed lines.
    - The **bill of materials** (bottom right) lists the parts of the type with their sizes and
      the number of holes; the **axis** (bottom left) shows X, Y and Z for the current view
@@ -432,19 +432,38 @@ hinge / handle holes and of the hinge / handle parts (docs/PANEL_RULES.md, secti
 
 ## GR editing: boxes, outer sizes, dividers
 
-- **Boxes:** each frame is a box (Box 0, Box 1, ...), one row per box. Select a box and click
-  **Add box right**, **Add box left** or **Add box front** to add one of the same size next to
-  it; a spot already taken moves the new box past it. **Remove box** removes the selected one.
+- **The twin** shows the GR from the front, which is the service side (TP). Turn it like in
+  Inventor: drag with the left button to turn, middle button (or Shift + left) to pan, wheel to
+  zoom, double-click on empty space to fit it again. The **View** box jumps to Front (service
+  side), Back, Left, Right, Top, Bottom or the isometric. Edges behind the boxes are dashed.
+  The drawing always fits between the legend and the tables; zoomed in, it stays inside that area.
+- **Dimensions:** every box has its own length, width and height as a chain along the outside
+  of the unit, with the overall size one step further out; an axis seen end-on has none.
+- **Boxes:** each frame is a box (Box 0, Box 1, ...). Right-click a box (its name or a profile)
+  for **Add a box** left, right, front or back of it (as seen from the service side), **Edit
+  sizes** or **Remove this box**. The **+ Left / + Right / + Front / + Back** buttons in the Boxes
+  window do the same for the selected row. A spot already taken moves the new box past it. New
+  boxes are made in Inventor on **Write new GR**, together with panels and P350 on them.
 - **Outer sizes:** **Outer L / W / H** are the outside sizes including the corners. The P150
-  profiles are calculated as outer − 2 × 130 and shown next to them.
+  profiles are calculated as outer − 2 corners and shown next to them.
+- **P350:** right-click a profile of any box:
+  - **Add a P350 ring here** (on a profile along the length): a copy of a ring of this box, or of
+    another box when this one has none, at the position you give. In another box it is mated to
+    that box's matching profiles, and its P350 get that box's lengths.
+  - **Add a single P350 on the <face> here**: one P350 on that face, across it, copied from a P350
+    lying the same way on the same kind of face. It is grounded in Inventor where it is placed.
+  - Right-click a P350: edit its position, add a ring like it, **copy this ring to** another box,
+    or remove the ring.
+- **Panels:** a GR loads with no panel planned. **Auto calculate panels** (ribbon, or the
+  Openings window) puts the default type on every empty opening: TP on the service side, RP on
+  the back, FP elsewhere. Change any opening by right-clicking it; **Clear panels** starts over.
 - **Real positions:** read from Inventor, every divider and joint is drawn where it really is:
-  - P350 purple, P350 gefräst green, a moved divider orange
+  - P350 purple, P350 gefräst green, a moved or new divider orange
   - corners grey squares, joints gold squares
 - **Spacing:** dimension chains show the distance from the frame profile's inner face to each
   divider, and between subsequent dividers.
 - **Export files** have no positions, so there the dividers placed by an offset are drawn
   schematically.
-- Added boxes are shown and listed but not yet written into Inventor.
 
 ## Working without opening files in Inventor
 

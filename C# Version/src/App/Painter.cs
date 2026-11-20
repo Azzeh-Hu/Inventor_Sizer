@@ -42,7 +42,7 @@ namespace InventorSizer
             ["dim"] = L("#6e6e6e", 1), ["ext"] = L("#d6d6d6", 1), ["arrow"] = new Style { Fill = "#6e6e6e" }, ["table"] = L("#d4d4d4", 1), ["frame"] = L("#d0d0d0", 1.2),
             ["axisX"] = L("#141414", 1.8, null, "#141414"), ["axisY"] = L("#5c5c5c", 1.8, null, "#5c5c5c"), ["axisZ"] = L("#9c9c9c", 1.8, null, "#9c9c9c"), ["axisRing"] = L("#bdbdbd", 1),
             ["hw"] = L("#2e2e2e", 2.0), ["hwHidden"] = L("#6a6a6a", 1.4, new float[] { 2.5f, 1.5f }), ["hwBad"] = L("#000000", 2.2, null, "#141414"),
-            ["profile"] = L("#262626", 2.6), ["corner"] = L("#1c1c1c", 1, null, "#5a5a5a"), ["joint"] = L("#1c1c1c", 1, null, "#e2e2e2"),
+            ["profile"] = L("#262626", 2.6), ["profileHidden"] = L("#b3b3b3", 1.1, new float[] { 5, 4 }), ["corner"] = L("#1c1c1c", 1, null, "#5a5a5a"), ["joint"] = L("#1c1c1c", 1, null, "#e2e2e2"),
             ["divider"] = L("#7a7a7a", 2), ["dividerMilled"] = L("#3a3a3a", 2, new float[] { 5, 3 }), ["dividerMoved"] = L("#000000", 3),
             ["label"] = T("#141414", 13, true), ["sub"] = T("#7a7a7a", 11), ["caption"] = T("#3a3a3a", 15), ["bom"] = T("#2a2a2a", 12),
             ["bomHead"] = T("#4a4a4a", 11.5, true), ["bomTitle"] = T("#141414", 14), ["axisLabel"] = T("#3a3a3a", 11, true), ["note"] = T("#6e6e6e", 11.5), ["empty"] = T("#9a9a9a", 16),
@@ -84,6 +84,9 @@ namespace InventorSizer
             g.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
             foreach (var s in shapes)
             {
+                // clip / unclip: what follows stays inside that rectangle (the GR model area)
+                if (s.Kind == "clip" && s.Points != null) { g.SetClip(RectangleF.FromLTRB((float)s.Points[0], (float)s.Points[1], (float)s.Points[4], (float)s.Points[5])); continue; }
+                if (s.Kind == "unclip") { g.ResetClip(); continue; }
                 var st = Get(s.Kind);
                 if (s.IsText)
                 {

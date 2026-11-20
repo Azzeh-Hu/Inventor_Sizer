@@ -822,7 +822,7 @@ namespace InventorSizer
             shapes = mode != "GR" && U.SizeParams.Any(k => !values.ContainsKey(k))
                 ? new List<Shape>()
                 : Log.Measure("Draw", () => mode == "GR"
-                    ? GrDrawing.Window(gr, view, size.Width, size.Height)
+                    ? GrDrawing.Window(gr, grCam, size.Width, size.Height)
                     : PanelDrawing.Window(WithMarks(PanelValues.Of(values, settings.Thickness, hw)), layout, view, size.Width, size.Height, chkHidden.Checked, CurrentBom()));
             twin.Invalidate();
         }

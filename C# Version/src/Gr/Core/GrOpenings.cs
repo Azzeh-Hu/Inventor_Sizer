@@ -166,7 +166,7 @@ namespace InventorSizer.Core
 
         // A frame profile's box in layout coordinates: from its real position when there is one,
         // else from the frame size (its length along dim, 70 x 70 at its edge).
-        static (double[] Min, double[] Max)? ProfileBox(GrModel m, GrFrame f, string name, int dim)
+        public static (double[] Min, double[] Max)? ProfileBox(GrModel m, GrFrame f, string name, int dim)
         {
             var c = m.Components[name];
             if (c.Box == null || m.RealMap == null || f.RealOrigin == null) return null;
@@ -178,6 +178,33 @@ namespace InventorSizer.Core
                 mn[g] = f.Pos[g] + a0; mx[g] = f.Pos[g] + a1;
             }
             return (mn, mx);
+        }
+
+        // The part of box `to` that sits where `name` sits in box `from` (a frame profile or corner of the
+        // same kind and direction; the far side stays the far side). Needs real positions in both.
+        public static string Counterpart(GrModel m, string name, GrFrame from, GrFrame to)
+        {
+            if (!m.Components.TryGetValue(name, out var c) || from == null || to == null) return null;
+            if (from == to) return name;
+            int dim = c.Follow.Count > 0 ? DimIndex(c.Follow[0].Dim) : -1;
+            var sb = ProfileBox(m, from, name, dim);
+            if (sb == null) return null;
+            var want = new double[3];
+            for (int i = 0; i < 3; i++)
+            {
+                double rel = (sb.Value.Min[i] + sb.Value.Max[i]) / 2 - from.Pos[i], so = from.Size[i] + Gr.CornerAdd, to_ = to.Size[i] + Gr.CornerAdd;
+                rel = i == dim ? rel / so * to_ : rel > so / 2 ? rel + to_ - so : rel;
+                want[i] = to.Pos[i] + rel;
+            }
+            string best = null; double bestD = 150;
+            foreach (var o in m.Components.Values.Where(o => o.Frame == to.Id && o.Kind == c.Kind && (o.Follow.Count > 0 ? DimIndex(o.Follow[0].Dim) : -1) == dim))
+            {
+                var ob = ProfileBox(m, to, o.Name, dim);
+                if (ob == null) continue;
+                double d = Math.Sqrt(Enumerable.Range(0, 3).Sum(i => Math.Pow((ob.Value.Min[i] + ob.Value.Max[i]) / 2 - want[i], 2)));
+                if (d < bestD) { bestD = d; best = o.Name; }
+            }
+            return best;
         }
 
         static int SideOrder(string face) => Array.IndexOf(new[] { "Bottom", "Top", "Service side", "End 2", "Back side", "End 1" }, face);

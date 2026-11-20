@@ -1,8 +1,9 @@
 // GR editing in the window: three floating glass windows (Boxes = sizes, Dividers, Openings)
 // opened from the ribbon or by clicking the twin, and the twin itself as an editor: click an
 // opening, divider or box to edit it, right-click an opening to pick its panel type.
-// Openings are numbered U0.. (bottom), D0.. (top), S0.. (sides and ends); empty ones get the
-// default type (TP service side, RP back, FP elsewhere) until the user picks another.
+// Openings are numbered U0.. (bottom), D0.. (top), S0.. (sides and ends). A GR loads with no
+// panel planned; "Auto calculate panels" gives every empty opening its default type (TP service
+// side, RP back, FP elsewhere), which the user can change opening by opening.
 // Kept apart from the panel code (FP / TP / RP).
 
 using System;
@@ -56,7 +57,7 @@ namespace InventorSizer
             popBoxes.Body.Controls.Add(grInfo);
             glassShared = new GlassToggle("Same width / height change together") { Checked = chkShared.Checked };
             glassShared.CheckedChanged += (s, e) => chkShared.Checked = glassShared.Checked;
-            foreach (var b in new[] { btnUp, btnAddR, btnAddL, btnAddF, btnRemove })
+            foreach (var b in new[] { btnUp, btnAddR, btnAddL, btnAddF, btnAddB, btnRemove })
             {
                 b.Parent?.Controls.Remove(b);
                 b.Kind = ButtonKind.Glass; b.Height = 28; b.FitWidth(); b.Margin = new Padding(0, 0, 6, 0);
@@ -77,25 +78,40 @@ namespace InventorSizer
 
             // Openings
             popOpenings.Body.Controls.Add(grOpGrid);
-            var btnDefaults = new FlatButton("Defaults", ButtonKind.Glass, 0, 28) { Margin = new Padding(0, 0, 6, 0) };
+            var btnDefaults = new FlatButton("Auto calculate panels", ButtonKind.Glass, 0, 28) { Margin = new Padding(0, 0, 6, 0) };
+            var btnClear = new FlatButton("Clear panels", ButtonKind.Glass, 0, 28) { Margin = new Padding(0, 0, 6, 0) };
             var btnSides = new FlatButton("Swap sides", ButtonKind.Glass, 0, 28) { Margin = new Padding(0, 0, 6, 0) };
             var btnList = new FlatButton("Panel list...", ButtonKind.Glass, 0, 28) { Margin = new Padding(0, 0, 6, 0) };
-            popOpenings.Actions.Controls.AddRange(new Control[] { btnDefaults, btnSides, btnList });
+            popOpenings.Actions.Controls.AddRange(new Control[] { btnDefaults, btnClear, btnSides, btnList });
 
             // ribbon: open / close the windows
             var bBoxes = new RibbonButton("Boxes", "master");
             var bDividers = new RibbonButton("Dividers", "fx");
             var bOpenings = new RibbonButton("Openings", "type");
             tabGr.AddGroup("Edit", bBoxes, bDividers, bOpenings);
+            var bAuto = new RibbonButton("Auto panels", "apply");
+            var bClear = new RibbonButton("Clear panels", "type");
+            tabGr.AddGroup("Panels", bAuto, bClear);
             bBoxes.Click += (s, e) => popBoxes.Toggle(PopAt(0));
             bDividers.Click += (s, e) => popDividers.Toggle(PopAt(1));
             bOpenings.Click += (s, e) => popOpenings.Toggle(PopAt(2));
 
-            btnDefaults.Click += (s, e) => GrEdit("Default panels", () =>
+            void AutoPanels() => GrEdit("Auto calculate panels", () =>
             {
+                if (gr.RealMap == null) throw new SizerException("Panels need real part positions: read the GR from Inventor.");
                 int n = GrOpenings.FillDefaults(gr, GrOpenings.Find(gr));
-                Log.Write(n > 0 ? $"GR: default panel types on {n} empty opening(s): TP service side, RP back side, FP elsewhere" : "GR: every empty opening has its default panel type");
+                Log.Write(n > 0 ? $"GR: panels on {n} empty opening(s): TP service side, RP back side, FP elsewhere. Change any of them by right-clicking it." : "GR: every empty opening has a panel type already");
             });
+            void ClearPanels() => GrEdit("Clear panels", () =>
+            {
+                int n = gr.PanelChoice.Count;
+                gr.PanelChoice.Clear(); gr.Edited = true;
+                Log.Write($"GR: panel choices cleared ({n}); no new panel is planned");
+            });
+            btnDefaults.Click += (s, e) => AutoPanels();
+            bAuto.Click += (s, e) => AutoPanels();
+            btnClear.Click += (s, e) => ClearPanels();
+            bClear.Click += (s, e) => ClearPanels();
             btnSides.Click += (s, e) => GrEdit("Swap sides", () =>
             {
                 gr.ServiceSide = -gr.ServiceSide;
@@ -103,6 +119,7 @@ namespace InventorSizer
                 foreach (var o in GrOpenings.Find(gr).Where(o => o.State == "empty" && (o.Face == "Service side" || o.Face == "Back side")))
                     if (o.Type == (o.Face == "Service side" ? "RP" : "TP")) gr.PanelChoice[o.Key] = GrOpenings.DefaultType(o.Face);
                 Log.Write($"GR: the service side (TP) is now the width side at {(gr.ServiceSide > 0 ? "W max" : "W 0")}");
+                ResetGrView();   // the front of the twin follows the service side
             });
             btnList.Click += (s, e) => Step("Save panel list", () =>
             {
@@ -133,19 +150,23 @@ namespace InventorSizer
             };
 
             // --- the twin as an editor
-            twin.MouseMove += (s, e) => { if (mode == "GR" && gr != null) twin.Cursor = GrHit(e.Location).Kind != null ? Cursors.Hand : Cursors.Default; };
+            twin.MouseMove += (s, e) => { if (mode == "GR" && gr != null && !grDragging && e.Button == MouseButtons.None) twin.Cursor = GrHit(e.Location).Kind != null ? Cursors.Hand : Cursors.Default; };
             twin.MouseClick += (s, e) =>
             {
                 if (mode != "GR" || gr == null) return;
+                if (grDragged) { grDragged = false; return; }   // the end of a turn or pan, not a click
                 var hit = GrHit(e.Location);
                 if (hit.Kind == null) return;
                 if (e.Button == MouseButtons.Right && hit.Kind == "open") { OpeningMenu(hit.Id, e.Location); return; }
                 if (e.Button == MouseButtons.Right && hit.Kind == "div") { DividerMenu(hit.Id, e.Location); return; }
+                if (e.Button == MouseButtons.Right && hit.Kind == "edge") { var p = hit.Id.Split(':'); EdgeMenu(int.Parse(p[0]), int.Parse(p[1]), e.Location); return; }
+                if (e.Button == MouseButtons.Right && hit.Kind == "box") { BoxMenu(int.Parse(hit.Id), e.Location); return; }
                 if (e.Button != MouseButtons.Left) return;
                 if (hit.Kind == "open") { gr.SelectedOpening = hit.Id; popOpenings.Popup(PopAt(2)); SelectRow(grOpGrid, "Key", hit.Id, null); UpdateDrawing(); }
                 else if (hit.Kind == "div") { popDividers.Popup(PopAt(1)); SelectRow(grDivGrid, "Divider", hit.Id, "Position"); }
-                else if (hit.Kind == "box") { popBoxes.Popup(PopAt(0)); SelectRow(grGrid, "Box", gr.Frame(int.Parse(hit.Id)).Label, null); }
+                else if (hit.Kind == "box" || hit.Kind == "edge") { popBoxes.Popup(PopAt(0)); SelectRow(grGrid, "Box", gr.Frame(int.Parse(hit.Id.Split(':')[0])).Label, null); }
             };
+            WireGrView();
         }
 
         // Where a window first appears: at the top left of the twin, one step further per window.
@@ -183,8 +204,14 @@ namespace InventorSizer
                 var s = shapes[i];
                 if (s.Tag != null && s.Tag.StartsWith("open:") && s.Points != null && Inside(s.Points, p)) return ("open", s.Tag.Substring(5));
             }
-            foreach (var s in shapes.Where(s => s.Tag != null && s.Tag.StartsWith("box:")))
-                if (s.IsText ? Math.Abs(p.X - s.X) < 40 && Math.Abs(p.Y - s.Y) < 12 : NearLine(s.Points, p, 5)) return ("box", s.Tag.Substring(4));
+            // box profiles (the edges seen in front last in the list: found first), then the box names
+            for (int i = shapes.Count - 1; i >= 0; i--)
+            {
+                var s = shapes[i];
+                if (s.Tag != null && s.Tag.StartsWith("edge:") && s.Points != null && NearLine(s.Points, p, 5)) return ("edge", s.Tag.Substring(5));
+            }
+            foreach (var s in shapes.Where(s => s.Tag != null && s.Tag.StartsWith("box:") && s.IsText))
+                if (Math.Abs(p.X - s.X) < 40 && Math.Abs(p.Y - s.Y) < 12) return ("box", s.Tag.Substring(4));
             return (null, null);
         }
 
@@ -225,7 +252,7 @@ namespace InventorSizer
             add.Click += (s, e) => AddRingDialog(name);
             var remove = new ToolStripMenuItem("Remove this ring");
             remove.Click += (s, e) => GrEdit("Remove ring", () => RemoveRingNow(name));
-            menu.Items.AddRange(new ToolStripItem[] { pos, add, remove });
+            menu.Items.AddRange(new ToolStripItem[] { pos, add, CopyRingItem(name), remove });
             menu.Show(twin, at);
         }
 
@@ -308,7 +335,6 @@ namespace InventorSizer
                 string current = gr?.SelectedOpening;
                 grOpGrid.Rows.Clear();
                 grOpenings = gr == null ? new List<GrOpening>() : GrOpenings.Find(gr);
-                if (gr != null) GrOpenings.AutoDefaults(gr, grOpenings);
                 foreach (var o in grOpenings)
                 {
                     string now = o.State == "filled" ? Short(o.Existing) : o.State == "blocked" ? "blocked: " + Short(o.Existing) : "empty";
@@ -331,7 +357,8 @@ namespace InventorSizer
                 else
                 {
                     int planned = GrOpenings.Planned(grOpenings).Count, none = grOpenings.Count(o => o.State == "empty" && !o.HasType);
-                    popOpenings.Subtitle = $"{grOpenings.Count} openings: {planned} panel(s) planned, {none} left empty";
+                    popOpenings.Subtitle = planned == 0 && none > 0 ? $"{grOpenings.Count} openings, no panel planned yet: Auto calculate panels, or pick a type per opening"
+                        : $"{grOpenings.Count} openings: {planned} panel(s) planned, {none} left empty";
                 }
                 popBoxes.Subtitle = gr == null ? "" : $"{gr.Frames.Count} box(es), outer sizes in mm";
             }

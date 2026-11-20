@@ -134,13 +134,12 @@ namespace InventorSizer
                 string n = (string)e.Row["Divider"]; double v = (double)e.Row["Position"];
                 BeginInvoke(new Action(() => GrEdit("Move divider", () => { Gr.SetDividerPosition(gr, n, v); Log.Write($"GR: {n} at {U.F(v)} mm"); })));
             };
-            foreach (var (b, side) in new[] { (btnAddR, "Right"), (btnAddL, "Left"), (btnAddF, "Front") })
-                b.Click += (s, e) => GrEdit("Add box", () =>
-                {
-                    int refNo = SelectedBox();
-                    var f = Gr.AddFrame(gr, refNo, side);
-                    Log.Write($"GR: added {f.Label} ({side.ToLower()} of Box {refNo - 1}), outer {U.F(f.Lx + Gr.CornerAdd)} x {U.F(f.Wy + Gr.CornerAdd)} x {U.F(f.Hz + Gr.CornerAdd)} mm");
-                });
+            // new boxes next to the selected box; left / right / front / back as seen from the service side
+            btnAddB = new FlatButton("+ Back", ButtonKind.Ghost, 0, 30) { Margin = new Padding(2, 0, 0, 0) };
+            btnAddF.Parent?.Controls.Add(btnAddB);
+            btnAddF.Parent?.Controls.SetChildIndex(btnAddB, btnAddF.Parent.Controls.GetChildIndex(btnAddF) + 1);
+            foreach (var (b, side) in new[] { (btnAddR, "Right"), (btnAddL, "Left"), (btnAddF, "Front"), (btnAddB, "Back") })
+                b.Click += (s, e) => { int refNo; try { refNo = SelectedBox(); } catch (SizerException ex) { Toast.Show(this, ToastKind.Error, "Add box", ex.Message + " Or right-click a box in the twin."); return; } AddBoxAt(refNo, side); };
             // Up axis: Z for the standard GR; another axis for a GR modelled lying down. Builds the GR
             // again from its data, so it is changed before editing.
             btnUp = new FlatButton("Up: Z", ButtonKind.Ghost, 0, 30) { Margin = new Padding(2, 0, 0, 0) };
@@ -175,6 +174,7 @@ namespace InventorSizer
         void SetGr(GrModel m)
         {
             gr = m;
+            ResetGrView();
             Log.Write($"GR {m.Name}: {m.Frames.Count} box(es), {m.Components.Values.Count(c => c.Kind == "panel")} panels, outer about {U.F(m.Length)} x {U.F(m.OuterWidth)} x {U.F(m.OuterHeight)} mm ({m.Source})");
             foreach (var w in m.Warnings) Log.Write("  note: " + w);
             if (mode != "GR") SetMode("GR"); else { UpdateGrGrid(); UpdateDrawing(); }

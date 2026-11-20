@@ -29,7 +29,9 @@ namespace InventorSizer.Core
         public double Opacity = 1;   // of the fill: the part colours are see-through
     }
 
-    public class ViewT { public string View; public double S, X, Y; }
+    // View transform: a named view (Proj), or with R a free camera (the GR twin): R holds the screen
+    // right, screen up and towards-the-viewer unit vectors (model axes), row after row.
+    public class ViewT { public string View; public double S, X, Y; public double[] R; }
 
     public static class Styles
     {
@@ -45,6 +47,7 @@ namespace InventorSizer.Core
             ["axisX"] = L("#ff0000", 1.6, null, "#ff0000"), ["axisY"] = L("#228b22", 1.6, null, "#228b22"), ["axisZ"] = L("#0000ff", 1.6, null, "#0000ff"), ["axisRing"] = L("#000000", 1),
             ["hw"] = L("#ff8c00", 1.4), ["hwHidden"] = L("#ff8c00", 1.3, new float[] { 2.5f, 1.5f }), ["hwBad"] = L("#8b0000", 1.5, null, "#ff0000"),
             ["profile"] = L("#4682b4", 2.2), ["corner"] = L("#000000", 1, null, "#696969"), ["joint"] = L("#000000", 1, null, "#ffd700"),
+            ["profileHidden"] = L("#9ab8d4", 1.2, new float[] { 5, 4 }),
             ["divider"] = L("#9370db", 2), ["dividerMilled"] = L("#2e8b57", 2), ["dividerMoved"] = L("#ff8c00", 2.4),
             ["label"] = T("#000000", 13, true), ["sub"] = T("#696969", 11), ["caption"] = T("#696969", 14, true), ["bom"] = T("#000000", 12),
             // the sub parts, each its own see-through colour: outer tray (-Au), inner panel(s) (-In / -In-2T), door hardware
@@ -84,7 +87,16 @@ namespace InventorSizer.Core
             }
         }
 
-        public static double[] Screen(ViewT t, double x, double y, double z) { var p = Proj(t.View, x, y, z); return new[] { p[0] * t.S + t.X, p[1] * t.S + t.Y }; }
+        public static double[] Screen(ViewT t, double x, double y, double z)
+        {
+            if (t.R != null)
+            {
+                var r = t.R;
+                double u = r[0] * x + r[1] * y + r[2] * z, v = -(r[3] * x + r[4] * y + r[5] * z);
+                return new[] { u * t.S + t.X, v * t.S + t.Y };
+            }
+            var p = Proj(t.View, x, y, z); return new[] { p[0] * t.S + t.X, p[1] * t.S + t.Y };
+        }
         public static double[] Screen(ViewT t, double[] p) => Screen(t, p[0], p[1], p[2]);
 
         // Scale and offset that fit model points (plus margins in px) into a rectangle.
@@ -228,8 +240,18 @@ namespace InventorSizer.Core
             sb.AppendLine($"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"{N(w)}\" height=\"{N(h)}\" viewBox=\"0 0 {N(w)} {N(h)}\">");
             sb.AppendLine($"  <title>{Esc(title)}</title>");
             sb.AppendLine("  <rect width=\"100%\" height=\"100%\" fill=\"#ffffff\"/>");
+            int clips = 0; bool clipped = false;
             foreach (var s in shapes)
             {
+                if (s.Kind == "clip" && s.Points != null)
+                {
+                    if (clipped) sb.AppendLine("  </g>");
+                    clips++; clipped = true;
+                    sb.AppendLine($"  <clipPath id=\"c{clips}\"><rect x=\"{N(s.Points[0])}\" y=\"{N(s.Points[1])}\" width=\"{N(s.Points[4] - s.Points[0])}\" height=\"{N(s.Points[5] - s.Points[1])}\"/></clipPath>");
+                    sb.AppendLine($"  <g clip-path=\"url(#c{clips})\">");
+                    continue;
+                }
+                if (s.Kind == "unclip") { if (clipped) sb.AppendLine("  </g>"); clipped = false; continue; }
                 Styles.All.TryGetValue(s.Kind, out var st);
                 st = st ?? new Style { Stroke = "#000000" };
                 if (s.IsText)
@@ -247,6 +269,7 @@ namespace InventorSizer.Core
                 if (s.Closed) sb.AppendLine($"  <polygon points=\"{pts}\" fill=\"{st.Fill ?? "none"}\"{fillOp} {stroke} stroke-linejoin=\"round\"/>");
                 else sb.AppendLine($"  <polyline points=\"{pts}\" fill=\"none\" {stroke} stroke-linecap=\"round\"/>");
             }
+            if (clipped) sb.AppendLine("  </g>");
             sb.AppendLine("</svg>");
             return sb.ToString();
         }

@@ -167,7 +167,8 @@ namespace InventorSizer
             var planned = job == null ? new List<GrOpening>() : GrOpenings.Planned(GrOpenings.Find(m));
             var bad = planned.Where(o => o.Panel.Problem != null).ToList();
             if (bad.Count > 0) throw new SizerException("Not written - fix these openings first (or set them to -):\n" + string.Join("\n", bad.Select(o => $"{o.Label}: {o.Panel.Problem}")));
-            if (planned.Count > 0 && m.Frames.Any(f => f.RealOrigin == null)) throw new SizerException("Placing panels needs the GR read from Inventor (real part positions): read it again, then write.");
+            // a box new in this write gets its real position when it is made, before the panels
+            if (planned.Count > 0 && m.Frames.Any(f => f.RealOrigin == null && f.CloneOf == 0)) throw new SizerException("Placing panels needs the GR read from Inventor (real part positions): read it again, then write.");
             string parts = Path.Combine(Path.GetDirectoryName(newPath), "Einzelteile");
             CheckRemovable(m, (object)asm);
             Log.Measure($"Save the GR as {newName}", () => { asm.SaveAs(newPath, false); });
@@ -184,7 +185,9 @@ namespace InventorSizer
                 if (m.Frames.Any(f => f.CloneOf != 0)) { AddBoxes(m, (object)asm); todo = Gr.Pending(m); }
             });
             Progress.Expect("gr.profile", todo.Profiles.Count);   // new boxes bring their own lengths
-            foreach (var g in todo.Profiles)
+            void ResizeProfiles(List<(string Kind, string From, string To, double Length, List<string> Names)> groups)
+            {
+            foreach (var g in groups)
             {
                 Progress.Next("gr.profile", $"Profile {g.From} -> {g.To} ({g.Names.Count} x)");
                 Log.Measure($"Profile {g.From} -> {g.To} ({g.Names.Count} x)", () =>
@@ -216,11 +219,18 @@ namespace InventorSizer
                     Log.Write($"  {g.Names.Count} x {g.From} -> {partName}");
                 });
             }
+            }
+            ResizeProfiles(todo.Profiles);
             // P350 rings: removed, then new ones copied from rings that already have their final length
             Quietly((object)inv, () =>
             {
                 if (m.RingRemoves.Count > 0) { Progress.Next("gr.ringremove", "Removing P350 rings"); RemoveRings(m, (object)asm); }
                 if (m.RingAdds.Count > 0) { AddRings(m, (object)asm); todo = Gr.Pending(m); }
+            });
+            // a ring copied into a box of another size: its P350 get that box's lengths
+            if (todo.Profiles.Count > 0) { Progress.Expect("gr.profile", todo.Profiles.Count); ResizeProfiles(todo.Profiles); todo = Gr.Pending(m); }
+            Quietly((object)inv, () =>
+            {
                 Progress.Next("gr.update", "Moving dividers and updating the GR");
                 if (todo.Dividers.Count > 0)
                 {
@@ -238,9 +248,11 @@ namespace InventorSizer
             Log.Measure("Save the new GR", () => { asm.Save2(true); });
             if (planned.Count > 0)
             {
+                var before = planned.Select(o => o.Key).ToList();
                 var now = GrOpenings.Find(m);   // again: sizes, rings and names may have changed above
-                GrOpenings.AutoDefaults(m, now);   // openings made by the edits get their default type
                 planned = GrOpenings.Planned(now);
+                // a choice for an opening that the write changed (e.g. a P350 ended up elsewhere) is not guessed
+                foreach (var k in before.Where(k => !planned.Any(o => o.Key == k))) Log.Write($"  note: a panel choice ({k}) has no opening of that size any more after the edits - set it again and write");
                 foreach (var k in new[] { "gr.panel.make.FP", "gr.panel.make.TP", "gr.panel.make.RP", "gr.panel.place", "gr.panel.check" }) Progress.Expect(k, 0);
                 foreach (var (key, count) in PanelPlan(planned)) Progress.Expect(key, count);   // the panels as they are now
                 job.Folder = parts;

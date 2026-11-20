@@ -24,13 +24,21 @@ namespace InventorSizer
         static string OccName(Func<dynamic> get) { try { return (string)get().Name; } catch { return ""; } }
 
         // A class, not a tuple: called with late-bound Inventor objects, tuple names are lost at run time.
-        public class CloneResult { public Dictionary<string, dynamic> Occs = new Dictionary<string, dynamic>(); public Dictionary<string, string> Cons = new Dictionary<string, string>(); }
+        public class CloneResult
+        {
+            public Dictionary<string, dynamic> Occs = new Dictionary<string, dynamic>();
+            public Dictionary<string, string> Cons = new Dictionary<string, string>();
+            public Dictionary<string, int> Constrained = new Dictionary<string, int>();   // old name -> constraints its copy got
+        }
 
-        // Copies the occurrences `names` (same files) moved by `shift` (assembly cm), and every Mate /
-        // Flush they have among themselves; one to a part outside the set is copied when keep(constraint
-        // name, other occurrence) says so. offset(constraint name) may give a new offset (cm).
-        // Returns old name -> new occurrence, and old constraint name -> new constraint name.
-        static CloneResult CloneOccurrences(object asmObj, IEnumerable<string> names, double[] shift, Func<string, string, bool> keep, Func<string, double?> offset)
+        // Copies the occurrences `names` (same files) moved by `shift` (assembly cm; shiftOf gives one per
+        // occurrence instead), and every Mate / Flush they have among themselves; one to a part outside
+        // the set is copied when keep(constraint name, other occurrence) says so, to partnerFor(other)
+        // when that gives another occurrence (the matching profile of another box). offset(constraint
+        // name) may give a new offset (cm). Returns old name -> new occurrence, and old constraint name ->
+        // new constraint name.
+        static CloneResult CloneOccurrences(object asmObj, IEnumerable<string> names, double[] shift, Func<string, string, bool> keep, Func<string, double?> offset,
+            Func<string, double[]> shiftOf = null, Func<string, string> partnerFor = null)
         {
             dynamic asm = asmObj;
             dynamic occs = asm.ComponentDefinition.Occurrences;
@@ -39,11 +47,13 @@ namespace InventorSizer
             var map = result.Occs;
             foreach (var n in names.Distinct())
             {
+                var sh = shiftOf?.Invoke(n) ?? shift;
                 dynamic o = occs.ItemByName(n);
                 dynamic mtx = o.Transformation;
                 dynamic tr = mtx.Translation;
-                mtx.SetTranslation(tg.CreateVector((double)tr.X + shift[0], (double)tr.Y + shift[1], (double)tr.Z + shift[2]));
+                mtx.SetTranslation(tg.CreateVector((double)tr.X + sh[0], (double)tr.Y + sh[1], (double)tr.Z + sh[2]));
                 map[n] = occs.Add((string)o.ReferencedDocumentDescriptor.FullDocumentName, mtx);
+                result.Constrained[n] = 0;
             }
             var newCons = result.Cons;
             dynamic cons = asm.ComponentDefinition.Constraints;
@@ -62,13 +72,66 @@ namespace InventorSizer
                     dynamic e1 = c.EntityOne, e2 = c.EntityTwo;
                     if (inA) e1 = Proxy(map[a], e1.NativeObject);
                     if (inB) e2 = Proxy(map[b], e2.NativeObject);
+                    // a partner outside the set: in another box, its matching part there
+                    string other = inA ? b : a, there = inA != inB && partnerFor != null ? partnerFor(other) : other;
+                    if (there == null) { Log.Write($"  {name} ({type} {a} - {b}) not copied: no matching part of {other} in that box"); continue; }
+                    if (there != other)
+                    {
+                        dynamic target = occs.ItemByName(there), source = occs.ItemByName(other);
+                        bool sameFile = string.Equals((string)target.ReferencedDocumentDescriptor.FullDocumentName, (string)source.ReferencedDocumentDescriptor.FullDocumentName, StringComparison.OrdinalIgnoreCase);
+                        dynamic moved = MatchEntity(inA ? e2 : e1, target, sameFile) ?? throw new SizerException($"no face of {there} matches the one of {other}");
+                        if (inA) e2 = moved; else e1 = moved;
+                    }
                     double off = offset(name) ?? (double)c.Offset.Value;
                     dynamic nc = type == "Mate" ? cons.AddMateConstraint(e1, e2, off, kNoInference, kNoInference) : cons.AddFlushConstraint(e1, e2, off);
                     newCons[name] = (string)nc.Name;
+                    if (inA) result.Constrained[a]++;
+                    if (inB) result.Constrained[b]++;
                 }
                 catch (Exception e) { Log.Write($"  could not copy {name} ({type} {a} - {b}): {e.Message}"); }
             }
             return result;
+        }
+
+        // The entity of another occurrence that matches `entity` (a face, work plane, axis or point seen
+        // through its occurrence): the same one when both use the same file; otherwise a planar face with
+        // the same normal at the same distance across the part (a profile of another length keeps its
+        // cross-section; an end face is the only one with its normal), or a work feature of the same name.
+        static dynamic MatchEntity(object entityObj, object occObj, bool sameFile)
+        {
+            dynamic entity = entityObj, occ = occObj;
+            dynamic native = entity;
+            try { native = entity.NativeObject; } catch { }
+            if (sameFile) return Proxy(occ, native);
+            dynamic def = occ.Definition;
+            // work features by name
+            string kind = Microsoft.VisualBasic.Information.TypeName(native) ?? "";
+            dynamic work = null;
+            try { work = kind.Contains("WorkPlane") ? def.WorkPlanes : kind.Contains("WorkAxis") ? def.WorkAxes : kind.Contains("WorkPoint") ? def.WorkPoints : null; } catch { }
+            if (work != null)
+            {
+                try { return Proxy(occ, work.Item((string)native.Name)); } catch { return null; }
+            }
+            // a planar face: same normal, nearest plane offset
+            double[] n0, p0;
+            try { dynamic g = native.Geometry; n0 = new[] { (double)g.Normal.X, (double)g.Normal.Y, (double)g.Normal.Z }; p0 = new[] { (double)g.RootPoint.X, (double)g.RootPoint.Y, (double)g.RootPoint.Z }; }
+            catch { return null; }
+            double d0 = Dot(n0, p0);
+            dynamic best = null; double bestDiff = double.MaxValue;
+            foreach (var body in Items(def.SurfaceBodies))
+                foreach (var f in Items(body.Faces))
+                {
+                    try
+                    {
+                        dynamic g = f.Geometry;
+                        var n1 = new[] { (double)g.Normal.X, (double)g.Normal.Y, (double)g.Normal.Z };
+                        if (Dot(n0, n1) < 0.999) continue;
+                        double diff = Math.Abs(Dot(n1, new[] { (double)g.RootPoint.X, (double)g.RootPoint.Y, (double)g.RootPoint.Z }) - d0);
+                        if (diff < bestDiff) { bestDiff = diff; best = f; }
+                    }
+                    catch { }   // not planar
+                }
+            return best == null ? null : Proxy(occ, best);
         }
 
         // GR axis vector (mm, GR axes) as an assembly vector in cm.
@@ -110,36 +173,97 @@ namespace InventorSizer
             m.RingRemoves.Clear();
         }
 
-        // New rings: copies of their template ring, placed at their position.
+        // A layout point (GR mm) of box f as a point of the assembly (GR axes, mm).
+        static double[] RealOf(GrFrame f, double[] layout) => Enumerable.Range(0, 3).Select(g => (f.RealOrigin ?? f.Pos)[g] + layout[g] - f.Pos[g]).ToArray();
+
+        // How far edits not yet written have moved a divider (its own offset and the ring it hangs on).
+        static double[] EditShift(GrModel m, GrComponent c)
+        {
+            var v = new double[3]; var seen = new HashSet<string>();
+            for (var x = c; x != null && seen.Add(x.Name);)
+            {
+                if (x.PosConstraint != "" && x.Position != null && x.OrigPosition != null && x.MoveAxis >= 0) v[x.MoveAxis] += (x.Position.Value - x.OrigPosition.Value) * x.MoveSign;
+                string up = x.PosConstraint != "" ? x.PosPartner : x.Leader;
+                x = up != "" && m.Components.TryGetValue(up, out var u) && u.Kind == "divider" ? u : null;
+            }
+            return v;
+        }
+
+        // New rings (and single P350): copies of their template, moved from where the template is in
+        // Inventor to where the model has the new part (another box: its frame offset and size too).
+        // A ring keeps its Mate / Flush among its parts and to the frame profiles (in another box: to
+        // the matching profiles there); its position offset is the new one. A single P350, and any copy
+        // that got no constraint, is grounded where it is placed. Lengths that differ from the template
+        // follow in Write new GR's second pass over the profile lengths.
         static void AddRings(GrModel m, dynamic asm)
         {
             foreach (var add in m.RingAdds.ToList())
             try
             {
-                Progress.Next("gr.ring", $"Copying a P350 ring to {U.F(add.Position)} mm");
-                if (!m.Components.TryGetValue(add.Template, out var lead)) { Log.Write($"  new ring skipped: {add.Template} is no longer in the GR"); continue; }
+                if (!m.Components.TryGetValue(add.Template, out var lead)) { Log.Write($"  new P350 skipped: {add.Template} is no longer in the GR"); continue; }
+                Progress.Next("gr.ring", add.Single ? $"Copying {add.Template} as a single P350" : $"Copying a P350 ring to {U.F(add.Position)} mm");
+                var from = m.ById(lead.Frame); var to = add.Frame != 0 ? m.ById(add.Frame) : from;
+                if (from == null || to == null) throw new SizerException("its box is no longer in the GR");
+                if (to.RealOrigin == null) throw new SizerException($"{to.Label} has no real position in Inventor (it was not made)");
                 var members = add.Names.Keys.ToList();
-                var joints = members.SelectMany(n => JointsOf((object)asm, n)).Distinct().ToList();
-                double delta = (add.Position - (lead.OrigPosition ?? lead.Position ?? 0)) * lead.MoveSign;
-                var gr = new double[3]; if (lead.MoveAxis >= 0) gr[lead.MoveAxis] = delta;
+                var joints = add.Single ? new List<string>() : members.SelectMany(n => JointsOf((object)asm, n)).Distinct().Where(j => !members.Contains(j)).ToList();
+                // per member: where it is in Inventor now -> where the model has the copy (GR mm)
+                var shift = new Dictionary<string, double[]>(); var info = new Dictionary<string, ((double[] Min, double[] Max) Box, int K, double Grow)>();
+                foreach (var n in members)
+                {
+                    var t = m.Components[n]; var nc = m.Components[add.Names[n]];
+                    var tb = GrOpenings.LayoutBox(m, t) ?? throw new SizerException($"{n} has no position (read the GR from Inventor)");
+                    var nb = GrOpenings.LayoutBox(m, nc) ?? throw new SizerException($"{nc.Name} has no position");
+                    var es = EditShift(m, t);
+                    var ext = Enumerable.Range(0, 3).Select(i => tb.Max[i] - tb.Min[i]).ToArray();
+                    int k = Array.IndexOf(ext, ext.Max());   // its length: kept at its start, the far end grows with the length
+                    var a = Enumerable.Range(0, 3).Select(g => (g == k ? tb.Min[g] : (tb.Min[g] + tb.Max[g]) / 2) - es[g]).ToArray();
+                    var b = Enumerable.Range(0, 3).Select(g => g == k ? nb.Min[g] : (nb.Min[g] + nb.Max[g]) / 2).ToArray();
+                    var ra = RealOf(from, a); var rb = RealOf(to, b);
+                    shift[n] = Enumerable.Range(0, 3).Select(g => rb[g] - ra[g]).ToArray();
+                    info[n] = (tb, k, (nb.Max[k] - nb.Min[k]) - ext[k]);
+                }
+                // joints go with the member they sit on (at its far end: also by its change in length)
+                foreach (var j in joints)
+                {
+                    var jb = m.Components.TryGetValue(j, out var jc) ? GrOpenings.LayoutBox(m, jc) : null;
+                    if (jb == null) { shift[j] = shift[members[0]]; continue; }
+                    var jcen = Enumerable.Range(0, 3).Select(i => (jb.Value.Min[i] + jb.Value.Max[i]) / 2).ToArray();
+                    string near = members.OrderBy(n => Enumerable.Range(0, 3).Sum(i => Math.Pow(Math.Max(0, Math.Max(info[n].Box.Min[i] - jcen[i], jcen[i] - info[n].Box.Max[i])), 2))).First();
+                    var sh = (double[])shift[near].Clone(); var mi = info[near];
+                    if (jcen[mi.K] > (mi.Box.Min[mi.K] + mi.Box.Max[mi.K]) / 2) sh[mi.K] += mi.Grow;
+                    shift[j] = sh;
+                }
                 string KindOf(string occ) => m.Components.TryGetValue(occ, out var c) ? c.Kind : Gr.Kind(System.Text.RegularExpressions.Regex.Replace(occ, @":\d+$", ""));
-                CloneResult r = Log.Measure($"Copy the P350 ring of {add.Template} to {U.F(add.Position)} mm", () => CloneOccurrences((object)asm, members.Concat(joints), ShiftOf(m, gr),
-                    (con, other) => con == lead.PosConstraint || KindOf(other) == "frameProfile" || KindOf(other) == "corner",
-                    con => con == lead.PosConstraint ? add.Position / 10 : (double?)null));
+                CloneResult r = Log.Measure(add.Single ? $"Copy {add.Template} as a single P350 into {to.Label}" : $"Copy the P350 ring of {add.Template} to {U.F(add.Position)} mm" + (to != from ? $" in {to.Label}" : ""),
+                    () => CloneOccurrences((object)asm, members.Concat(joints), new double[3],
+                        (con, other) => !add.Single && (con == lead.PosConstraint || KindOf(other) == "frameProfile" || KindOf(other) == "corner"),
+                        con => con == lead.PosConstraint ? add.Position / 10 : (double?)null,
+                        n => ShiftOf(m, shift[n]),
+                        to == from ? (Func<string, string>)null : other => GrOpenings.Counterpart(m, other, from, to)));
                 // the model takes the names Inventor gave the copies
+                var grounded = new List<string>();
                 foreach (var kv in add.Names.ToList())
                 {
                     if (!r.Occs.TryGetValue(kv.Key, out var occ)) continue;
                     string now = occ.Name, tmp = add.Names[kv.Key];
                     Gr.RenameComponent(m, tmp, now);
                     var c = m.Components[now];
-                    c.OrigBase = c.Base; c.CloneOf = "";
-                    if (kv.Key == add.Template) { c.PosConstraint = r.Cons.TryGetValue(lead.PosConstraint, out var pc) ? pc : ""; c.OrigPosition = c.Position; }
+                    c.OrigBase = m.Components.TryGetValue(kv.Key, out var tc) ? tc.OrigBase : c.Base;   // the file it is a copy of; a new length follows
+                    c.CloneOf = "";
+                    if (kv.Key == add.Template && !add.Single)
+                    {
+                        c.PosConstraint = r.Cons.TryGetValue(lead.PosConstraint, out var pc) ? pc : "";
+                        c.OrigPosition = c.Position;
+                        if (c.PosConstraint == "") Log.Write($"  note: the position offset of {now} could not be copied - it is held where it was placed");
+                    }
+                    if (add.Single || r.Constrained[kv.Key] == 0) { try { occ.Grounded = true; grounded.Add(now); } catch { } }
                 }
                 m.RingAdds.Remove(add);
-                Log.Write($"  new P350 ring at {U.F(add.Position)} mm: {string.Join(", ", r.Occs.Values.Select(o => (string)o.Name))}");
+                Log.Write(add.Single ? $"  new P350 on {to.Label}: {string.Join(", ", r.Occs.Values.Select(o => (string)o.Name))} (grounded)"
+                    : $"  new P350 ring at {U.F(add.Position)} mm{(to != from ? " in " + to.Label : "")}: {string.Join(", ", r.Occs.Values.Select(o => (string)o.Name))}" + (grounded.Count > 0 ? $"; grounded (nothing to mate to): {string.Join(", ", grounded)}" : ""));
             }
-            catch (Exception e) { Log.Write($"  not finished: new P350 ring like {add.Template} at {U.F(add.Position)} mm: {e.Message}"); }
+            catch (Exception e) { Log.Write($"  not finished: new P350 {(add.Single ? "" : "ring ")}like {add.Template}: {e.Message}"); }
         }
 
         // The corner of box f nearest to a layout point (GR mm), from the corners' range boxes.

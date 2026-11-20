@@ -1,7 +1,13 @@
 // GR drawings: boxes as profile wireframes with corners and labels, dividers (P350 purple,
 // P350 gefraest green, moved orange) and joints (gold) at their real positions, spacing chains
-// between subsequent dividers, a legend, a box table and a cut list.
+// between subsequent dividers, the size of every box, a legend, a box table and a cut list.
 // Drawing axes as for panels: x = width, y = length (along the unit), z = height.
+//
+// The model is drawn through a camera (GrCamera) that the user turns, pans and zooms like in
+// Inventor. The views of the View box are camera positions; "Front" looks at the service side
+// (the TP side), so the unit faces the user. The model area is fitted between the header
+// (caption, legend) and the tables, so nothing runs into the bill of materials, and it is
+// clipped to that area when zoomed in.
 
 using System;
 using System.Collections.Generic;
@@ -11,56 +17,141 @@ namespace InventorSizer.Core
 {
     public class DividerLine { public double[] A, B; public int Axis; public string Name, Kind; public GrFrame Frame; public bool Real; }
 
+    // Where the GR is seen from. Yaw turns around the height (0 = looking from the W max side),
+    // pitch looks down (+) or up (-). Scale 0 = fit to the area on the next drawing.
+    public class GrCamera
+    {
+        public double Yaw = 40, Pitch = 30, Scale, PanX, PanY;
+        public string View = "Isometric";
+        public double[] Area;   // the model area of the last drawing (px: x, y, w, h)
+
+        public static double FrontYaw(int serviceSide) => serviceSide >= 0 ? 0 : 180;
+
+        // A view of the View box; "Front" = the service side, Left / Right as seen from the front.
+        public void Set(string view, int serviceSide)
+        {
+            double f = FrontYaw(serviceSide);
+            View = view ?? "Isometric";
+            switch (View)
+            {
+                case "Front": Yaw = f; Pitch = 0; break;
+                case "Back": Yaw = f + 180; Pitch = 0; break;
+                case "Right": Yaw = f + 90; Pitch = 0; break;
+                case "Left": Yaw = f - 90; Pitch = 0; break;
+                case "Top": Yaw = f; Pitch = 90; break;
+                case "Bottom": Yaw = f; Pitch = -90; break;
+                default: Yaw = f + 40; Pitch = 30; break;
+            }
+            Fit();
+        }
+
+        public void Fit() { Scale = 0; PanX = PanY = 0; }
+
+        public void Orbit(double dxPx, double dyPx)
+        {
+            Yaw = (Yaw - dxPx * 0.4) % 360;
+            Pitch = Math.Max(-90, Math.Min(90, Pitch + dyPx * 0.4));
+            View = "";
+        }
+
+        // Zoom by factor around a screen point (px), keeping the model point under it in place.
+        public void Zoom(double factor, double px, double py)
+        {
+            if (Scale <= 0 || Area == null) return;
+            double ns = Math.Max(1e-5, Math.Min(Scale * factor, 50));
+            double cx = Area[0] + Area[2] / 2 + PanX, cy = Area[1] + Area[3] / 2 + PanY;
+            double k = ns / Scale;
+            PanX += (px - cx) * (1 - k); PanY += (py - cy) * (1 - k);
+            Scale = ns;
+        }
+
+        // Right, up and towards-the-viewer unit vectors in drawing axes (x = W, y = L, z = H).
+        public double[] Basis()
+        {
+            double y = Yaw * Math.PI / 180, p = Pitch * Math.PI / 180;
+            var d = new[] { Math.Cos(p) * Math.Cos(y), Math.Cos(p) * Math.Sin(y), Math.Sin(p) };
+            double[] r = Math.Abs(Math.Cos(p)) > 1e-6 ? Norm(new[] { -d[1], d[0], 0 }) : new[] { -Math.Sin(y), Math.Cos(y), 0 };
+            var u = new[] { d[1] * r[2] - d[2] * r[1], d[2] * r[0] - d[0] * r[2], d[0] * r[1] - d[1] * r[0] };
+            return new[] { r[0], r[1], r[2], u[0], u[1], u[2], d[0], d[1], d[2] };
+        }
+
+        static double[] Norm(double[] v) { double n = Math.Sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]); return n < 1e-12 ? new[] { 1.0, 0, 0 } : v.Select(x => x / n).ToArray(); }
+    }
+
     public static class GrDrawing
     {
-        class BoxXYZ { public GrFrame F; public double X0, X1, Y0, Y1, Z0, Z1; }
+        public class BoxXYZ { public GrFrame F; public double X0, X1, Y0, Y1, Z0, Z1; public double Min(int k) => k == 0 ? X0 : k == 1 ? Y0 : Z0; public double Max(int k) => k == 0 ? X1 : k == 1 ? Y1 : Z1; }
 
-        static List<BoxXYZ> Boxes(GrModel m)
+        public static List<BoxXYZ> Boxes(GrModel m)
         {
             double a = Gr.CornerAdd;
             return m.Frames.Select(f => new BoxXYZ { F = f, X0 = f.Y, X1 = f.Y + f.Wy + a, Y0 = f.X, Y1 = f.X + f.Lx + a, Z0 = f.Z, Z1 = f.Z + f.Hz + a }).ToList();
         }
 
-        static double[][] Corners(BoxXYZ b) => new[]
+        public static double[][] Corners(BoxXYZ b) => new[]
         {
             new[] { b.X0, b.Y0, b.Z0 }, new[] { b.X1, b.Y0, b.Z0 }, new[] { b.X1, b.Y1, b.Z0 }, new[] { b.X0, b.Y1, b.Z0 },
             new[] { b.X0, b.Y0, b.Z1 }, new[] { b.X1, b.Y0, b.Z1 }, new[] { b.X1, b.Y1, b.Z1 }, new[] { b.X0, b.Y1, b.Z1 },
         };
 
-        static readonly int[][] Edges = { new[] { 0, 1 }, new[] { 1, 2 }, new[] { 2, 3 }, new[] { 3, 0 }, new[] { 4, 5 }, new[] { 5, 6 }, new[] { 6, 7 }, new[] { 7, 4 }, new[] { 0, 4 }, new[] { 1, 5 }, new[] { 2, 6 }, new[] { 3, 7 } };
+        public static readonly int[][] Edges = { new[] { 0, 1 }, new[] { 1, 2 }, new[] { 2, 3 }, new[] { 3, 0 }, new[] { 4, 5 }, new[] { 5, 6 }, new[] { 6, 7 }, new[] { 7, 4 }, new[] { 0, 4 }, new[] { 1, 5 }, new[] { 2, 6 }, new[] { 3, 7 } };
 
-        static List<double[]> AllPoints(List<BoxXYZ> boxes) => boxes.SelectMany(Corners).ToList();
+        // An edge of a box: its two ends (drawing axes), the drawing axis it runs along, and the two
+        // faces it lies on (GR axis, side 0 = min / 1 = max).
+        public static (double[] A, double[] B, int Axis, (int Axis, int Side)[] Faces) Edge(BoxXYZ b, int i)
+        {
+            var c = Corners(b); var a = c[Edges[i][0]]; var e = c[Edges[i][1]];
+            int along = Enumerable.Range(0, 3).First(k => Math.Abs(a[k] - e[k]) > 1e-9);
+            var faces = Enumerable.Range(0, 3).Where(k => k != along).Select(k => (GrAxis(k), Math.Abs(a[k] - b.Max(k)) < 1e-6 ? 1 : 0)).ToArray();
+            return (a, e, along, faces);
+        }
+
+        public static int GrAxis(int drawAxis) => drawAxis == 0 ? 1 : drawAxis == 1 ? 0 : 2;   // x = W, y = L, z = H
+        public static int DrawAxis(int grAxis) => GrAxis(grAxis);
+        static double[] ToDraw(double[] p) => new[] { p[1], p[0], p[2] };   // GR (L, W, H) -> drawing (x = W, y = L, z = H)
+
+        static double Dot(double[] r, int row, double[] p) => r[row * 3] * p[0] + r[row * 3 + 1] * p[1] + r[row * 3 + 2] * p[2];
+
+        // Is a face (GR axis, side) turned to the viewer?
+        static bool Facing(double[] R, int grAxis, int side) => R[6 + DrawAxis(grAxis)] * (side == 0 ? -1 : 1) > 1e-6;
 
         static void Frames(Draw d, ViewT t, List<BoxXYZ> boxes)
         {
+            // hidden edges first and dashed, so the eye reads the box the right way round
+            foreach (bool front in new[] { false, true })
+                foreach (var b in boxes)
+                    for (int i = 0; i < Edges.Length; i++)
+                    {
+                        var e = Edge(b, i);
+                        bool seen = e.Faces.Any(f => Facing(t.R, f.Axis, f.Side));
+                        if (seen != front) continue;
+                        d.Poly3(seen ? "profile" : "profileHidden", t, new[] { e.A, e.B }, false);
+                        d.Shapes[d.Shapes.Count - 1].Tag = $"edge:{b.F.No}:{i}";
+                    }
             foreach (var b in boxes)
-            {
-                var c = Corners(b);
-                foreach (var e in Edges) { d.Poly3("profile", t, new[] { c[e[0]], c[e[1]] }, false); d.Shapes[d.Shapes.Count - 1].Tag = "box:" + b.F.No; }
-                foreach (var p in c) { var s = Draw.Screen(t, p); d.Rect("corner", s[0] - 2.5, s[1] - 2.5, s[0] + 2.5, s[1] + 2.5); }
-            }
+                foreach (var p in Corners(b)) { var s = Draw.Screen(t, p); d.Rect("corner", s[0] - 2.5, s[1] - 2.5, s[0] + 2.5, s[1] + 2.5); }
         }
 
-        static void Labels(Draw d, ViewT t, List<BoxXYZ> boxes, string view)
+        static void Labels(Draw d, ViewT t, List<BoxXYZ> boxes)
         {
+            var taken = new List<double[]>();
             foreach (var b in boxes)
             {
                 var f = b.F;
-                double z = view == "Top" || view == "Bottom" ? b.Z1 : (b.Z0 + b.Z1) / 2, mx = (b.X0 + b.X1) / 2;
-                var p = Draw.Screen(t, mx, (b.Y0 + b.Y1) / 2, z);
-                var e0 = Draw.Screen(t, mx, b.Y0, z); var e1 = Draw.Screen(t, mx, b.Y1, z);
-                double span = view == "Left" || view == "Right" ? 999 : Math.Sqrt(Math.Pow(e1[0] - e0[0], 2) + Math.Pow(e1[1] - e0[1], 2));
+                // above the box on the screen, clear of the opening numbers on its faces
+                var sc = Corners(b).Select(c => Draw.Screen(t, c)).ToList();
+                var p = new[] { (sc.Min(s => s[0]) + sc.Max(s => s[0])) / 2, sc.Min(s => s[1]) - 26 };
+                for (int guard = 0; guard < 8 && taken.Any(q => Math.Abs(q[0] - p[0]) < 52 && Math.Abs(q[1] - p[1]) < 16); guard++) p[0] += 56;   // not on another box's name
+                taken.Add(p);
                 d.Text("label", p[0], p[1], f.Label); d.Shapes[d.Shapes.Count - 1].Tag = "box:" + f.No;
-                if (span < 80) continue;
                 var extra = new List<string>();
                 if (f.Panels.Count > 0) extra.Add($"{f.Panels.Count} pan.");
                 if (f.Dividers.Count > 0) extra.Add($"{f.Dividers.Count} div.");
-                if (extra.Count > 0) d.Text("sub", p[0], p[1] + 14, string.Join(" / ", extra));
+                if (extra.Count > 0 && t.S * Math.Max(b.Y1 - b.Y0, b.X1 - b.X0) > 90) d.Text("sub", p[0], p[1] + 14, string.Join(" / ", extra));
             }
         }
 
         static int DimIndex(string dim) => dim == "L" ? 0 : dim == "W" ? 1 : 2;
-        static double[] ToDraw(double[] p) => new[] { p[1], p[0], p[2] };   // GR (L, W, H) -> drawing (x = W, y = L, z = H)
 
         static string DividerKind(GrModel m, GrComponent c) =>
             (c.Position != null && c.Position != c.OrigPosition) || Gr.DividerShift(m, c).Delta != 0 ? "dividerMoved" : c.Base.Contains("gefr") ? "dividerMilled" : "divider";
@@ -132,9 +223,6 @@ namespace InventorSizer.Core
         static void Chains(Draw d, ViewT t, List<DividerLine> lines)
         {
             const double prof = 70;
-            // The face a divider lies on: of its two cross axes, the one where it sits at the box's
-            // outside (within 120 mm). The spacing runs along the other cross axis. One chain per
-            // box and spacing axis: side dividers and the gefraest ones of the same ring share it.
             int SpacingAxis(DividerLine l)
             {
                 var f = l.Frame; var o = f.Pos; var size = f.Size;
@@ -148,7 +236,7 @@ namespace InventorSizer.Core
             {
                 int s = g.First().S;
                 var all = g.Select(x => x.L).ToList();
-                int k = all.Select(l => l.Axis).OrderByDescending(x => x).First();   // drawn beside the vertical dividers when there are any
+                int k = all.Select(l => l.Axis).OrderByDescending(x => x).First();
                 var ls = all.Where(l => l.Axis == k).ToList(); var f = ls[0].Frame;
                 var o = f.Pos; var size = f.Size;
                 int third = Enumerable.Range(0, 3).First(i => i != k && i != s);
@@ -184,13 +272,15 @@ namespace InventorSizer.Core
             return o.State == "filled" ? "openFilled" : "openEmpty";
         }
 
-        // Openings as see-through areas on the box faces, the selected one outlined. The faces
-        // turned to the viewer carry their number and a tag, so a click on the drawing finds them.
+        // Openings as see-through areas on the box faces (far ones first), the selected one outlined.
+        // The faces turned to the viewer carry their number and a tag, so a click finds them.
         static void Openings(Draw d, ViewT t, GrModel m)
         {
             var list = GrOpenings.Find(m);
-            GrOpenings.AutoDefaults(m, list);
-            foreach (var o in list)
+            var centre = new Dictionary<string, double[]>();
+            foreach (var o in list) { var c = new double[3]; c[o.Axis] = o.Plane; c[o.U] = (o.U0 + o.U1) / 2; c[o.V] = (o.V0 + o.V1) / 2; centre[o.Key] = ToDraw(c); }
+            int first = d.Shapes.Count;   // a sheet draws several views into one page: only this view's shapes
+            foreach (var o in list.OrderBy(o => Dot(t.R, 2, centre[o.Key])))
             {
                 var pts = new[] { (o.U0, o.V0), (o.U1, o.V0), (o.U1, o.V1), (o.U0, o.V1) }.Select(p =>
                 {
@@ -198,15 +288,14 @@ namespace InventorSizer.Core
                 }).ToList();
                 d.Poly3(OpeningKind(o), t, pts, true);
                 var shape = d.Shapes[d.Shapes.Count - 1];
-                if (Facing(o, shape.Points, t.View)) shape.Tag = "open:" + o.Key;
+                if (Facing(t.R, o.Axis, o.Side)) shape.Tag = "open:" + o.Key;
                 if (o.Key == m.SelectedOpening) d.Poly3("openSelected", t, pts, true);
             }
             foreach (var o in list)
             {
-                var c = new double[3]; c[o.Axis] = o.Plane; c[o.U] = (o.U0 + o.U1) / 2; c[o.V] = (o.V0 + o.V1) / 2;
-                var poly = d.Shapes.FirstOrDefault(s => s.Tag == "open:" + o.Key);
+                var poly = d.Shapes.Skip(first).FirstOrDefault(s => s.Tag == "open:" + o.Key);
                 if (poly == null || Area(poly.Points) < 900) continue;   // turned away, or too small to label
-                var p = Draw.Screen(t, ToDraw(c));
+                var p = Draw.Screen(t, centre[o.Key]);
                 d.Text("openLabel", p[0], p[1], o.Id);
             }
         }
@@ -218,17 +307,85 @@ namespace InventorSizer.Core
             return Math.Abs(a / 2);
         }
 
-        // Is the face turned to the viewer? From the winding of its corners on the screen (the
-        // isometric is drawn mirrored to the straight views, seen from above: it winds the other way).
-        public static bool Facing(GrOpening o, double[] p, string view)
+        // ------------------------------------------------------------------ dimensions
+
+        // The size of every box along each axis, as chains along the outside of the unit (one
+        // segment per box; boxes side by side follow each other, boxes of the same span share
+        // one), and the overall size one step further out when it differs. An axis seen end-on
+        // has no dimension. Lengths along the floor go below the unit, the height to its left.
+        static void Dimensions(Draw d, ViewT t, List<BoxXYZ> boxes)
         {
-            double a = 0; int n = p.Length / 2;
-            for (int i = 0; i < n; i++) { int j = (i + 1) % n; a += p[2 * i] * p[2 * j + 1] - p[2 * j] * p[2 * i + 1]; }
-            if (Math.Abs(a) < 1) return false;   // seen edge-on
-            int perm = o.Axis == 1 ? -1 : 1;     // (U, V, normal) is right-handed for L and H faces, left-handed for W faces
-            int side = o.Side == 0 ? -1 : 1;
-            return a * perm * side * (view == "Isometric" ? -1 : 1) > 0;
+            if (boxes.Count == 0) return;
+            var R = t.R;
+            var lo = Enumerable.Range(0, 3).Select(k => boxes.Min(b => b.Min(k))).ToArray();
+            var hi = Enumerable.Range(0, 3).Select(k => boxes.Max(b => b.Max(k))).ToArray();
+            double[] ScreenDir(double[] v) { var a = Draw.Screen(t, 0, 0, 0); var b = Draw.Screen(t, v); return new[] { b[0] - a[0], b[1] - a[1] }; }
+            double Len(double[] v) => Math.Sqrt(v[0] * v[0] + v[1] * v[1]);
+            for (int k = 0; k < 3; k++)
+            {
+                var along = new double[3]; along[k] = 1;
+                if (Math.Sqrt(R[k] * R[k] + R[3 + k] * R[3 + k]) < 0.12) continue;   // seen (almost) end-on
+                var others = Enumerable.Range(0, 3).Where(i => i != k).ToArray();
+                // the edge of the unit the chain runs beside, and the direction it is moved out to
+                var at = new double[3]; double[] outDir = null; double best = double.MinValue;
+                if (k == 2)
+                {
+                    // height: the vertical edge most to the left on the screen, moved out further left
+                    foreach (var sx in new[] { 0, 1 })
+                        foreach (var sy in new[] { 0, 1 })
+                        {
+                            var p = new[] { sx == 0 ? lo[0] : hi[0], sy == 0 ? lo[1] : hi[1], lo[2] };
+                            double u = -Draw.Screen(t, p)[0];
+                            if (u > best) { best = u; at = p; }
+                        }
+                    double bestOut = double.MinValue;
+                    foreach (var i in new[] { 0, 1 })
+                    {
+                        var v = new double[3]; v[i] = Math.Abs(at[i] - lo[i]) < 1e-6 ? -1 : 1;
+                        double left = -ScreenDir(v)[0];
+                        if (left > bestOut) { bestOut = left; outDir = v; }
+                    }
+                }
+                else
+                {
+                    // along the floor: on the side turned to the viewer, at the bottom, moved down
+                    int other = others.First(i => i != 2);
+                    at[other] = R[6 + other] >= 0 ? hi[other] : lo[other]; at[2] = lo[2];
+                    var vSide = new double[3]; vSide[other] = R[6 + other] >= 0 ? 1 : -1;
+                    var vDown = new[] { 0.0, 0, -1 };
+                    var sSide = ScreenDir(vSide); var sDown = ScreenDir(vDown);
+                    outDir = sDown[1] >= sSide[1] - 1e-9 && Len(sDown) > 1e-6 ? vDown : vSide;
+                }
+                if (Len(ScreenDir(outDir)) < 1e-6) continue;
+                double outLen = Len(ScreenDir(outDir));
+                double unit = 30 / outLen;   // model length (mm) that moves the dimension 30 px out
+                // the segments: each box's span along k, the same span drawn once, overlaps on further levels
+                var spans = boxes.Select(b => (A: Math.Round(b.Min(k), 1), B: Math.Round(b.Max(k), 1))).Distinct().OrderBy(s => s.A).ThenBy(s => s.B).ToList();
+                var levels = new List<double>();   // end of the last segment on each level
+                var placed = new List<(double A, double B, int Level)>();
+                foreach (var s in spans)
+                {
+                    int lv = levels.FindIndex(e => s.A >= e - 1);
+                    if (lv < 0) { levels.Add(s.B); lv = levels.Count - 1; } else levels[lv] = s.B;
+                    placed.Add((s.A, s.B, lv));
+                }
+                bool overall = spans.Count > 1 || Math.Abs(spans[0].A - lo[k]) > 1 || Math.Abs(spans[0].B - hi[k]) > 1;
+                if (overall) placed.Add((lo[k], hi[k], levels.Count));
+                foreach (var (a, b, lv) in placed)
+                {
+                    var pa = (double[])at.Clone(); pa[k] = a;
+                    var pb = (double[])at.Clone(); pb[k] = b;
+                    var sa = Draw.Screen(t, pa); var sb = Draw.Screen(t, pb);
+                    if (Math.Sqrt(Math.Pow(sb[0] - sa[0], 2) + Math.Pow(sb[1] - sa[1], 2)) < 24) continue;
+                    double o = unit * (lv + 1);
+                    d.Poly3("ext", t, new[] { Draw.Offset(pa, outDir, unit * 0.15), Draw.Offset(pa, outDir, o + unit * 0.25) }, false);
+                    d.Poly3("ext", t, new[] { Draw.Offset(pb, outDir, unit * 0.15), Draw.Offset(pb, outDir, o + unit * 0.25) }, false);
+                    d.DimLine(Draw.Screen(t, Draw.Offset(pa, outDir, o)), Draw.Screen(t, Draw.Offset(pb, outDir, o)), U.F(b - a));
+                }
+            }
         }
+
+        // ------------------------------------------------------------------ the model through a camera
 
         static void Legend(Draw d, double x, double y)
         {
@@ -250,65 +407,137 @@ namespace InventorSizer.Core
             }
         }
 
-        static void Iso(Draw d, GrModel m, double[] rect)
+        // The axis cross for a camera (X = W red, Y = L green, Z = H blue, as in Inventor).
+        static void Axis(Draw d, double[] R, double cx, double cy, double len = 26)
         {
-            var boxes = Boxes(m);
-            double L = m.Length, W = m.OuterWidth, H = m.OuterHeight, off = Math.Max(W, L) * 0.07;
-            var pts = AllPoints(boxes); pts.Add(new[] { W + off * 1.4, 0, 0 }); pts.Add(new[] { 0, L + off * 1.4, 0 }); pts.Add(new[] { -off, L, H });
-            var t = Draw.Fit("Isometric", pts, rect, new double[] { 30, 34, 30, 30 });
-            Openings(d, t, m); Frames(d, t, boxes); Dividers(d, t, m); Labels(d, t, boxes, "Isometric");
-            d.IsoDim(t, new[] { 0, L, 0 }, new[] { W, L, 0 }, new[] { 0, off, 0 }, U.F(W), "width");
-            d.IsoDim(t, new[] { W, 0, 0 }, new[] { W, L, 0 }, new[] { off, 0, 0 }, U.F(L), "length");
-            d.IsoDim(t, new[] { 0, L, 0 }, new[] { 0, L, H }, new[] { -off * 0.55, 0, 0 }, U.F(H), "");
+            foreach (var ax in new[] { ("X", 0), ("Y", 1), ("Z", 2) })
+            {
+                double dx = R[ax.Item2], dy = -R[3 + ax.Item2], n = Math.Sqrt(dx * dx + dy * dy);
+                if (n < 0.15) { d.Circle("axisRing", cx, cy, 6); d.Text("axisLabel", cx - 12, cy + 11, ax.Item1); continue; }
+                double ex = cx + dx * len, ey = cy + dy * len, ux = dx / n, uy = dy / n;
+                d.Line("axis" + ax.Item1, cx, cy, ex, ey);
+                d.Poly("axis" + ax.Item1, new[] { ex, ey, ex - ux * 7 - uy * 3, ey - uy * 7 + ux * 3, ex - ux * 7 + uy * 3, ey - uy * 7 - ux * 3 }, true);
+                d.Text("axisLabel", ex + ux * 9, ey + uy * 9, ax.Item1);
+            }
         }
 
-        static void Ortho(Draw d, GrModel m, string view, double[] rect)
+        static ViewT Transform(GrModel m, GrCamera cam, double[] area, out double[] centre)
         {
             var boxes = Boxes(m);
-            var t = Draw.Fit(view, AllPoints(boxes), rect, new double[] { 64, 34, 24, 70 });
-            Openings(d, t, m); Frames(d, t, boxes); Dividers(d, t, m); Labels(d, t, boxes, view);
-            double minX = double.MaxValue, maxX = double.MinValue, minY = double.MaxValue, maxY = double.MinValue;
-            foreach (var p in AllPoints(boxes)) { var s = Draw.Screen(t, p); minX = Math.Min(minX, s[0]); maxX = Math.Max(maxX, s[0]); minY = Math.Min(minY, s[1]); maxY = Math.Max(maxY, s[1]); }
-            if (view == "Front" || view == "Back" || view == "Top" || view == "Bottom")
+            centre = boxes.Count == 0 ? new double[3] : Enumerable.Range(0, 3).Select(k => (boxes.Min(b => b.Min(k)) + boxes.Max(b => b.Max(k))) / 2).ToArray();
+            var R = cam.Basis();
+            double s = cam.Scale;
+            double cu = Dot(R, 0, centre), cv = -Dot(R, 1, centre);
+            return new ViewT { View = "Free", R = R, S = s, X = area[0] + area[2] / 2 + cam.PanX - cu * s, Y = area[1] + area[3] / 2 + cam.PanY - cv * s };
+        }
+
+        static void Model(Draw d, GrModel m, ViewT t)
+        {
+            var boxes = Boxes(m);
+            Openings(d, t, m); Frames(d, t, boxes); Dividers(d, t, m); Labels(d, t, boxes); Dimensions(d, t, boxes);
+        }
+
+        // Screen box of shapes (text estimated from its font size).
+        static double[] Bounds(IEnumerable<Shape> shapes)
+        {
+            double x0 = double.MaxValue, y0 = double.MaxValue, x1 = double.MinValue, y1 = double.MinValue;
+            foreach (var s in shapes)
             {
-                foreach (var b in boxes.OrderBy(b => b.Y0))
+                if (s.IsText)
                 {
-                    if (b.Z0 > 0 && view != "Top" && view != "Bottom") continue;
-                    var a = Draw.Screen(t, b.X0, b.Y0, 0); var c = Draw.Screen(t, b.X0, b.Y1, 0);
-                    if (a[0] > c[0]) { var tmp = a; a = c; c = tmp; }
-                    d.DimLine(new[] { a[0], maxY + 22 }, new[] { c[0], maxY + 22 }, U.F(b.Y1 - b.Y0));
+                    double fs = Styles.All.TryGetValue(s.Kind, out var st) && st.FontSize > 0 ? st.FontSize : 12;
+                    double w = 0.6 * fs * (s.Text ?? "").Length, h = fs * 1.3, a = s.Angle * Math.PI / 180;
+                    double wx = Math.Abs(Math.Cos(a)) * w + Math.Abs(Math.Sin(a)) * h, wy = Math.Abs(Math.Sin(a)) * w + Math.Abs(Math.Cos(a)) * h;
+                    double ox = s.Align == "left" ? wx / 2 : 0, cy = s.Y + s.Dy * Math.Cos(a);
+                    x0 = Math.Min(x0, s.X + ox - wx / 2); x1 = Math.Max(x1, s.X + ox + wx / 2);
+                    y0 = Math.Min(y0, cy - wy / 2); y1 = Math.Max(y1, cy + wy / 2);
+                    continue;
                 }
-                d.Line("ext", minX, maxY + 4, minX, maxY + 62); d.Line("ext", maxX, maxY + 4, maxX, maxY + 62);
-                d.DimLine(new[] { minX, maxY + 56 }, new[] { maxX, maxY + 56 }, U.F(m.Length));
+                for (int i = 0; i + 1 < s.Points.Length; i += 2) { x0 = Math.Min(x0, s.Points[i]); x1 = Math.Max(x1, s.Points[i]); y0 = Math.Min(y0, s.Points[i + 1]); y1 = Math.Max(y1, s.Points[i + 1]); }
             }
-            else
+            return x0 > x1 ? null : new[] { x0, y0, x1, y1 };
+        }
+
+        // Fits the camera to the area: everything drawn (with labels and dimensions) inside it.
+        // Text keeps its size while the model scales, so it is measured and corrected a few times.
+        public static void Fit(GrModel m, GrCamera cam, double[] area)
+        {
+            var boxes = Boxes(m);
+            if (boxes.Count == 0) { cam.Scale = 1; return; }
+            var R = cam.Basis();
+            var pts = boxes.SelectMany(Corners).ToList();
+            double du = pts.Max(p => Dot(R, 0, p)) - pts.Min(p => Dot(R, 0, p)), dv = pts.Max(p => Dot(R, 1, p)) - pts.Min(p => Dot(R, 1, p));
+            cam.Scale = Math.Max(1e-5, 0.8 * Math.Min(area[2] / Math.Max(du, 1), area[3] / Math.Max(dv, 1)));
+            cam.PanX = cam.PanY = 0;
+            for (int pass = 0; pass < 5; pass++)
             {
-                d.Line("ext", minX, maxY + 4, minX, maxY + 40); d.Line("ext", maxX, maxY + 4, maxX, maxY + 40);
-                d.DimLine(new[] { minX, maxY + 34 }, new[] { maxX, maxY + 34 }, U.F(m.OuterWidth));
+                var d = new Draw();
+                Model(d, m, Transform(m, cam, area, out _));
+                var b = Bounds(d.Shapes);
+                if (b == null) return;
+                double bw = b[2] - b[0], bh = b[3] - b[1];
+                double f = Math.Min(area[2] / Math.Max(bw, 1), area[3] / Math.Max(bh, 1));
+                // centre the drawing in the area, then scale around the area's centre
+                cam.PanX += area[0] + area[2] / 2 - (b[0] + b[2]) / 2;
+                cam.PanY += area[1] + area[3] / 2 - (b[1] + b[3]) / 2;
+                if (f >= 1 && f < 1.04) return;   // all inside, and not much room left over
+                double k = Math.Max(0.2, Math.Min(5, f < 1 ? f * 0.99 : 1 + (f - 1) * 0.92));
+                cam.Scale *= k; cam.PanX *= k; cam.PanY *= k;
             }
-            double vSpan = view == "Top" || view == "Bottom" ? m.OuterWidth : m.OuterHeight;
-            d.Line("ext", minX - 4, minY, minX - 40, minY); d.Line("ext", minX - 4, maxY, minX - 40, maxY);
-            d.DimLine(new[] { minX - 34, maxY }, new[] { minX - 34, minY }, U.F(vSpan));
+        }
+
+        // The model through the camera into a rectangle of the page (fitted first when the camera asks).
+        static void Place(Draw d, GrModel m, GrCamera cam, double[] area)
+        {
+            cam.Area = area;
+            if (cam.Scale <= 0) Fit(m, cam, area);
+            d.Shapes.Add(new Shape { Kind = "clip", Points = new[] { area[0], area[1], area[0] + area[2], area[1], area[0] + area[2], area[1] + area[3], area[0], area[1] + area[3] }, Closed = true });
+            Model(d, m, Transform(m, cam, area, out _));
+            d.Shapes.Add(new Shape { Kind = "unclip", Points = new double[0] });
         }
 
         static readonly (string, double)[] FrameCols = { ("Box", 0.14), ("L x W x H (profiles)", 0.40), ("Attached", 0.46) };
         static readonly (string, double)[] PartCols = { ("Item", 0.24), ("Qty", 0.08), ("Lengths / sizes (mm)", 0.68) };
 
+        // Rows that fit into a height; the rest as one "... more" line.
+        static List<string[]> Cap(List<string[]> rows, double height, double rowH, string more)
+        {
+            int fit = (int)Math.Floor((height - 22) / rowH) - 1;
+            if (rows.Count <= fit || fit < 2) return rows;
+            var o = rows.Take(fit - 1).ToList();
+            var line = Enumerable.Repeat("", rows[0].Length).ToArray();
+            line[0] = $"... {rows.Count - fit + 1} more";
+            if (line.Length > 2) line[2] = more;
+            o.Add(line);
+            return o;
+        }
+
         public static List<Shape> Window(GrModel m, string view, double w, double h)
+        {
+            var cam = new GrCamera(); cam.Set(view, m?.ServiceSide ?? 1);
+            return Window(m, cam, w, h);
+        }
+
+        public static List<Shape> Window(GrModel m, GrCamera cam, double w, double h)
         {
             var d = new Draw();
             if (m == null) { d.Text("empty", w / 2, h / 2, "GR view: choose a preset, load a GR export, or read a GR from Inventor"); return d.Shapes; }
+            const double head = 86, rowH = 17;
             var tables = Gr.Tables(m);
-            double rowH = 17, tabH = Math.Max(Draw.TableHeight(tables.Frames.Count, rowH), Draw.TableHeight(tables.Parts.Count, rowH));
-            var rect = new[] { 0, 0, w, Math.Max(140, h - tabH - 16) };
-            if (view == "Isometric") Iso(d, m, rect); else Ortho(d, m, view, rect);
-            d.Text("caption", 10, 14, $"GR {view.ToUpperInvariant()} - {m.Name}", 0, 0, "left");
-            d.Text("sub", 10, 32, m.RealMap != null ? $"Real part positions ({m.Source})" : $"Layout inferred from the constraints ({m.Source}) - dividers schematic", 0, 0, "left");
+            double tabMax = Math.Max(90, h * 0.34);
+            var frames = Cap(tables.Frames, tabMax, rowH, "");
+            var parts = Cap(tables.Parts, tabMax, rowH, "all of them: Files > Save cut list");
+            double tabH = Math.Max(Draw.TableHeight(frames.Count, rowH), Draw.TableHeight(parts.Count, rowH));
+            double top = head, bottom = Math.Max(top + 120, h - tabH - 40);
+            Place(d, m, cam, new[] { 12, top, Math.Max(100, w - 24), bottom - top });
+            string seen = string.IsNullOrEmpty(cam.View) ? "free view (drag to turn, wheel to zoom)" : cam.View;
+            d.Text("caption", 10, 14, $"GR {seen.ToUpperInvariant()} - {m.Name}", 0, 0, "left");
+            d.Text("sub", 10, 32, (m.RealMap != null ? $"Real part positions ({m.Source})" : $"Layout inferred from the constraints ({m.Source}) - dividers schematic") + "  ·  drag: turn, middle / Shift-drag: pan, wheel: zoom, double-click: fit", 0, 0, "left");
             Legend(d, 14, 50);
             double y = h - tabH - 6, leftW = Math.Floor((w - 30) * 0.4);
-            d.Table("Boxes", FrameCols, tables.Frames, 10, y, leftW, rowH, 11);
-            d.Table("Cut list and parts", PartCols, tables.Parts, 20 + leftW, y, w - 30 - leftW, rowH, 11);
-            d.Axis(view, w - 60, 70);
+            d.Table("Boxes", FrameCols, frames, 10, y, leftW, rowH, 11);
+            d.Table("Cut list and parts", PartCols, parts, 20 + leftW, y, w - 30 - leftW, rowH, 11);
+            Axis(d, cam.Basis(), w - 46, 48);
             return d.Shapes;
         }
 
@@ -330,11 +559,13 @@ namespace InventorSizer.Core
             var d = new Draw();
             d.Rect("frame", 15, 15, 1385, 975);
             if (m == null) { d.Text("empty", 700, 495, "No GR model loaded"); return d.Shapes; }
-            Iso(d, m, new double[] { 30, 30, 640, 420 });
-            d.Text("caption", 40, 46, $"ISOMETRIC - {m.Name}", 0, 0, "left");
-            d.Axis("Isometric", 70, 420);
-            Ortho(d, m, "Front", new double[] { 690, 30, 680, 230 }); d.Text("caption", 700, 46, "FRONT", 0, 0, "left");
-            Ortho(d, m, "Top", new double[] { 690, 270, 680, 230 }); d.Text("caption", 700, 286, "TOP", 0, 0, "left");
+            foreach (var (view, rect, caption) in new[] { ("Isometric", new double[] { 40, 60, 620, 440 }, "ISOMETRIC"), ("Front", new double[] { 700, 60, 660, 200 }, "FRONT (service side)"), ("Top", new double[] { 700, 300, 660, 200 }, "TOP") })
+            {
+                var cam = new GrCamera(); cam.Set(view, m.ServiceSide);
+                Place(d, m, cam, rect);
+                d.Text("caption", rect[0], rect[1] - 16, caption + (view == "Isometric" ? " - " + m.Name : ""), 0, 0, "left");
+                if (view == "Isometric") Axis(d, cam.Basis(), 70, 480);
+            }
             var tables = Gr.Tables(m);
             double y = 520;
             d.Table("Boxes", FrameCols, tables.Frames, 30, y, 520, 22, 12);

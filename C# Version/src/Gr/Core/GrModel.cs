@@ -84,12 +84,17 @@ namespace InventorSizer.Core
         public GrFrame ById(int id) => Frames.FirstOrDefault(f => f.Id == id);
     }
 
-    // A new P350 ring: a copy of the ring led by Template, at Position (offset from the same partner).
+    // A new P350 ring: a copy of the ring led by Template, at Position (offset from the same partner,
+    // or from the matching profile of box Frame when it goes into another box). Single: one P350 on
+    // one face (a copy of Template), at Position mm from the box's outer start along Axis (GR), grounded.
     public class GrRingAdd
     {
         public string Template;
         public double Position;
         public Dictionary<string, string> Names = new Dictionary<string, string>();   // template member -> new member in the model
+        public int Frame;          // the box it goes into (Id); 0 = the template's box
+        public bool Single;
+        public int Axis = -1;
     }
 
     public class GrPending
@@ -793,20 +798,20 @@ namespace InventorSizer.Core
             UpdateLayout(m);
         }
 
-        // A new box next to box likeNo (Right / Left along the length, Front across the width), with
-        // its size, 8 corners and 12 frame profiles named like the existing ones. A spot already taken
-        // moves the new box past it.
+        // A new box next to box likeNo (Right / Left along the length: + / - L; Front / Back across the
+        // width: + / - W), with its size, 8 corners and 12 frame profiles named like the existing ones.
+        // A spot already taken moves the new box past it.
         public static GrFrame AddFrame(GrModel m, int likeNo, string side = "Right")
         {
             var like = m.Frame(likeNo);
-            string place = side == "Front" ? "front" : "side";
-            int dir = side == "Left" ? -1 : 1;
+            string place = side == "Front" || side == "Back" ? "front" : "side";
+            int dir = side == "Left" || side == "Back" ? -1 : 1;
             double Outer(double v) => v + CornerAdd;
             var last = like;
             for (int guard = 0; guard < 100; guard++)
             {
                 double x = last.X, y = last.Y, z = last.Z;
-                if (place == "front") y = last.Y + Outer(last.Wy);
+                if (place == "front") y = dir > 0 ? last.Y + Outer(last.Wy) : last.Y - Outer(like.Wy);
                 else if (dir > 0) x = last.X + Outer(last.Lx);
                 else x = last.X - Outer(like.Lx);
                 double x1 = x + Outer(like.Lx), y1 = y + Outer(like.Wy), z1 = z + Outer(like.Hz);
@@ -816,7 +821,9 @@ namespace InventorSizer.Core
             }
             int id = m.Frames.Select(f => f.Id).DefaultIfEmpty(0).Max() + 1;
             int no = m.Frames.Select(f => f.No).DefaultIfEmpty(0).Max() + 1;
-            var nf = new GrFrame { Id = id, No = no, Sizes = like.Size, Lx = like.Lx, Wy = like.Wy, Hz = like.Hz, Parent = last.Id, Place = place, Dir = dir, CloneOf = like.Id };
+            // in Inventor the new box is a copy of a box that is there already (a new box is not yet)
+            int source = like.CloneOf != 0 ? like.CloneOf : like.Id;
+            var nf = new GrFrame { Id = id, No = no, Sizes = like.Size, Lx = like.Lx, Wy = like.Wy, Hz = like.Hz, Parent = last.Id, Place = place, Dir = dir, CloneOf = source };
             nf.Neighbours.Add(last.Id); last.Neighbours.Add(id);
             string cornerBase = m.Components.Values.FirstOrDefault(c => c.Kind == "corner")?.Base ?? "APS Ecke";
             var prof = m.Components.Values.FirstOrDefault(c => c.Kind == "frameProfile");
@@ -907,13 +914,31 @@ namespace InventorSizer.Core
 
         // A new ring: a copy of the ring of `divider` at `position` mm from the same partner. In the
         // model at once (drawing, openings); in Inventor on Write new GR.
-        public static GrRingAdd AddRing(GrModel m, string divider, double position)
+        public static GrRingAdd AddRing(GrModel m, string divider, double position, int targetFrame = 0)
         {
             string leader = RingOf(m, divider);
             if (!m.Components.TryGetValue(leader, out var lc) || lc.PosConstraint == "")
                 throw new SizerException($"{divider} has no position of its own and does not move with a divider that has one: it cannot be copied.");
             if (lc.CloneOf != "") throw new SizerException("Copy a ring that is in Inventor already (write the GR first).");
-            var add = new GrRingAdd { Template = leader, Position = position };
+            var from = m.ById(lc.Frame);
+            var to = targetFrame == 0 ? from : m.ById(targetFrame) ?? throw new SizerException("That box is not in the GR.");
+            bool other = to != from;
+            if (other)
+            {
+                if (!m.Components.TryGetValue(lc.PosPartner, out var pp) || (pp.Kind != "frameProfile" && pp.Kind != "corner"))
+                    throw new SizerException($"The ring of {leader} is placed from {lc.PosPartner}, not from a frame profile: it can only be copied within {from?.Label}.");
+                if (to.RealOrigin == null && to.CloneOf == 0) throw new SizerException($"{to.Label} has no real positions: read the GR from Inventor first.");
+            }
+            if (position <= 0 || (lc.MoveAxis >= 0 && position >= to.Size[lc.MoveAxis] + CornerAdd)) throw new SizerException($"{U.F(position)} mm is outside {to.Label} ({U.F(to.Size[Math.Max(0, lc.MoveAxis)] + CornerAdd)} mm).");
+            // a ring placed from the far end of its box stays that far from the far end of the other box
+            double farShift = 0;
+            if (other && lc.MoveAxis >= 0)
+            {
+                var pb = GrOpenings.LayoutBox(m, m.Components[lc.PosPartner]) ?? GrOpenings.ProfileBox(m, from, lc.PosPartner, -1);
+                if (pb != null && (pb.Value.Min[lc.MoveAxis] + pb.Value.Max[lc.MoveAxis]) / 2 - from.Pos[lc.MoveAxis] > (from.Size[lc.MoveAxis] + CornerAdd) / 2)
+                    farShift = to.Size[lc.MoveAxis] - from.Size[lc.MoveAxis];
+            }
+            var add = new GrRingAdd { Template = leader, Position = position, Frame = other ? to.Id : 0 };
             int k = m.Components.Count(c => c.Value.CloneOf != "") + 1;
             foreach (var name in RingMembers(m, leader))
             {
@@ -927,16 +952,68 @@ namespace InventorSizer.Core
                 var c = m.Components[kv.Key];
                 var n = new GrComponent
                 {
-                    Name = kv.Value, File = c.File, Base = c.Base, OrigBase = "", Kind = c.Kind, Length = c.Length, Frame = c.Frame, CloneOf = kv.Key,
+                    Name = kv.Value, File = c.File, Base = c.Base, OrigBase = "", Kind = c.Kind, Length = c.Length, Frame = to?.Id ?? c.Frame, CloneOf = kv.Key,
                     Follow = c.Follow.Select(r => new Follow { Dim = r.Dim, Offset = r.Offset, Part = r.Part }).ToList(),
                     Box = c.Box, MoveAxis = c.MoveAxis, MoveSign = c.MoveSign, PosPartner = c.PosPartner,
                     Leader = c.Leader != "" && add.Names.TryGetValue(c.Leader, out var ln) ? ln : c.Leader,
                     Geo = c.Geo == null ? null : new Geo { Min = (double[])c.Geo.Min.Clone(), Max = (double[])c.Geo.Max.Clone(), Size0 = c.Geo.Size0, Pos0 = c.Geo.Pos0 }
                 };
                 if (kv.Key == leader) { n.Position = position; n.OrigPosition = position; n.PosConstraint = "(new)"; if (n.Geo != null) n.Geo.Pos0 = c.Geo.Pos0; }
+                if (other)
+                {
+                    foreach (var r in n.Follow) SetComponentLength(n, r.Part, to.Get(r.Dim) + r.Offset);   // the other box's size
+                    if (n.Geo != null && farShift != 0) { n.Geo.Min[lc.MoveAxis] += farShift; n.Geo.Max[lc.MoveAxis] += farShift; }
+                }
                 m.Components[n.Name] = n;
                 m.ById(n.Frame)?.Dividers.Add(n.Name);
             }
+            m.RingAdds.Add(add); m.Edited = true;
+            return add;
+        }
+
+        // P350 that could be copied as a single one onto a face of a box: in Inventor already, lying on a
+        // face with the same normal (GR axis faceAxis) and the same side of its own box, and running
+        // along longAxis. The ones in the box itself first.
+        public static List<string> SingleTemplates(GrModel m, int frameId, int faceAxis, int side, int longAxis)
+        {
+            var list = new List<(string Name, bool Same)>();
+            foreach (var c in m.Components.Values.Where(c => c.Kind == "divider" && c.CloneOf == "" && !string.IsNullOrEmpty(c.OrigBase)))
+            {
+                var f = m.ById(c.Frame); var b = GrOpenings.LayoutBox(m, c);
+                if (f == null || b == null) continue;
+                var ext = Enumerable.Range(0, 3).Select(i => b.Value.Max[i] - b.Value.Min[i]).ToArray();
+                if (Array.IndexOf(ext, ext.Max()) != longAxis || ext[faceAxis] > 150) continue;
+                double plane = f.Pos[faceAxis] + (side == 0 ? 0 : f.Size[faceAxis] + CornerAdd);
+                if (Math.Abs((b.Value.Min[faceAxis] + b.Value.Max[faceAxis]) / 2 - plane) > 150) continue;
+                list.Add((c.Name, f.Id == frameId));
+            }
+            return list.OrderByDescending(x => x.Same).ThenBy(x => x.Name, StringComparer.OrdinalIgnoreCase).Select(x => x.Name).ToList();
+        }
+
+        // One P350 on a face: a copy of `template` in box frameId, at `position` mm from the box's outer
+        // start along GR axis `axis`. It hangs on nothing in Inventor: it is placed there and grounded.
+        public static GrRingAdd AddSingle(GrModel m, string template, int frameId, int axis, double position)
+        {
+            if (!m.Components.TryGetValue(template, out var c) || c.Kind != "divider") throw new SizerException($"'{template}' is not a divider.");
+            if (c.CloneOf != "" || c.Geo == null) throw new SizerException("Copy a P350 that is in Inventor already (write the GR first).");
+            var to = m.ById(frameId) ?? throw new SizerException("That box is not in the GR.");
+            if (to.RealOrigin == null && to.CloneOf == 0) throw new SizerException($"{to.Label} has no real positions: read the GR from Inventor first.");
+            if (position <= 0 || position >= to.Size[axis] + CornerAdd) throw new SizerException($"{U.F(position)} mm is outside {to.Label} ({U.F(to.Size[axis] + CornerAdd)} mm).");
+            int k = 0; string nn;
+            do nn = $"{Regex.Replace(c.Name, @":\d+$", "")}:new{++k + m.Components.Count(x => x.Value.CloneOf != "")}"; while (m.Components.ContainsKey(nn));
+            var geo = new Geo { Min = (double[])c.Geo.Min.Clone(), Max = (double[])c.Geo.Max.Clone(), Size0 = c.Geo.Size0 };
+            double half = (geo.Max[axis] - geo.Min[axis]) / 2, at = (geo.Max[axis] + geo.Min[axis]) / 2;
+            geo.Min[axis] += position - at; geo.Max[axis] += position - at;
+            var n = new GrComponent
+            {
+                Name = nn, File = c.File, Base = c.Base, OrigBase = "", Kind = c.Kind, Length = c.Length, Frame = to.Id, CloneOf = template,
+                Follow = c.Follow.Select(r => new Follow { Dim = r.Dim, Offset = r.Offset, Part = r.Part }).ToList(), Box = c.Box, Geo = geo
+            };
+            foreach (var r in n.Follow) SetComponentLength(n, r.Part, to.Get(r.Dim) + r.Offset);
+            m.Components[nn] = n;
+            to.Dividers.Add(nn);
+            var add = new GrRingAdd { Template = template, Position = position, Frame = to.Id, Single = true, Axis = axis };
+            add.Names[template] = nn;
             m.RingAdds.Add(add); m.Edited = true;
             return add;
         }
@@ -987,7 +1064,9 @@ namespace InventorSizer.Core
                 p.Dividers.Add((c.Name, c.PosConstraint, c.OrigPosition ?? 0, c.Position ?? 0));
             foreach (var f in m.Frames.Where(f => f.CloneOf != 0)) p.Boxes.Add($"new {f.Label}, a copy of {m.ById(f.CloneOf)?.Label ?? "a removed box"}");
             if (m.Removed.Count > 0) p.Boxes.Add($"{m.Removed.Count} part(s) of removed boxes deleted");
-            foreach (var r in m.RingAdds) p.Rings.Add($"new P350 ring like {r.Template} at {U.F(r.Position)} mm ({r.Names.Count} P350)");
+            foreach (var r in m.RingAdds)
+                p.Rings.Add(r.Single ? $"new P350 like {r.Template} on {m.ById(r.Frame)?.Label}, {U.F(r.Position)} mm along {"LWH"[Math.Max(0, r.Axis)]}"
+                    : $"new P350 ring like {r.Template} at {U.F(r.Position)} mm ({r.Names.Count} P350){(r.Frame != 0 ? " in " + m.ById(r.Frame)?.Label : "")}");
             foreach (var r in m.RingRemoves) p.Rings.Add($"P350 ring removed: {string.Join(", ", r)}");
             int lost = m.Components.Values.Count(c => string.IsNullOrEmpty(c.OrigBase) && c.CloneOf == "");
             if (lost > 0) p.Blocked.Add($"{lost} part(s) are not in Inventor and not a copy of anything there.");
