@@ -64,10 +64,16 @@ namespace InventorSizer
             }
             popBoxes.Actions.Controls.Add(glassShared);
 
-            // Dividers
+            // Dividers: the grid, and adding / removing P350 rings (a ring = a P350 and those moving with it)
             grDivGrid.Parent?.Controls.Remove(grDivGrid);
             Glass.StyleDarkGrid(grDivGrid);
             popDividers.Body.Controls.Add(grDivGrid);
+            var btnRingAdd = new FlatButton("Add ring like selected...", ButtonKind.Glass, 0, 28) { Margin = new Padding(0, 0, 6, 0) };
+            var btnRingRemove = new FlatButton("Remove ring", ButtonKind.Glass, 0, 28) { Margin = new Padding(0, 0, 6, 0) };
+            popDividers.Actions.Controls.AddRange(new Control[] { btnRingAdd, btnRingRemove });
+            string SelectedDivider() => grDivGrid.CurrentRow == null ? throw new SizerException("Select a divider in the list first.") : Convert.ToString(grDivGrid.CurrentRow.Cells["Divider"].Value);
+            btnRingAdd.Click += (s, e) => { if (gr != null) AddRingDialog(SelectedDivider()); };
+            btnRingRemove.Click += (s, e) => GrEdit("Remove ring", () => RemoveRingNow(SelectedDivider()));
 
             // Openings
             popOpenings.Body.Controls.Add(grOpGrid);
@@ -134,6 +140,7 @@ namespace InventorSizer
                 var hit = GrHit(e.Location);
                 if (hit.Kind == null) return;
                 if (e.Button == MouseButtons.Right && hit.Kind == "open") { OpeningMenu(hit.Id, e.Location); return; }
+                if (e.Button == MouseButtons.Right && hit.Kind == "div") { DividerMenu(hit.Id, e.Location); return; }
                 if (e.Button != MouseButtons.Left) return;
                 if (hit.Kind == "open") { gr.SelectedOpening = hit.Id; popOpenings.Popup(PopAt(2)); SelectRow(grOpGrid, "Key", hit.Id, null); UpdateDrawing(); }
                 else if (hit.Kind == "div") { popDividers.Popup(PopAt(1)); SelectRow(grDivGrid, "Divider", hit.Id, "Position"); }
@@ -203,6 +210,50 @@ namespace InventorSizer
                 if ((yi > p.Y) != (yj > p.Y) && p.X < (xj - xi) * (p.Y - yi) / (yj - yi) + xi) inside = !inside;
             }
             return inside;
+        }
+
+        // Right-click on a divider in the twin: its position, a copy of its ring, or removing the ring.
+        void DividerMenu(string name, Point at)
+        {
+            if (!gr.Components.TryGetValue(name, out var c)) return;
+            string leader = Gr.RingOf(gr, name);
+            var menu = Glass.Menu();
+            menu.Items.Add(new ToolStripMenuItem($"{name}" + (leader != name ? $"  (moves with {leader})" : "")) { Enabled = false });
+            var pos = new ToolStripMenuItem("Edit position...");
+            pos.Click += (s, e) => { popDividers.Popup(PopAt(1)); SelectRow(grDivGrid, "Divider", leader, "Position"); };
+            var add = new ToolStripMenuItem("Add a ring like this...");
+            add.Click += (s, e) => AddRingDialog(name);
+            var remove = new ToolStripMenuItem("Remove this ring");
+            remove.Click += (s, e) => GrEdit("Remove ring", () => RemoveRingNow(name));
+            menu.Items.AddRange(new ToolStripItem[] { pos, add, remove });
+            menu.Show(twin, at);
+        }
+
+        void AddRingDialog(string divider)
+        {
+            string leader = Gr.RingOf(gr, divider);
+            if (!gr.Components.TryGetValue(leader, out var lc) || lc.PosConstraint == "")
+            {
+                Toast.Show(this, ToastKind.Error, "Add ring", $"{divider} has no position of its own: pick a divider placed by an offset.");
+                return;
+            }
+            string from = Short(lc.PosPartner);
+            string text = SetupTextDialog.Prompt(this, "Add a P350 ring",
+                $"A copy of the ring of {leader} ({Gr.RingMembers(gr, leader).Count} P350 and their joints).\nPosition in mm, measured like {leader} ({U.F(lc.Position ?? 0)} mm from {from}):", U.F((lc.Position ?? 0) + 300));
+            if (string.IsNullOrWhiteSpace(text)) return;
+            GrEdit("Add ring", () =>
+            {
+                double v;
+                try { v = U.P(text); } catch { throw new SizerException($"'{text}' is not a number in mm."); }
+                var add = Gr.AddRing(gr, divider, v);
+                Log.Write($"GR: new P350 ring like {leader} at {U.F(v)} mm: {string.Join(", ", add.Names.Values)} (made in Inventor on Write new GR)");
+            });
+        }
+
+        void RemoveRingNow(string divider)
+        {
+            var gone = Gr.RemoveRing(gr, divider);
+            Log.Write($"GR: P350 ring removed: {string.Join(", ", gone)} (deleted in Inventor on Write new GR)");
         }
 
         // Right-click on an opening in the twin: its panel type.
