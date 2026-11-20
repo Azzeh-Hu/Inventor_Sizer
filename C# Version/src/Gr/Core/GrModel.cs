@@ -884,6 +884,8 @@ namespace InventorSizer.Core
         {
             if (!m.Components.TryGetValue(name, out var c) || c.Kind != "divider") throw new SizerException($"'{name}' is not a divider.");
             if (c.PosConstraint == "") throw new SizerException($"'{name}' has no position of its own: it hangs on joints and follows the dividers it joins.");
+            var f = m.ById(c.Frame);
+            if (value <= 0 || (f != null && c.MoveAxis >= 0 && value >= f.Size[c.MoveAxis] + CornerAdd)) throw new SizerException($"{U.F(value)} mm is outside the box ({U.F((f?.Size[Math.Max(0, c.MoveAxis)] ?? 0) + CornerAdd)} mm).");
             c.Position = value; m.Edited = true;
             foreach (var r in m.RingAdds.Where(r => r.Names.TryGetValue(r.Template, out var nl) && nl == name)) { r.Position = value; c.OrigPosition = value; }
         }

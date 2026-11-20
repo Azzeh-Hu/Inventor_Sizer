@@ -47,7 +47,8 @@ namespace InventorSizer
             }
             var newCons = result.Cons;
             dynamic cons = asm.ComponentDefinition.Constraints;
-            foreach (var c in Items(cons).ToList())
+            List<dynamic> all = Items(cons);   // typed: LINQ does not bind on a late-bound result
+            foreach (var c in all)
             {
                 string type = ConstraintType(c);
                 if (type != "Mate" && type != "Flush") continue;
@@ -113,6 +114,7 @@ namespace InventorSizer
         static void AddRings(GrModel m, dynamic asm)
         {
             foreach (var add in m.RingAdds.ToList())
+            try
             {
                 if (!m.Components.TryGetValue(add.Template, out var lead)) { Log.Write($"  new ring skipped: {add.Template} is no longer in the GR"); continue; }
                 var members = add.Names.Keys.ToList();
@@ -136,6 +138,7 @@ namespace InventorSizer
                 m.RingAdds.Remove(add);
                 Log.Write($"  new P350 ring at {U.F(add.Position)} mm: {string.Join(", ", r.Occs.Values.Select(o => (string)o.Name))}");
             }
+            catch (Exception e) { Log.Write($"  not finished: new P350 ring like {add.Template} at {U.F(add.Position)} mm: {e.Message}"); }
         }
 
         // The corner of box f nearest to a layout point (GR mm), from the corners' range boxes.
@@ -162,6 +165,7 @@ namespace InventorSizer
             dynamic cons = asm.ComponentDefinition.Constraints;
             var outNames = (Gr.FaceNames.TryGetValue("corner", out var cn) ? cn : new string[0]).Where(n => n.StartsWith("Out")).ToArray();
             foreach (var f in m.Order.Select(m.ById).Where(f => f != null && f.CloneOf != 0).ToList())
+            try
             {
                 var like = m.ById(f.CloneOf);
                 if (like?.RealOrigin == null) throw new SizerException($"{f.Label}: the box it copies has no real positions (read the GR from Inventor first).");
@@ -203,6 +207,7 @@ namespace InventorSizer
                     cons.AddFlushConstraint(SupportFace(no, outNames, AxisVec(m, g, -1), "outside"), SupportFace(po, outNames, AxisVec(m, g, -1), "outside"), 0);
                 Log.Write($"  {f.Label} joined to {p.Label}: {nc.Name} to {pc.Name}");
             }
+            catch (Exception e) { Log.Write($"  not finished: new {f.Label}: {e.Message}"); }
         }
 
         // Boxes marked for removal: their parts deleted.
