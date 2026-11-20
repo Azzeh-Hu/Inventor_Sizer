@@ -57,15 +57,19 @@ namespace InventorSizer
             throw new SizerException("Inventor gave no face in the GR for a named face" + (last != null ? $" ({last.Message})" : "") + ".");
         }
 
-        // A planar face's outward normal and a point on it (assembly cm).
-        static (double[] N, double[] P) PlaneOf(dynamic face)
+        // A planar face's outward normal and a point on it (assembly cm). A class, not a tuple: the
+        // face is a late-bound COM object, so the call is late-bound too, and tuple names are lost then.
+        public class FacePlane { public double[] N, P; }
+
+        static FacePlane PlaneOf(object faceObj)
         {
+            dynamic face = faceObj;
             dynamic g = face.Geometry;
             var n = new[] { (double)g.Normal.X, (double)g.Normal.Y, (double)g.Normal.Z };
             bool reversed = false;
             try { reversed = (bool)face.IsParamReversed; } catch { }
             if (reversed) n = n.Select(x => -x).ToArray();
-            return (n, new[] { (double)g.RootPoint.X, (double)g.RootPoint.Y, (double)g.RootPoint.Z });
+            return new FacePlane { N = n, P = new[] { (double)g.RootPoint.X, (double)g.RootPoint.Y, (double)g.RootPoint.Z } };
         }
 
         static double Dot(double[] a, double[] b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
