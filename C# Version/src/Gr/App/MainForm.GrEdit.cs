@@ -349,7 +349,7 @@ namespace InventorSizer
                     if (o.State == "blocked") { cell.Items.Add(NoPanel); cell.ReadOnly = true; row.DefaultCellStyle.ForeColor = Theme.GlassMuted; }
                     else cell.Items.AddRange(o.State == "filled" ? Keep : NoPanel, "FP", "TP", "RP");
                     cell.Value = type;
-                    if (o.Panel?.Problem != null) row.Cells["Panel"].Style.ForeColor = Color.LightCoral;
+                    if (o.Panel?.Problem != null) row.Cells["Panel"].Style.ForeColor = Theme.MacRed;
                     if (o.Key == current) { grOpGrid.CurrentCell = row.Cells["No"]; row.Selected = true; }
                 }
                 if (gr == null || gr.RealMap == null)

@@ -159,7 +159,9 @@ namespace InventorSizer
             btnGrApply.Click += (s, e) => Step("Write new GR to Inventor", () =>
             {
                 if (gr == null) throw new SizerException("Load a GR first.");
-                Inv.ApplyGr(gr, grNewName.Text, grPrefix.Text, new Inv.PanelJob { Prefix = grPrefix.Text.Trim(), MakePanel = MakeGrPanel });
+                bool written = Inv.ApplyGr(gr, grNewName.Text, grPrefix.Text, new Inv.PanelJob { Prefix = grPrefix.Text.Trim(), MakePanel = MakeGrPanel },
+                    what => GlassDialog.Warn(this, "Overwrite the GR?", what, "Cancel", "Overwrite") == "Overwrite");
+                if (!written) return;
                 grData = null;   // the new GR differs from the data it was read from
                 UpdateGrGrid();
             }, true);

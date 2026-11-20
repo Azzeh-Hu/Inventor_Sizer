@@ -125,8 +125,26 @@ namespace InventorSizer
         // divider offsets set, the planned panels made and placed (job), the new GR saved and opened.
         // On the loading bar: one item per step below and per panel made and placed; the time of
         // each kind of item is learned from earlier writes (a TP panel takes longer than an FP).
-        public static void ApplyGr(GrModel m, string newName, string prefix, PanelJob job = null)
+        // An existing GR of that name, or the GR being edited itself, is only written over when
+        // confirm (asked with what will happen) says so; the old file is kept in OldVersions\.
+        // Returns false when the user said no (nothing written).
+        public static bool ApplyGr(GrModel m, string newName, string prefix, PanelJob job = null, Func<string, bool> confirm = null)
         {
+            string name = (newName ?? "").Trim();
+            bool overwrite = false;
+            string target = TargetPath(m, name);
+            if (target != null && name != "")
+            {
+                bool self = name == m.Name || string.Equals(target, m.SourcePath, StringComparison.OrdinalIgnoreCase);
+                if (self || File.Exists(target))
+                {
+                    string what = self
+                        ? $"\"{name}\" is the GR you are editing. Overwriting writes every change into it: the GR as it is now is replaced.\n\nA copy of it is kept in OldVersions\\ next to it."
+                        : $"{name}.iam already exists in\n{Path.GetDirectoryName(target)}\n\nOverwriting replaces it with this GR. Other assemblies and drawings that use {name}.iam change with it. The old file is kept in OldVersions\\ next to it.";
+                    if (confirm == null || !confirm(what)) { Log.Write("Cancelled: nothing was written."); return false; }
+                    overwrite = true;
+                }
+            }
             var pending = Gr.Pending(m);
             var openings = job == null ? new List<GrOpening>() : GrOpenings.Planned(GrOpenings.Find(m));
             var plan = new List<(string Key, int Count)>
@@ -137,7 +155,34 @@ namespace InventorSizer
             };
             plan.AddRange(PanelPlan(openings));
             using (Progress.Run("Write new GR to Inventor", plan.ToArray()))
-                ApplyGrSteps(m, newName, prefix, job);
+                ApplyGrSteps(m, newName, prefix, job, overwrite);
+            return true;
+        }
+
+        // Where the GR of that name will be: next to the source GR (its file, or the GR open in Inventor).
+        static string TargetPath(GrModel m, string name)
+        {
+            if (name == "" || name.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0) return null;
+            string src = !string.IsNullOrEmpty(m.SourcePath) && File.Exists(m.SourcePath) ? m.SourcePath : null;
+            if (src == null)
+                try
+                {
+                    dynamic a = App().ActiveDocument;
+                    if (a != null && Path.GetFileNameWithoutExtension((string)a.FullFileName) == m.Name) src = (string)a.FullFileName;
+                }
+                catch { }
+            return src == null ? null : Path.Combine(Path.GetDirectoryName(src), name + Path.GetExtension(src));
+        }
+
+        // The file as it was, kept in OldVersions\ next to it (moved, or copied when it is written into).
+        static void KeepOldVersion(string path, bool move)
+        {
+            string dir = Path.Combine(Path.GetDirectoryName(path), "OldVersions");
+            Directory.CreateDirectory(dir);
+            string to = Path.Combine(dir, $"{Path.GetFileNameWithoutExtension(path)}.{DateTime.Now:yyyyMMdd-HHmmss}{Path.GetExtension(path)}");
+            try { if (move) File.Move(path, to); else File.Copy(path, to); }
+            catch (Exception e) { throw new SizerException($"{Path.GetFileName(path)} could not be kept in OldVersions ({e.Message}); nothing was written."); }
+            Log.Write($"  kept the old {Path.GetFileName(path)} as {to}");
         }
 
         // The panel part of the plan: each panel file made once (per type), each opening placed.
@@ -149,12 +194,12 @@ namespace InventorSizer
             return plan;
         }
 
-        static void ApplyGrSteps(GrModel m, string newName, string prefix, PanelJob job)
+        static void ApplyGrSteps(GrModel m, string newName, string prefix, PanelJob job, bool overwrite)
         {
             newName = (newName ?? "").Trim(); prefix = (prefix ?? "").Trim();
             if (newName == "") throw new SizerException("Enter the name of the new GR assembly (e.g. 5794 GR).");
             if (newName.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0) throw new SizerException($"'{newName}' is not a valid file name.");
-            if (newName == m.Name) throw new SizerException("The new GR needs a new name; the original stays as it is.");
+            if (newName == m.Name && !overwrite) throw new SizerException("The new GR needs a new name; the original stays as it is (or write over it on purpose).");
             var todo = Gr.Pending(m);
             if (todo.Blocked.Count > 0) throw new SizerException("Not written:\n" + string.Join("\n", todo.Blocked) + "\nUndo those (load the GR again) or make them in Inventor.");
             Progress.Next("gr.start", $"Saving the GR as {newName}");
@@ -162,8 +207,23 @@ namespace InventorSizer
             dynamic asm = src.Doc;
             string name = Path.GetFileNameWithoutExtension((string)asm.FullFileName);
             string newPath = Path.Combine(Path.GetDirectoryName((string)asm.FullFileName), newName + Path.GetExtension((string)asm.FullFileName));
-            if (File.Exists(newPath)) throw new SizerException($"{newPath} already exists.");
+            bool inPlace = string.Equals(newPath, (string)asm.FullFileName, StringComparison.OrdinalIgnoreCase);
+            if (inPlace && !overwrite) throw new SizerException("The new GR needs a new name; the original stays as it is (or write over it on purpose).");
             dynamic inv = asm.Parent;
+            if (File.Exists(newPath) && !inPlace)
+            {
+                if (!overwrite) throw new SizerException($"{newPath} already exists.");
+                // the old file must not be open in Inventor while it is replaced
+                dynamic open = FindOpen(inv, newPath);
+                if (open != null)
+                {
+                    bool dirty = false; try { dirty = (bool)open.Dirty; } catch { }
+                    if (dirty) throw new SizerException($"{Path.GetFileName(newPath)} is open in Inventor with unsaved changes. Save or close it, then write again.");
+                    try { open.Close(true); } catch (Exception e) { throw new SizerException($"{Path.GetFileName(newPath)} is open in Inventor and could not be closed ({e.Message}). Close it, then write again."); }
+                }
+                KeepOldVersion(newPath, true);
+            }
+            else if (inPlace) KeepOldVersion(newPath, false);
             var planned = job == null ? new List<GrOpening>() : GrOpenings.Planned(GrOpenings.Find(m));
             var bad = planned.Where(o => o.Panel.Problem != null).ToList();
             if (bad.Count > 0) throw new SizerException("Not written - fix these openings first (or set them to -):\n" + string.Join("\n", bad.Select(o => $"{o.Label}: {o.Panel.Problem}")));
@@ -171,8 +231,12 @@ namespace InventorSizer
             if (planned.Count > 0 && m.Frames.Any(f => f.RealOrigin == null && f.CloneOf == 0)) throw new SizerException("Placing panels needs the GR read from Inventor (real part positions): read it again, then write.");
             string parts = Path.Combine(Path.GetDirectoryName(newPath), "Einzelteile");
             CheckRemovable(m, (object)asm);
-            Log.Measure($"Save the GR as {newName}", () => { asm.SaveAs(newPath, false); });
-            Log.Write($"  saved {newPath} (the new GR; {name} stays as it was)");
+            if (inPlace) Log.Write($"  writing the changes into {name} itself (overwrite)");
+            else
+            {
+                Log.Measure($"Save the GR as {newName}", () => { asm.SaveAs(newPath, false); });
+                Log.Write(overwrite ? $"  saved {newPath} (written over the old one; {name} stays as it was)" : $"  saved {newPath} (the new GR; {name} stays as it was)");
+            }
             dynamic occs = asm.ComponentDefinition.Occurrences;
             var renamed = new Dictionary<string, string>();
             // boxes first: a new box is a copy at the old size, its profiles get their own size below

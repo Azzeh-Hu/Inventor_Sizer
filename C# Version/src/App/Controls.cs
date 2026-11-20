@@ -18,6 +18,7 @@ namespace InventorSizer
     {
         public ButtonKind Kind;
         public string Glyph;          // drawn after the text, e.g. "▾"
+        public bool Destructive;      // red text: the button does something that cannot be undone
         bool hover, down;
 
         public FlatButton(string text, ButtonKind kind = ButtonKind.Secondary, int width = 0, int height = 32)
@@ -50,15 +51,15 @@ namespace InventorSizer
             bool on = Enabled;
             switch (Kind)
             {
+                // the default button: macOS blue with white text
                 case ButtonKind.Primary:
-                    fill = !on ? Theme.LineStrong : down ? Color.Black : hover ? Theme.InkSoft : Theme.Ink;
-                    border = fill; text = on ? Color.White : Theme.App; break;
                 case ButtonKind.GlassPrimary:
-                    fill = !on ? Theme.GlassLine : down ? Theme.Pressed : hover ? Theme.Hover : Theme.GlassText;
-                    border = fill; text = Theme.Ink; break;
+                    fill = !on ? Theme.MacTrack : down ? Theme.MacBlueDown : hover ? Theme.MacBlueHover : Theme.MacBlue;
+                    border = fill; text = on ? Color.White : Theme.MacTertiary; break;
+                // the other buttons: white with a hairline, as on macOS
                 case ButtonKind.Glass:
-                    fill = down ? Theme.GlassLine : hover ? Theme.GlassRaised : Theme.Glass;
-                    border = Theme.GlassLine; text = on ? Theme.GlassText : Theme.GlassMuted; break;
+                    fill = !on ? Theme.Glass : down ? Theme.MacTrack : hover ? Theme.MacStripe : Theme.GlassRaised;
+                    border = Theme.MacBorder; text = !on ? Theme.MacTertiary : Destructive ? Theme.MacRed : Theme.GlassText; break;
                 case ButtonKind.Ghost:
                     var bg = Parent?.BackColor ?? Theme.App;
                     fill = down ? Theme.Mix(bg, Color.Black, 0.12) : hover ? Theme.Mix(bg, Color.Black, 0.06) : bg;
@@ -115,15 +116,18 @@ namespace InventorSizer
             Theme.Smooth(g);
             var track = new RectangleF(1, (Height - 18) / 2f, 32, 18);
             using (var path = Theme.Round(track, 9))
-            using (var b = new SolidBrush(!Enabled ? Theme.Line : Checked ? Theme.Ink : Theme.LineStrong))
+            using (var b = new SolidBrush(!Enabled ? Theme.Line : Checked ? Theme.MacBlue : Theme.MacTrack))
                 g.FillPath(b, path);
             float kx = Checked ? track.Right - 16 : track.X + 2;
-            using (var b = new SolidBrush(Color.White)) g.FillEllipse(b, kx, track.Y + 2, 14, 14);
+            Theme.Knob(g, kx, track.Y + 2, 14);
             TextRenderer.DrawText(g, Text, Font, new Rectangle(42, 0, Width - 42, Height), Enabled ? Theme.Ink : Theme.Faint, TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
         }
     }
 
     // ------------------------------------------------------------------ combo box
+    // A macOS pop-up button: a white rounded box with the choice, a small blue box with the up / down
+    // chevrons on the right; the list is a menu with the current choice ticked and the one under the
+    // mouse in blue.
     public class ThemedCombo : ComboBox
     {
         public ThemedCombo(int width)
@@ -137,9 +141,17 @@ namespace InventorSizer
         {
             if (e.Index < 0) return;
             bool edit = (e.State & DrawItemState.ComboBoxEdit) != 0, sel = (e.State & DrawItemState.Selected) != 0 && !edit;
-            using (var b = new SolidBrush(sel ? Theme.Selection : Theme.Paper)) e.Graphics.FillRectangle(b, e.Bounds);
-            var r = new Rectangle(e.Bounds.X + (edit ? 4 : 10), e.Bounds.Y, e.Bounds.Width - 14, e.Bounds.Height);
-            TextRenderer.DrawText(e.Graphics, GetItemText(Items[e.Index]), Font, r, Enabled ? Theme.Ink : Theme.Faint, TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
+            var g = e.Graphics;
+            using (var b = new SolidBrush(Theme.Paper)) g.FillRectangle(b, e.Bounds);
+            if (sel)
+            {
+                Theme.Smooth(g);
+                using (var path = Theme.Round(new RectangleF(e.Bounds.X + 4, e.Bounds.Y + 1, e.Bounds.Width - 8, e.Bounds.Height - 2), 5))
+                using (var b = new SolidBrush(Theme.MacBlue)) g.FillPath(b, path);
+            }
+            if (!edit && e.Index == SelectedIndex) Theme.Tick(g, e.Bounds.X + 9, e.Bounds.Y + e.Bounds.Height / 2f, sel ? Color.White : Theme.Ink);
+            var r = new Rectangle(e.Bounds.X + (edit ? 4 : 24), e.Bounds.Y, e.Bounds.Width - (edit ? 30 : 28), e.Bounds.Height);
+            TextRenderer.DrawText(g, GetItemText(Items[e.Index]), Font, r, sel ? Color.White : Enabled ? Theme.Ink : Theme.Faint, TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
         }
 
         // The system draws the frame and the arrow; paint our own over them.
@@ -154,13 +166,20 @@ namespace InventorSizer
                     var bg = Parent?.BackColor ?? Theme.App;
                     using (var p = new Pen(bg, 3)) g.DrawRectangle(p, 0, 0, Width - 1, Height - 1);
                     Theme.Smooth(g);
+                    bool focus = Focused || DroppedDown;
                     using (var path = Theme.Round(new RectangleF(0.5f, 0.5f, Width - 1.5f, Height - 1.5f), 6))
-                    using (var p = new Pen(Focused || DroppedDown ? Theme.Ink : Theme.LineStrong)) g.DrawPath(p, path);
-                    var arrow = new Rectangle(Width - 24, 2, 21, Height - 4);
-                    using (var b = new SolidBrush(Theme.Paper)) g.FillRectangle(b, arrow);
-                    float cx = arrow.X + arrow.Width / 2f - 1, cy = Height / 2f;
-                    using (var p = new Pen(Enabled ? Theme.InkSoft : Theme.Faint, 1.5f))
-                        g.DrawLines(p, new[] { new PointF(cx - 4, cy - 2), new PointF(cx, cy + 2), new PointF(cx + 4, cy - 2) });
+                    using (var p = new Pen(focus ? Theme.MacBlue : Theme.MacBorder, focus ? 1.6f : 1f)) g.DrawPath(p, path);
+                    var cover = new Rectangle(Width - 25, 2, 23, Height - 4);
+                    using (var b = new SolidBrush(Theme.Paper)) g.FillRectangle(b, cover);
+                    var box = new RectangleF(Width - 21, 4, 16, Height - 8);
+                    using (var path = Theme.Round(box, 4))
+                    using (var b = new SolidBrush(Enabled ? Theme.MacBlue : Theme.MacTrack)) g.FillPath(b, path);
+                    float cx = box.X + box.Width / 2, cy = box.Y + box.Height / 2;
+                    using (var p = new Pen(Color.White, 1.4f) { StartCap = LineCap.Round, EndCap = LineCap.Round, LineJoin = LineJoin.Round })
+                    {
+                        g.DrawLines(p, new[] { new PointF(cx - 3, cy - 1.5f), new PointF(cx, cy - 4.5f), new PointF(cx + 3, cy - 1.5f) });
+                        g.DrawLines(p, new[] { new PointF(cx - 3, cy + 1.5f), new PointF(cx, cy + 4.5f), new PointF(cx + 3, cy + 1.5f) });
+                    }
                 }
             }
             catch { }
@@ -364,101 +383,125 @@ namespace InventorSizer
     // ------------------------------------------------------------------ tables, menus
     public static class Glass
     {
-        // A data grid without the spreadsheet chrome: no cell borders, a quiet header row,
-        // white value cells on the grey card.
-        public static void StyleGrid(DataGridView g, Color card)
+        // A table as on macOS: white, every second row lightly striped, no cell lines, a quiet grey
+        // header with a hairline under it, the selected row in blue with white text.
+        static void MacTable(DataGridView g, Color text)
         {
             g.BorderStyle = BorderStyle.None;
-            g.BackgroundColor = card;
+            g.BackgroundColor = Theme.GlassRaised;
             g.EnableHeadersVisualStyles = false;
-            g.CellBorderStyle = DataGridViewCellBorderStyle.SingleHorizontal;
+            g.CellBorderStyle = DataGridViewCellBorderStyle.None;
             g.ColumnHeadersBorderStyle = DataGridViewHeaderBorderStyle.None;
-            g.GridColor = Theme.Line;
+            g.GridColor = Theme.GlassLine;
             g.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
-            g.ColumnHeadersHeight = 32;
-            g.RowTemplate.Height = 30;
+            g.ColumnHeadersHeight = 28;
+            g.RowTemplate.Height = 26;
             g.AllowUserToResizeRows = false;
             g.Font = Theme.Body;
             g.ColumnHeadersDefaultCellStyle = new DataGridViewCellStyle
             {
-                BackColor = Theme.CardHead, ForeColor = Theme.InkSoft, Font = Theme.Ui(8.75f, FontStyle.Bold),
-                SelectionBackColor = Theme.CardHead, SelectionForeColor = Theme.InkSoft, Padding = new Padding(6, 0, 0, 0), Alignment = DataGridViewContentAlignment.MiddleLeft, WrapMode = DataGridViewTriState.False
+                BackColor = Theme.GlassRaised, ForeColor = Theme.GlassMuted, Font = Theme.Ui(8.5f, FontStyle.Bold),
+                SelectionBackColor = Theme.GlassRaised, SelectionForeColor = Theme.GlassMuted, Padding = new Padding(8, 0, 0, 0), Alignment = DataGridViewContentAlignment.MiddleLeft, WrapMode = DataGridViewTriState.False
             };
+            g.DefaultCellStyle = new DataGridViewCellStyle
+            {
+                BackColor = Theme.GlassRaised, ForeColor = text, SelectionBackColor = Theme.MacSelection, SelectionForeColor = Color.White,
+                Padding = new Padding(8, 0, 4, 0), Font = Theme.Body
+            };
+            g.AlternatingRowsDefaultCellStyle = new DataGridViewCellStyle { BackColor = Theme.MacStripe };
             g.ScrollBars = ScrollBars.Vertical;
             // the order of the rows means something here: no sorting by clicking a header
             g.DataBindingComplete += (s, e) => { foreach (DataGridViewColumn c in g.Columns) c.SortMode = DataGridViewColumnSortMode.NotSortable; };
-            g.DefaultCellStyle = new DataGridViewCellStyle
+            // the header: its text and a hairline under it, with a thin divider between the columns
+            g.CellPainting += (s, e) =>
             {
-                BackColor = card, ForeColor = Theme.Ink, SelectionBackColor = Theme.Selection, SelectionForeColor = Theme.Ink,
-                Padding = new Padding(6, 0, 4, 0), Font = Theme.Body
+                if (e.RowIndex != -1 || e.ColumnIndex < 0) return;
+                e.Paint(e.CellBounds, DataGridViewPaintParts.Background | DataGridViewPaintParts.ContentForeground);
+                using (var p = new Pen(Theme.GlassLine)) e.Graphics.DrawLine(p, e.CellBounds.Left, e.CellBounds.Bottom - 1, e.CellBounds.Right, e.CellBounds.Bottom - 1);
+                if (e.ColumnIndex > 0) using (var p = new Pen(Theme.GlassLine)) e.Graphics.DrawLine(p, e.CellBounds.Left, e.CellBounds.Top + 7, e.CellBounds.Left, e.CellBounds.Bottom - 7);
+                e.Handled = true;
             };
         }
 
-        // The same grid on the dark glass of the parameter pop-up.
-        public static void StyleDarkGrid(DataGridView g)
-        {
-            StyleGrid(g, Theme.Glass);
-            g.GridColor = Theme.GlassLine;
-            g.ColumnHeadersDefaultCellStyle = new DataGridViewCellStyle
-            {
-                BackColor = Theme.PopHead, ForeColor = Theme.GlassMuted, Font = Theme.Ui(8.75f, FontStyle.Bold),
-                SelectionBackColor = Theme.PopHead, SelectionForeColor = Theme.GlassMuted, Padding = new Padding(6, 0, 0, 0), Alignment = DataGridViewContentAlignment.MiddleLeft, WrapMode = DataGridViewTriState.False
-            };
-            g.DefaultCellStyle = new DataGridViewCellStyle
-            {
-                BackColor = Theme.Glass, ForeColor = Theme.GlassText, SelectionBackColor = Theme.GlassLine, SelectionForeColor = Theme.GlassText,
-                Padding = new Padding(6, 0, 4, 0), Font = Theme.Body
-            };
-        }
+        public static void StyleGrid(DataGridView g, Color card) => MacTable(g, Theme.Ink);
 
-        // Value cells on the dark pop-up: lighter grey input cells.
+        // The same table in the pop-ups.
+        public static void StyleDarkGrid(DataGridView g) => MacTable(g, Theme.GlassText);
+
+        // Value cells the user types into: bold, on the row's own stripe.
         public static void DarkInputColumn(DataGridView g, string column)
         {
             if (g.Columns[column] == null) return;
-            g.Columns[column].DefaultCellStyle = new DataGridViewCellStyle { BackColor = Theme.PopInput, ForeColor = Theme.GlassText, Font = Theme.BodyBold, SelectionBackColor = Theme.Accent, SelectionForeColor = Color.White };
+            g.Columns[column].DefaultCellStyle = new DataGridViewCellStyle { ForeColor = Theme.GlassText, Font = Theme.BodyBold, SelectionBackColor = Theme.MacSelection, SelectionForeColor = Color.White };
         }
 
-        // Editable value columns read as white input cells.
-        public static void InputColumn(DataGridView g, string column)
-        {
-            if (g.Columns[column] == null) return;
-            g.Columns[column].DefaultCellStyle = new DataGridViewCellStyle { BackColor = Theme.Paper, Font = Theme.BodyBold, SelectionBackColor = Theme.Selection, SelectionForeColor = Theme.Ink };
-        }
+        public static void InputColumn(DataGridView g, string column) => DarkInputColumn(g, column);
 
+        // A menu as on macOS: a light rounded panel, a checkmark column, the item under the mouse in a
+        // blue rounded bar with white text, hairline separators.
         public static ContextMenuStrip Menu()
         {
             var m = new ContextMenuStrip
             {
                 Renderer = new GlassRenderer(), BackColor = Theme.Glass, ForeColor = Theme.GlassText, Font = Theme.Body,
-                ShowImageMargin = false, ShowCheckMargin = false, Padding = new Padding(4), DropShadowEnabled = true
+                ShowImageMargin = false, ShowCheckMargin = false, Padding = new Padding(4, 5, 4, 5), DropShadowEnabled = true
             };
             try { m.Opacity = Theme.GlassOpacity; } catch { }
+            m.ItemAdded += (s, e) => { if (e.Item is ToolStripMenuItem it) Style(it); };
+            m.Opened += (s, e) => Theme.RoundControl(m, 8, true);
             return m;
+        }
+
+        // Submenus get the same look and room.
+        static void Style(ToolStripMenuItem it)
+        {
+            it.Padding = new Padding(4, 3, 4 + GlassRenderer.TickColumn + 6, 3);   // room for the tick column
+            it.DropDown.BackColor = Theme.Glass;
+            if (it.DropDown is ToolStripDropDownMenu dm) { dm.ShowImageMargin = false; dm.ShowCheckMargin = false; dm.Renderer = new GlassRenderer(); dm.Padding = new Padding(4, 5, 4, 5); }
+            it.DropDown.Opened += (s, e) => Theme.RoundControl(it.DropDown, 8, true);
+            it.DropDown.ItemAdded += (s, e) => { if (e.Item is ToolStripMenuItem sub) Style(sub); };
+            foreach (var sub in it.DropDownItems.OfType<ToolStripMenuItem>()) Style(sub);   // added before this item was
         }
     }
 
     class GlassRenderer : ToolStripProfessionalRenderer
     {
+        public const int TickColumn = 18;
         public GlassRenderer() { RoundedEdges = false; }
         protected override void OnRenderToolStripBackground(ToolStripRenderEventArgs e) { using (var b = new SolidBrush(Theme.Glass)) e.Graphics.FillRectangle(b, e.AffectedBounds); }
-        protected override void OnRenderToolStripBorder(ToolStripRenderEventArgs e) { using (var p = new Pen(Theme.GlassLine)) e.Graphics.DrawRectangle(p, 0, 0, e.AffectedBounds.Width - 1, e.AffectedBounds.Height - 1); }
+        protected override void OnRenderToolStripBorder(ToolStripRenderEventArgs e)
+        {
+            Theme.Smooth(e.Graphics);
+            using (var path = Theme.Round(new RectangleF(0.5f, 0.5f, e.AffectedBounds.Width - 1.5f, e.AffectedBounds.Height - 1.5f), 8))
+            using (var p = new Pen(Theme.GlassLine)) e.Graphics.DrawPath(p, path);
+        }
         protected override void OnRenderMenuItemBackground(ToolStripItemRenderEventArgs e)
         {
             if (!e.Item.Selected || !e.Item.Enabled) return;
             Theme.Smooth(e.Graphics);
-            using (var path = Theme.Round(new RectangleF(3, 1, e.Item.Width - 6, e.Item.Height - 2), 6))
-            using (var b = new SolidBrush(Theme.GlassLine)) e.Graphics.FillPath(b, path);
+            using (var path = Theme.Round(new RectangleF(2, 0.5f, e.Item.Width - 4, e.Item.Height - 1), 5))
+            using (var b = new SolidBrush(Theme.MacBlue)) e.Graphics.FillPath(b, path);
         }
         protected override void OnRenderItemText(ToolStripItemTextRenderEventArgs e)
         {
-            e.TextColor = e.Item.Enabled ? Theme.GlassText : Theme.GlassMuted;
-            e.TextRectangle = new Rectangle(e.TextRectangle.X + 6, e.TextRectangle.Y, e.TextRectangle.Width, e.TextRectangle.Height);
+            bool sel = e.Item.Selected && e.Item.Enabled;
+            // the first line of a menu, greyed, is its heading: small and bold, as macOS section titles
+            bool heading = !e.Item.Enabled && e.Item.Owner != null && e.Item.Owner.Items.IndexOf(e.Item) == 0;
+            e.TextColor = sel ? Color.White : e.Item.Enabled ? Theme.GlassText : heading ? Theme.GlassMuted : Theme.MacTertiary;
+            if (heading) e.TextFont = Theme.Ui(8.25f, FontStyle.Bold);
+            if (e.Item is ToolStripMenuItem mi && mi.Checked) Theme.Tick(e.Graphics, 8, e.Item.Height / 2f, sel ? Color.White : Theme.GlassText);
+            e.TextRectangle = new Rectangle(e.TextRectangle.X + (heading ? 6 : TickColumn), e.TextRectangle.Y, e.TextRectangle.Width, e.TextRectangle.Height);
             base.OnRenderItemText(e);
+        }
+        protected override void OnRenderArrow(ToolStripArrowRenderEventArgs e)
+        {
+            e.ArrowColor = e.Item != null && e.Item.Selected ? Color.White : Theme.GlassMuted;
+            base.OnRenderArrow(e);
         }
         protected override void OnRenderSeparator(ToolStripSeparatorRenderEventArgs e)
         {
             int y = e.Item.Height / 2;
-            using (var p = new Pen(Theme.GlassLine)) e.Graphics.DrawLine(p, 8, y, e.Item.Width - 8, y);
+            using (var p = new Pen(Theme.GlassLine)) e.Graphics.DrawLine(p, 10, y, e.Item.Width - 10, y);
         }
     }
 }

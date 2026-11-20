@@ -54,14 +54,14 @@ namespace InventorSizer
         public static void Badge(Graphics g, RectangleF r, ToastKind kind)
         {
             Theme.Smooth(g);
-            using (var b = new SolidBrush(kind == ToastKind.Error ? Theme.GlassText : Theme.GlassLine)) g.FillEllipse(b, r);
-            var ink = kind == ToastKind.Error ? Theme.Ink : Theme.GlassText;
-            float cx = r.X + r.Width / 2, cy = r.Y + r.Height / 2;
-            using (var p = new Pen(ink, 1.8f) { StartCap = System.Drawing.Drawing2D.LineCap.Round, EndCap = System.Drawing.Drawing2D.LineCap.Round })
+            var fill = kind == ToastKind.Error ? Theme.MacRed : kind == ToastKind.Done ? Theme.MacGreen : Theme.MacBlue;
+            using (var b = new SolidBrush(fill)) g.FillEllipse(b, r);
+            float cx = r.X + r.Width / 2, cy = r.Y + r.Height / 2, k = r.Width / 22f;
+            using (var p = new Pen(Color.White, 1.9f * k) { StartCap = System.Drawing.Drawing2D.LineCap.Round, EndCap = System.Drawing.Drawing2D.LineCap.Round, LineJoin = System.Drawing.Drawing2D.LineJoin.Round })
             {
-                if (kind == ToastKind.Done) g.DrawLines(p, new[] { new PointF(cx - 4, cy), new PointF(cx - 1, cy + 3), new PointF(cx + 4.5f, cy - 3) });
-                else if (kind == ToastKind.Error) { g.DrawLine(p, cx, cy - 4.5f, cx, cy + 1); g.DrawLine(p, cx, cy + 4, cx, cy + 4.2f); }
-                else { g.DrawLine(p, cx, cy - 1, cx, cy + 4.5f); g.DrawLine(p, cx, cy - 4.5f, cx, cy - 4.3f); }
+                if (kind == ToastKind.Done) g.DrawLines(p, new[] { new PointF(cx - 4.5f * k, cy), new PointF(cx - 1.2f * k, cy + 3.3f * k), new PointF(cx + 4.8f * k, cy - 3.4f * k) });
+                else if (kind == ToastKind.Error) { g.DrawLine(p, cx, cy - 5 * k, cx, cy + 1 * k); g.DrawLine(p, cx, cy + 4.4f * k, cx, cy + 4.6f * k); }
+                else { g.DrawLine(p, cx, cy - 1 * k, cx, cy + 5 * k); g.DrawLine(p, cx, cy - 4.8f * k, cx, cy - 4.6f * k); }
             }
         }
     }
@@ -157,51 +157,76 @@ namespace InventorSizer
     {
         public string Answer;
 
-        GlassDialog(string title, string text, ToastKind kind, string[] buttons)
+        // Laid out like a macOS alert: the icon on top, the title in bold and the text under it,
+        // centred; the buttons fill the width, the default (first) one in blue on the right (with
+        // three or more they stack, the default on top). Long texts (lists of files) get a wider
+        // dialog and are left-aligned.
+        GlassDialog(string title, string text, ToastKind kind, string[] buttons, int destructiveIndex = -1)
         {
-            Answer = buttons[buttons.Length - 1];
-            const int pad = 24, maxText = 480;
-            var titleFont = Theme.Serif(14f);
-            var head = new Label { Text = title, Font = titleFont, ForeColor = Theme.GlassText, AutoSize = true, Location = new Point(pad + 34, pad - 2), BackColor = Color.Transparent, UseMnemonic = false };
-            var body = new Label { Text = text, Font = Theme.Body, ForeColor = Theme.GlassMuted, AutoSize = true, MaximumSize = new Size(maxText, 0), Location = new Point(pad, pad + 40), BackColor = Color.Transparent, UseMnemonic = false };
-            var badge = new Panel { Location = new Point(pad, pad), Size = new Size(24, 24), BackColor = Theme.Glass };
-            badge.Paint += (s, e) => Badge(e.Graphics, new RectangleF(1, 1, 21, 21), kind);
+            // Esc, closing and Cancel answer the last button; with a destructive one, the first (safe) one
+            Answer = destructiveIndex >= 0 ? buttons[0] : buttons[buttons.Length - 1];
+            const int pad = 22;
+            bool wide = (text ?? "").Length > 220 || (text ?? "").Count(c => c == '\n') > 3;
+            int width = wide ? 480 : 320, inner = width - 2 * pad;
+            var badge = new Panel { Location = new Point((width - 48) / 2, pad), Size = new Size(48, 48), BackColor = Theme.Glass };
+            badge.Paint += (s, e) => Badge(e.Graphics, new RectangleF(2, 2, 43, 43), kind);
+            var head = new Label { Text = title, Font = Theme.Heading(10.5f), ForeColor = Theme.GlassText, AutoSize = true, MaximumSize = new Size(inner, 0), BackColor = Color.Transparent, UseMnemonic = false, TextAlign = ContentAlignment.MiddleCenter };
+            var body = new Label { Text = text, Font = Theme.Ui(9f), ForeColor = Theme.GlassText, AutoSize = true, MaximumSize = new Size(inner, 0), BackColor = Color.Transparent, UseMnemonic = false, TextAlign = wide ? ContentAlignment.TopLeft : ContentAlignment.TopCenter };
             Controls.AddRange(new Control[] { badge, head, body });
+            // measured at the width they wrap to (PreferredWidth would be one long line)
+            var hs = head.GetPreferredSize(new Size(inner, 0)); var bs = body.GetPreferredSize(new Size(inner, 0));
+            head.AutoSize = body.AutoSize = false;
+            head.Size = new Size(Math.Min(inner, hs.Width), hs.Height); body.Size = new Size(Math.Min(inner, bs.Width), bs.Height);
+            head.Location = new Point((width - head.Width) / 2, badge.Bottom + 12);
+            body.Location = new Point(wide ? pad : (width - body.Width) / 2, head.Location.Y + hs.Height + 6);
+            int top = body.Location.Y + bs.Height + 18;
 
-            // buttons right aligned, the default (first) one on the far right
             var btns = new List<FlatButton>();
             for (int i = 0; i < buttons.Length; i++)
             {
                 string b = buttons[i];
-                var btn = new FlatButton(b, i == 0 ? ButtonKind.GlassPrimary : ButtonKind.Glass, 0, 34);
-                btn.Width = Math.Max(96, btn.Width);
+                var btn = new FlatButton(b, i == 0 ? ButtonKind.GlassPrimary : ButtonKind.Glass, 0, 28) { Font = i == 0 ? Theme.BodyBold : Theme.Body };
+                btn.Destructive = i == destructiveIndex;
                 btn.Click += (s, e) => { Answer = b; Close(); };
                 btns.Add(btn);
                 if (i == 0) AcceptButton = btn;
-                if (i == buttons.Length - 1) CancelButton = btn;
+                if (destructiveIndex >= 0 ? i == 0 : i == buttons.Length - 1) CancelButton = btn;
             }
-            int rowW = btns.Sum(b => b.Width) + 8 * (btns.Count - 1);
-            int width = Math.Max(Math.Max(head.Right, body.Right) + pad, Math.Max(400, rowW + pad * 2));
-            int top = body.Bottom + pad, x = width - pad;
-            foreach (var btn in btns) { x -= btn.Width; btn.Location = new Point(x, top); x -= 8; Controls.Add(btn); }
-            Size = new Size(width, top + 34 + pad);
-            KeyDown += (s, e) => { if (e.KeyCode == Keys.Escape) { Answer = buttons[buttons.Length - 1]; Close(); } };
+            bool stack = btns.Count > 2 || btns.Sum(b => b.AutoWidth()) + 8 > inner;
+            if (stack)
+                foreach (var btn in btns) { btn.Bounds = new Rectangle(pad, top, inner, 28); Controls.Add(btn); top += 36; }
+            else
+            {
+                int w = btns.Count == 1 ? inner : (inner - 8) / 2, x = pad;
+                foreach (var btn in Enumerable.Reverse(btns)) { btn.Bounds = new Rectangle(x, top, w, 28); Controls.Add(btn); x += w + 8; }
+                top += 36;
+            }
+            Size = new Size(width, top + pad - 8);
+            string esc = Answer;
+            KeyDown += (s, e) => { if (e.KeyCode == Keys.Escape) { Answer = esc; Close(); } };
         }
 
         public static string Ask(Form owner, string title, string text, params string[] buttons) => Run(owner, title, text, ToastKind.Info, buttons);
         public static void Error(Form owner, string title, string text) => Run(owner, title, text, ToastKind.Error, new[] { "OK" });
 
+        // A question about something that cannot be undone: the warning badge, the first (safe) button
+        // is the default (Enter), Esc answers it too; the destructive one has to be clicked.
+        public static string Warn(Form owner, string title, string text, string safe, string destructive)
+        {
+            return Run(owner, title, text, ToastKind.Error, new[] { safe, destructive }, destructiveIndex: 1);
+        }
+
         public static void Report(Form owner, string title, string text) => SetupReportDialog.Show(owner, title, text);
 
-        static string Run(Form owner, string title, string text, ToastKind kind, string[] buttons)
+        static string Run(Form owner, string title, string text, ToastKind kind, string[] buttons, int destructiveIndex = -1)
         {
-            using (var d = new GlassDialog(title, text, kind, buttons))
+            using (var d = new GlassDialog(title, text, kind, buttons, destructiveIndex))
             using (var dim = new Form { FormBorderStyle = FormBorderStyle.None, ShowInTaskbar = false, StartPosition = FormStartPosition.Manual, BackColor = Color.Black })
             {
                 var host = owner != null && !owner.IsDisposed && owner.Visible ? owner : null;
                 if (host != null)
                 {
-                    try { dim.Opacity = 0.22; } catch { }
+                    try { dim.Opacity = 0.08; } catch { }
                     dim.Bounds = host.RectangleToScreen(host.ClientRectangle);
                     dim.Show(host);
                     var r = dim.Bounds;
@@ -222,7 +247,7 @@ namespace InventorSizer
             var heading = new Label
             {
                 Text = title,
-                Font = Theme.Serif(14f),
+                Font = Theme.Heading(11f),
                 ForeColor = Theme.GlassText,
                 AutoSize = true,
                 Location = new Point(24, 20),
@@ -262,7 +287,7 @@ namespace InventorSizer
                 var host = owner != null && !owner.IsDisposed && owner.Visible ? owner : null;
                 if (host != null)
                 {
-                    try { dim.Opacity = 0.22; } catch { }
+                    try { dim.Opacity = 0.08; } catch { }
                     dim.Bounds = host.RectangleToScreen(host.ClientRectangle);
                     dim.Show(host);
                     var r = dim.Bounds;
@@ -283,7 +308,7 @@ namespace InventorSizer
         SetupTextDialog(string title, string prompt, string initial, out TextBox input, bool multiline)
         {
             Size = new Size(620, multiline ? 420 : 290);
-            var heading = new Label { Text = title, Font = Theme.Serif(14f), ForeColor = Theme.GlassText, AutoSize = true, Location = new Point(24, 20), BackColor = Color.Transparent };
+            var heading = new Label { Text = title, Font = Theme.Heading(11f), ForeColor = Theme.GlassText, AutoSize = true, Location = new Point(24, 20), BackColor = Color.Transparent };
             var label = new Label { Text = prompt, Font = Theme.Body, ForeColor = Theme.GlassMuted, AutoSize = true, MaximumSize = new Size(Width - 48, 0), Location = new Point(24, 58), BackColor = Color.Transparent };
             input = new TextBox
             {
@@ -323,7 +348,7 @@ namespace InventorSizer
             if (host == null) return dialog.ShowDialog();
             using (var dim = new Form { FormBorderStyle = FormBorderStyle.None, ShowInTaskbar = false, StartPosition = FormStartPosition.Manual, BackColor = Color.Black })
             {
-                try { dim.Opacity = 0.22; } catch { }
+                try { dim.Opacity = 0.08; } catch { }
                 dim.Bounds = host.RectangleToScreen(host.ClientRectangle);
                 dim.Show(host);
                 var r = dim.Bounds;
@@ -341,7 +366,7 @@ namespace InventorSizer
         SetupParameterDialog()
         {
             Size = new Size(620, 420);
-            var heading = new Label { Text = "Add user parameter", Font = Theme.Serif(14f), ForeColor = Theme.GlassText, AutoSize = true, Location = new Point(24, 20), BackColor = Color.Transparent };
+            var heading = new Label { Text = "Add user parameter", Font = Theme.Heading(11f), ForeColor = Theme.GlassText, AutoSize = true, Location = new Point(24, 20), BackColor = Color.Transparent };
             var table = new TableLayoutPanel { Location = new Point(24, 62), Size = new Size(Width - 48, 260), ColumnCount = 2, RowCount = 4, Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right };
             table.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 150));
             table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
@@ -395,7 +420,7 @@ namespace InventorSizer
             if (host == null) return dialog.ShowDialog();
             using (var dim = new Form { FormBorderStyle = FormBorderStyle.None, ShowInTaskbar = false, StartPosition = FormStartPosition.Manual, BackColor = Color.Black })
             {
-                try { dim.Opacity = 0.22; } catch { }
+                try { dim.Opacity = 0.08; } catch { }
                 dim.Bounds = host.RectangleToScreen(host.ClientRectangle);
                 dim.Show(host);
                 var r = dim.Bounds;
@@ -439,7 +464,7 @@ namespace InventorSizer
             Size = new Size(580, 360); MinimumSize = new Size(380, 200);
             Padding = new Padding(5, 1, 5, 5);
             head = new Panel { Dock = DockStyle.Top, Height = 52, BackColor = Theme.Glass, Cursor = Cursors.SizeAll };
-            var title = new Label { Text = "Parameters", Font = Theme.Serif(13f), ForeColor = Theme.GlassText, AutoSize = true, Location = new Point(14, 14), BackColor = Color.Transparent, Cursor = Cursors.SizeAll };
+            var title = new Label { Text = "Parameters", Font = Theme.Heading(10.5f), ForeColor = Theme.GlassText, AutoSize = true, Location = new Point(14, 14), BackColor = Color.Transparent, Cursor = Cursors.SizeAll };
             var sub = new Label { Text = "Parameters.xml", Font = Theme.Small, ForeColor = Theme.GlassMuted, AutoSize = true, BackColor = Color.Transparent, Cursor = Cursors.SizeAll };
             sub.Location = new Point(title.Left + TextRenderer.MeasureText(title.Text, title.Font).Width + 6, 19);
             Reload = new FlatButton("Reload file", ButtonKind.Glass, 0, 28) { Anchor = AnchorStyles.Top | AnchorStyles.Right };
@@ -530,7 +555,7 @@ namespace InventorSizer
         public ActivityPanel()
         {
             Size = new Size(620, 340);
-            var title = new Label { Text = "Activity", Font = Theme.Serif(13f), ForeColor = Theme.GlassText, AutoSize = true, Location = new Point(18, 14), BackColor = Color.Transparent };
+            var title = new Label { Text = "Activity", Font = Theme.Heading(10.5f), ForeColor = Theme.GlassText, AutoSize = true, Location = new Point(18, 14), BackColor = Color.Transparent };
             tabLog = new FlatButton("Log", ButtonKind.GlassPrimary, 0, 28);
             tabDev = new FlatButton("Dev log", ButtonKind.Glass, 0, 28);
             SaveDev = new FlatButton("Save dev log...", ButtonKind.Glass, 0, 28);

@@ -44,7 +44,7 @@ namespace InventorSizer
         readonly IntPtr owner;
         readonly System.Windows.Forms.Timer tick = new System.Windows.Forms.Timer { Interval = 100 };
         // own fonts: the shared ones in Theme are used by the main window's thread
-        readonly Font titleFont = Theme.Serif(12.5f), bodyFont = Theme.Ui(9f), smallFont = Theme.Ui(8.5f);
+        readonly Font titleFont = Theme.Heading(10.5f), bodyFont = Theme.Ui(9f), smallFont = Theme.Ui(8.5f);
         ProgressSnapshot snap = new ProgressSnapshot();
         double shown, left = -1;   // bar and time left as shown: smoothed, the bar never goes back
         bool visible;
@@ -122,11 +122,11 @@ namespace InventorSizer
             var track = new Rectangle(Pad, 76, w, 8);
             Theme.Smooth(g);
             using (var path = Theme.Round(track, 4))
-            using (var b = new SolidBrush(Theme.GlassRaised)) g.FillPath(b, path);
+            using (var b = new SolidBrush(Theme.MacTrack)) g.FillPath(b, path);
             int fill = (int)Math.Round(track.Width * Math.Max(0, Math.Min(1, shown)));
             if (fill >= 8)
                 using (var path = Theme.Round(new Rectangle(track.X, track.Y, fill, track.Height), 4))
-                using (var b = new SolidBrush(Theme.Accent)) g.FillPath(b, path);
+                using (var b = new SolidBrush(Theme.MacBlue)) g.FillPath(b, path);
             string spent = $"{Duration(snap.Elapsed)} elapsed   {Math.Round(shown * 100)} %";
             TextRenderer.DrawText(g, spent, smallFont, new Rectangle(Pad, 94, w, 18), Theme.GlassMuted, TextFormatFlags.Left | TextFormatFlags.NoPrefix);
             TextRenderer.DrawText(g, LeftText(), smallFont, new Rectangle(Pad, 94, w, 18), Theme.GlassText, TextFormatFlags.Right | TextFormatFlags.NoPrefix);

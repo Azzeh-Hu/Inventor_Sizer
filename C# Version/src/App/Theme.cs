@@ -29,13 +29,26 @@ namespace InventorSizer
         public static readonly Color Pressed = C("#D6D6D6");
         public static readonly Color Selection = C("#DCDCDC");
 
-        // Glass: the translucent grey of toasts, dialogs, menus and the activity panel.
-        public static readonly Color Glass = C("#2B2B2B");
-        public static readonly Color GlassRaised = C("#383838");
-        public static readonly Color GlassLine = C("#4A4A4A");
-        public static readonly Color GlassText = C("#F2F2F2");
-        public static readonly Color GlassMuted = C("#A6A6A6");
-        public const double GlassOpacity = 0.93;
+        // Glass: the material of toasts, dialogs, menus, pop-ups and the activity panel, after macOS
+        // (light vibrancy): a light grey sheet, white wells and tables, hairlines, near-black text.
+        public static readonly Color Glass = C("#F2F2F4");
+        public static readonly Color GlassRaised = C("#FFFFFF");
+        public static readonly Color GlassLine = C("#D8D8DC");
+        public static readonly Color GlassText = C("#1D1D1F");
+        public static readonly Color GlassMuted = C("#6E6E73");
+        public const double GlassOpacity = 0.97;
+
+        // macOS system colours: the blue of default buttons, selections and switches, and the rest.
+        public static readonly Color MacBlue = C("#007AFF");
+        public static readonly Color MacBlueHover = C("#1A88FF");
+        public static readonly Color MacBlueDown = C("#0062CC");
+        public static readonly Color MacSelection = C("#0063E1");   // a selected table row
+        public static readonly Color MacStripe = C("#F4F5F7");      // every second table row
+        public static readonly Color MacTrack = C("#E5E5EA");       // switch off, progress track
+        public static readonly Color MacBorder = C("#C7C7CC");      // buttons and pop-up buttons
+        public static readonly Color MacTertiary = C("#A1A1A6");    // disabled text
+        public static readonly Color MacRed = C("#FF3B30");
+        public static readonly Color MacGreen = C("#34C759");
 
         // The Inventor-like frame around the drawing: a dark title bar, the ribbon, the browser
         // on the left and the status bar. Blue is used sparingly (active tab, hover, selection).
@@ -52,12 +65,12 @@ namespace InventorSizer
         public static readonly Color AccentLine = C("#A9D6F0");
         public static readonly Color BrowserSel = C("#CFE7F7");
 
-        // The parameter pop-up: dark grey glass with lighter input cells.
-        public static readonly Color PopInput = C("#3B3B3B");
-        public static readonly Color PopHead = C("#333333");
-        public const double PopOpacity = 0.95;
+        // The pop-ups' tables: white input cells, the header on the table's own white.
+        public static readonly Color PopInput = C("#FFFFFF");
+        public static readonly Color PopHead = C("#FFFFFF");
+        public const double PopOpacity = 0.98;
 
-        public const int Radius = 12, RadiusSmall = 8, Gap = 14;
+        public const int Radius = 10, RadiusSmall = 6, Gap = 14;
 
         static Color C(string hex) => ColorTranslator.FromHtml(hex);
 
@@ -65,7 +78,7 @@ namespace InventorSizer
         // Claude's interface pairs a serif for headings with a clean sans for everything else.
         // The first installed family of each list is used; the last ones ship with Windows.
         static readonly string[] SerifFamilies = { "Tiempos Headline", "Tiempos Text", "Copernicus", "Source Serif 4", "Source Serif Pro", "Georgia", "DejaVu Serif" };
-        static readonly string[] SansFamilies = { "Styrene B", "Styrene A", "Inter", "Segoe UI Variable Text", "Segoe UI", "DejaVu Sans" };
+        static readonly string[] SansFamilies = { "SF Pro Text", "SF Pro Display", "SF Pro", "Inter", "Segoe UI Variable Text", "Segoe UI", "DejaVu Sans" };
         static readonly string[] MonoFamilies = { "JetBrains Mono", "Cascadia Mono", "Consolas", "DejaVu Sans Mono" };
 
         public static readonly string SerifName = Pick(SerifFamilies, "Georgia");
@@ -89,6 +102,8 @@ namespace InventorSizer
         public static Font Ui(float size = 9.5f, FontStyle style = FontStyle.Regular) => new Font(SansName, size, style);
         public static Font Serif(float size = 14f, FontStyle style = FontStyle.Regular) => new Font(SerifName, size, style);
         public static Font Mono(float size = 9f) => new Font(MonoName, size);
+        // Titles of pop-ups and dialogs: the sans in bold, as macOS sets them (not the serif).
+        public static Font Heading(float size = 10.5f) => new Font(SansName, size, FontStyle.Bold);
 
         public static readonly Font Body = Ui(9.5f);
         public static readonly Font BodyBold = Ui(9.5f, FontStyle.Bold);
@@ -130,6 +145,21 @@ namespace InventorSizer
             }
         }
 
+        // A switch knob: white, with the hairline and soft shadow of a macOS switch.
+        public static void Knob(Graphics g, float x, float y, float d)
+        {
+            using (var s = new SolidBrush(Color.FromArgb(40, 0, 0, 0))) g.FillEllipse(s, x, y + 0.8f, d, d);
+            using (var b = new SolidBrush(Color.White)) g.FillEllipse(b, x, y, d, d);
+            using (var p = new Pen(Color.FromArgb(30, 0, 0, 0), 0.8f)) g.DrawEllipse(p, x, y, d, d);
+        }
+
+        // A checkmark (menus, lists) with its left end at x, centred on y.
+        public static void Tick(Graphics g, float x, float y, Color c)
+        {
+            using (var p = new Pen(c, 1.7f) { StartCap = LineCap.Round, EndCap = LineCap.Round, LineJoin = LineJoin.Round })
+                g.DrawLines(p, new[] { new PointF(x, y), new PointF(x + 3.2f, y + 3.4f), new PointF(x + 9, y - 3.6f) });
+        }
+
         public static Color Mix(Color a, Color b, double t) =>
             Color.FromArgb((int)(a.R + (b.R - a.R) * t), (int)(a.G + (b.G - a.G) * t), (int)(a.B + (b.B - a.B) * t));
 
@@ -141,10 +171,13 @@ namespace InventorSizer
 
         // Rounded corners for a borderless window: Windows 11 rounds it natively (with its own
         // shadow); on Windows 10 the window region is rounded instead.
-        public static void RoundWindow(Form f, int radius = Radius)
+        public static void RoundWindow(Form f, int radius = Radius) => RoundControl(f, radius);
+
+        // The same for any top-level window, e.g. a menu (pref 3 = the small rounding of menus).
+        public static void RoundControl(Control f, int radius = Radius, bool small = false)
         {
             bool native = false;
-            try { int pref = 2; native = DwmSetWindowAttribute(f.Handle, 33, ref pref, sizeof(int)) == 0 && Environment.OSVersion.Version.Build >= 22000; }
+            try { int pref = small ? 3 : 2; native = DwmSetWindowAttribute(f.Handle, 33, ref pref, sizeof(int)) == 0 && Environment.OSVersion.Version.Build >= 22000; }
             catch { }
             if (native) return;
             try { f.Region = Region.FromHrgn(CreateRoundRectRgn(0, 0, f.Width + 1, f.Height + 1, radius * 2, radius * 2)); }

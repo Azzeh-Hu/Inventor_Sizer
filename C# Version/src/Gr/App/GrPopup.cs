@@ -26,7 +26,7 @@ namespace InventorSizer
             Size = size; MinimumSize = new Size(360, 180);
             Padding = new Padding(5, 1, 5, 5);
             head = new Panel { Dock = DockStyle.Top, Height = 48, BackColor = Theme.Glass, Cursor = Cursors.SizeAll };
-            title = new Label { Text = titleText, Font = Theme.Serif(13f), ForeColor = Theme.GlassText, AutoSize = true, Location = new Point(14, 13), BackColor = Color.Transparent, Cursor = Cursors.SizeAll };
+            title = new Label { Text = titleText, Font = Theme.Heading(10.5f), ForeColor = Theme.GlassText, AutoSize = true, Location = new Point(14, 13), BackColor = Color.Transparent, Cursor = Cursors.SizeAll };
             sub = new Label { Text = "", Font = Theme.Small, ForeColor = Theme.GlassMuted, AutoSize = true, BackColor = Color.Transparent, Cursor = Cursors.SizeAll };
             var close = new FlatButton("✕", ButtonKind.Glass, 30, 28) { Anchor = AnchorStyles.Top | AnchorStyles.Right };
             head.Controls.AddRange(new Control[] { title, sub, close });
@@ -122,10 +122,10 @@ namespace InventorSizer
             Theme.Smooth(g);
             var track = new RectangleF(1, (Height - 18) / 2f, 32, 18);
             using (var path = Theme.Round(track, 9))
-            using (var b = new SolidBrush(Checked ? Theme.Accent : Theme.GlassLine))
+            using (var b = new SolidBrush(Checked ? Theme.MacBlue : Theme.MacTrack))
                 g.FillPath(b, path);
             float kx = Checked ? track.Right - 16 : track.X + 2;
-            using (var b = new SolidBrush(Color.White)) g.FillEllipse(b, kx, track.Y + 2, 14, 14);
+            Theme.Knob(g, kx, track.Y + 2, 14);
             TextRenderer.DrawText(g, Text, Font, new Rectangle(42, 0, Width - 42, Height), Theme.GlassText, TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
         }
     }

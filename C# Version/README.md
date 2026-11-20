@@ -444,6 +444,10 @@ hinge / handle holes and of the hinge / handle parts (docs/PANEL_RULES.md, secti
   sizes** or **Remove this box**. The **+ Left / + Right / + Front / + Back** buttons in the Boxes
   window do the same for the selected row. A spot already taken moves the new box past it. New
   boxes are made in Inventor on **Write new GR**, together with panels and P350 on them.
+- **Writing over a GR:** **Write new GR** with the name of a GR that exists already, or with the
+  name of the GR being edited, asks first (Cancel is the default). Overwriting keeps the old file
+  in `OldVersions\` next to it (with the date and time in its name); a GR open in Inventor with
+  unsaved changes is refused.
 - **Outer sizes:** **Outer L / W / H** are the outside sizes including the corners. The P150
   profiles are calculated as outer − 2 corners and shown next to them.
 - **P350:** right-click a profile of any box:
