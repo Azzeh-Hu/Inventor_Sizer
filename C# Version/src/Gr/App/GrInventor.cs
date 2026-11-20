@@ -22,11 +22,17 @@ namespace InventorSizer
             int skipped = 0;
             // Quiet (no redraw, no input) while reading: with the GR drawn in a window each call
             // waited for Inventor (about 50 ms), many times faster quiet.
+            // on the loading bar: one item per part and per constraint (joins Open GR's bar)
+            using (Progress.Run("Read GR from Inventor", true, ("gr.read.component", 40), ("gr.read.constraint", 120)))
             Quietly((object)asm.Parent, () => {
             Log.Measure("Read components from Inventor", () =>
             {
-                foreach (var occ in Items(asm.ComponentDefinition.Occurrences))
+                List<dynamic> occList = Items(asm.ComponentDefinition.Occurrences);
+                Progress.Expect("gr.read.component", occList.Count);
+                int at = 0;
+                foreach (var occ in occList)
                 {
+                    Progress.Next("gr.read.component", $"Reading part {++at} of {occList.Count}");
                     string name, file = "";
                     try { name = occ.Name; } catch { skipped++; continue; }
                     try { file = occ.ReferencedDocumentDescriptor.FullDocumentName; } catch { }
@@ -42,8 +48,12 @@ namespace InventorSizer
             });
             Log.Measure("Read constraints from Inventor", () =>
             {
-                foreach (var c in Items(asm.ComponentDefinition.Constraints))
+                List<dynamic> conList = Items(asm.ComponentDefinition.Constraints);
+                Progress.Expect("gr.read.constraint", conList.Count);
+                int at = 0;
+                foreach (var c in conList)
                 {
+                    Progress.Next("gr.read.constraint", $"Reading constraint {++at} of {conList.Count}");
                     var k = new GrConstraint();
                     try { k.Name = c.Name; } catch { skipped++; continue; }
                     k.Type = Microsoft.VisualBasic.Information.TypeName(c) ?? "";
@@ -113,7 +123,33 @@ namespace InventorSizer
         // every new profile length becomes "<prefix> P150 1700mm.ipt" in Einzelteile\ next to the
         // new GR, the occurrences are replaced (the model takes the names Inventor gives them), the
         // divider offsets set, the planned panels made and placed (job), the new GR saved and opened.
+        // On the loading bar: one item per step below and per panel made and placed; the time of
+        // each kind of item is learned from earlier writes (a TP panel takes longer than an FP).
         public static void ApplyGr(GrModel m, string newName, string prefix, PanelJob job = null)
+        {
+            var pending = Gr.Pending(m);
+            var openings = job == null ? new List<GrOpening>() : GrOpenings.Planned(GrOpenings.Find(m));
+            var plan = new List<(string Key, int Count)>
+            {
+                ("gr.start", 1), ("gr.remove", m.Removed.Count > 0 ? 1 : 0), ("gr.box", m.Frames.Count(f => f.CloneOf != 0)),
+                ("gr.profile", pending.Profiles.Count), ("gr.ringremove", m.RingRemoves.Count > 0 ? 1 : 0), ("gr.ring", m.RingAdds.Count),
+                ("gr.update", 1), ("gr.save", 1),
+            };
+            plan.AddRange(PanelPlan(openings));
+            using (Progress.Run("Write new GR to Inventor", plan.ToArray()))
+                ApplyGrSteps(m, newName, prefix, job);
+        }
+
+        // The panel part of the plan: each panel file made once (per type), each opening placed.
+        static List<(string Key, int Count)> PanelPlan(List<GrOpening> planned)
+        {
+            var plan = planned.GroupBy(o => o.Panel.Name).Select(g => g.First().Panel.Type).GroupBy(t => t)
+                .Select(g => ("gr.panel.make." + g.Key, g.Count())).ToList();
+            if (planned.Count > 0) plan.AddRange(new[] { ("gr.panel.place", planned.Count), ("gr.panel.check", 1), ("gr.save", 1) });
+            return plan;
+        }
+
+        static void ApplyGrSteps(GrModel m, string newName, string prefix, PanelJob job)
         {
             newName = (newName ?? "").Trim(); prefix = (prefix ?? "").Trim();
             if (newName == "") throw new SizerException("Enter the name of the new GR assembly (e.g. 5794 GR).");
@@ -121,6 +157,7 @@ namespace InventorSizer
             if (newName == m.Name) throw new SizerException("The new GR needs a new name; the original stays as it is.");
             var todo = Gr.Pending(m);
             if (todo.Blocked.Count > 0) throw new SizerException("Not written:\n" + string.Join("\n", todo.Blocked) + "\nUndo those (load the GR again) or make them in Inventor.");
+            Progress.Next("gr.start", $"Saving the GR as {newName}");
             var src = OpenGrSource(m);
             dynamic asm = src.Doc;
             string name = Path.GetFileNameWithoutExtension((string)asm.FullFileName);
@@ -140,13 +177,16 @@ namespace InventorSizer
             // boxes first: a new box is a copy at the old size, its profiles get their own size below
             // Quiet (no redraw, no input) while parts are removed, copied and moved; not around the
             // Save As / Save calls (an assembly's save writes its view and fails with the screen off).
+            if (m.Removed.Count > 0) Progress.Next("gr.remove", "Removing boxes");
             Quietly((object)inv, () =>
             {
                 RemoveBoxes(m, (object)asm);
                 if (m.Frames.Any(f => f.CloneOf != 0)) { AddBoxes(m, (object)asm); todo = Gr.Pending(m); }
             });
+            Progress.Expect("gr.profile", todo.Profiles.Count);   // new boxes bring their own lengths
             foreach (var g in todo.Profiles)
             {
+                Progress.Next("gr.profile", $"Profile {g.From} -> {g.To} ({g.Names.Count} x)");
                 Log.Measure($"Profile {g.From} -> {g.To} ({g.Names.Count} x)", () =>
                 {
                     dynamic srcPart = occs.ItemByName(g.Names[0]).Definition.Document;
@@ -179,8 +219,9 @@ namespace InventorSizer
             // P350 rings: removed, then new ones copied from rings that already have their final length
             Quietly((object)inv, () =>
             {
-                if (m.RingRemoves.Count > 0) RemoveRings(m, (object)asm);
+                if (m.RingRemoves.Count > 0) { Progress.Next("gr.ringremove", "Removing P350 rings"); RemoveRings(m, (object)asm); }
                 if (m.RingAdds.Count > 0) { AddRings(m, (object)asm); todo = Gr.Pending(m); }
+                Progress.Next("gr.update", "Moving dividers and updating the GR");
                 if (todo.Dividers.Count > 0)
                 {
                     dynamic cons = asm.ComponentDefinition.Constraints;
@@ -193,14 +234,18 @@ namespace InventorSizer
                 }
                 Log.Measure("Update the new GR", () => { asm.Update(); });
             });
+            Progress.Next("gr.save", "Saving the new GR");
             Log.Measure("Save the new GR", () => { asm.Save2(true); });
             if (planned.Count > 0)
             {
                 var now = GrOpenings.Find(m);   // again: sizes, rings and names may have changed above
                 GrOpenings.AutoDefaults(m, now);   // openings made by the edits get their default type
                 planned = GrOpenings.Planned(now);
+                foreach (var k in new[] { "gr.panel.make.FP", "gr.panel.make.TP", "gr.panel.make.RP", "gr.panel.place", "gr.panel.check" }) Progress.Expect(k, 0);
+                foreach (var (key, count) in PanelPlan(planned)) Progress.Expect(key, count);   // the panels as they are now
                 job.Folder = parts;
                 Log.Write(PlacePanels(m, asm, planned, job));
+                Progress.Next("gr.save", "Saving the new GR with its panels");
                 Log.Measure("Save the new GR with its panels", () => { asm.Update(); asm.Save2(true); });
             }
             foreach (var p in todo.Panels.Where(p => !planned.Any(o => o.Existing == p.Name))) Log.Write($"  panel {p.Name}: needs size {p.To} (now {p.From}) - set its opening to a panel type to replace it");

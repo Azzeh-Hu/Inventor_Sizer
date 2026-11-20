@@ -83,6 +83,7 @@ namespace InventorSizer
             Log.Written += line => { if (!IsDisposed) logBox.AppendText(line + Environment.NewLine); };
             Log.DevWritten += line => { if (!IsDisposed) devBox.AppendText(line + Environment.NewLine); };
             devBox.AppendText(string.Join(Environment.NewLine, Log.DevSnapshot()) + Environment.NewLine);
+            ProgressWindow.Attach(this);   // the loading bar of long steps
             Shown += (s, e) => OnShownLoad();
             FormClosing += (s, e) => { try { SaveFormSettings(); } catch { } try { Inv.ClosePreloaded(); } catch { } };
         }

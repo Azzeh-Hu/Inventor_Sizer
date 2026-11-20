@@ -87,7 +87,13 @@ namespace InventorSizer
             btnOpenGr.Click += (s, e) => Step("Open GR", () =>
             {
                 using (var d = new OpenFileDialog { Filter = "Inventor assembly (*.iam)|*.iam", Title = "Open a GR assembly" })
-                    if (d.ShowDialog(this) == DialogResult.OK) { Inv.OpenVisible(d.FileName); SetGr(Log.Measure("Build the GR model", () => BuildGr(Inv.ReadGr()))); }
+                    if (d.ShowDialog(this) == DialogResult.OK)
+                        using (Progress.Run("Open GR", ("gr.open", 1)))
+                        {
+                            Progress.Next("gr.open", $"Opening {Path.GetFileName(d.FileName)} in Inventor");
+                            Inv.OpenVisible(d.FileName);
+                            SetGr(Log.Measure("Build the GR model", () => BuildGr(Inv.ReadGr())));
+                        }
             }, true);
             presetBox.SelectedIndexChanged += (s, e) =>
             {

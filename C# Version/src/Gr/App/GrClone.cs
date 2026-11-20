@@ -116,6 +116,7 @@ namespace InventorSizer
             foreach (var add in m.RingAdds.ToList())
             try
             {
+                Progress.Next("gr.ring", $"Copying a P350 ring to {U.F(add.Position)} mm");
                 if (!m.Components.TryGetValue(add.Template, out var lead)) { Log.Write($"  new ring skipped: {add.Template} is no longer in the GR"); continue; }
                 var members = add.Names.Keys.ToList();
                 var joints = members.SelectMany(n => JointsOf((object)asm, n)).Distinct().ToList();
@@ -168,6 +169,7 @@ namespace InventorSizer
             try
             {
                 var like = m.ById(f.CloneOf);
+                Progress.Next("gr.box", $"Copying {like?.Label} as {f.Label}");
                 if (like?.RealOrigin == null) throw new SizerException($"{f.Label}: the box it copies has no real positions (read the GR from Inventor first).");
                 var tmpl = m.Components.Values.Where(c => c.Frame == like.Id && (c.Kind == "corner" || c.Kind == "frameProfile") && !string.IsNullOrEmpty(c.OrigBase)).ToList();
                 var grShift = Enumerable.Range(0, 3).Select(g => f.Pos[g] - like.Pos[g]).ToArray();

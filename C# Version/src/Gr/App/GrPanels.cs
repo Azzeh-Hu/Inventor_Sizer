@@ -189,8 +189,11 @@ namespace InventorSizer
 
             // 1. the panel files, one per size
             var files = new Dictionary<string, string>(); var failed = new Dictionary<string, string>();
-            foreach (var name in planned.Select(o => (job.Prefix != "" ? job.Prefix + " " : "") + o.Panel.Name).Distinct())
+            var toMake = planned.GroupBy(o => (job.Prefix != "" ? job.Prefix + " " : "") + o.Panel.Name).Select(g => (Name: g.Key, Type: g.First().Panel.Type)).ToList();
+            int made = 0;
+            foreach (var (name, type) in toMake)
                 {
+                    Progress.Next("gr.panel.make." + type, $"Making panel {++made} of {toMake.Count}: {name}");
                     try { Log.Measure($"Panel {name}", () => { files[name] = job.MakePanel(name, job.Folder); }); }
                     catch (Exception e) { failed[name] = e.Message; Log.Write($"  {name} could not be made: {e.Message}"); }
                 }
@@ -198,11 +201,13 @@ namespace InventorSizer
             int placed = 0, mated = 0; var problems = new List<string>();
             var placedOccs = new List<(GrOpening O, string Occ)>();
             var axesOf = new Dictionary<string, PanelAxes>(StringComparer.OrdinalIgnoreCase);
+            int placing = 0;
             Quietly((object)inv, (Action)(() => {   // no redraw while placing: Inventor draws once at the end
             foreach (var o in planned)
             {
                 string step = "";   // the step that failed goes into the problem line
                 string name = (job.Prefix != "" ? job.Prefix + " " : "") + o.Panel.Name;
+                Progress.Next("gr.panel.place", $"Placing panel {++placing} of {planned.Count}: {name} in {o.Label}");
                 if (!files.ContainsKey(name)) { problems.Add($"{o.Label} ({name}): not placed, the panel could not be made ({(failed.TryGetValue(name, out var why) ? why : "?")})"); continue; }
                 try
                 {
@@ -269,6 +274,7 @@ namespace InventorSizer
                 catch (Exception e) { problems.Add($"{o.Label} ({name}), {step}: {e.Message}"); Log.Write($"  problem at {step}: {e.Message}"); }
             }
             // after the constraints are solved: is every panel in its opening? (still quiet)
+            Progress.Next("gr.panel.check", "Solving the constraints and checking the panels");
             try { asm.Update(); } catch { }
             foreach (var (o, occName) in placedOccs)
             {

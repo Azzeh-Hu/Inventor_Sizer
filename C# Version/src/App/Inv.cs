@@ -650,6 +650,7 @@ namespace InventorSizer
             // Quiet (no redraw, no input) while values change and the model rebuilds. Not while
             // saving: an assembly's Save As also writes its view (camera) and fails with the
             // screen switched off.
+            Progress.Next("panel.update." + s.Id, $"Changing the values of {newName} and rebuilding");
             Quietly((object)asm.Parent, () =>
             {
                 var push = s.SetupFor(Standards.SubOf(lay.Split))?.Obj("push");
@@ -657,6 +658,7 @@ namespace InventorSizer
                 Log.Measure("Inner-panel split", () => { if (!InnerPanelsPatterned(asm, s, lay.Split)) UpdateInnerSplit(asm, s, lay.Split, lay.InnerWidth); });
                 asm.Update2(true);
             });
+            Progress.Next("panel.save." + s.Id, $"Saving {newName} and its parts");
             Log.Measure("Save the new files", () => { SaveAsNewSize(asm, oldN, newN, newName, outDir, s, lay.Split, overwrite, confirm); });
         }
 
@@ -697,22 +699,27 @@ namespace InventorSizer
             foreach (var n in lay.Notes) Log.Write("  note: " + n);
 
             Log.Write($"  master: {s.Id} {sub}  {master}");
-            var src = Open(master);
-            try
+            // on the loading bar (not shown when a GR write makes the panel: that one counts it whole)
+            using (Progress.Run("Apply to Inventor", ("panel.open", 1), ("panel.update." + s.Id, 1), ("panel.save." + s.Id, 1)))
             {
-                TestMasterSetup(src.Doc, s, sub);
-                UpdatePanelAssembly(src.Doc, standards, s, newName, ps, lay, set.OutputFolder, overwrite, confirm);
+                Progress.Next("panel.open", $"Opening the {s.Id} {sub} master");
+                var src = Open(master);
+                try
+                {
+                    TestMasterSetup(src.Doc, s, sub);
+                    UpdatePanelAssembly(src.Doc, standards, s, newName, ps, lay, set.OutputFolder, overwrite, confirm);
+                }
+                catch
+                {
+                    // The app's own (hidden) copy is closed unsaved. A master open in a window is the
+                    // user's: it now holds the changed values (and maybe new part files), so say so.
+                    if (src.Opened) { try { src.Doc.Close(true); } catch { } }
+                    else Log.Write($"  warning: the master open in Inventor ({Path.GetFileName(master)}) was changed by this Apply. Close it WITHOUT saving before the next Apply.");
+                    throw;
+                }
+                if (show) Show(src);
+                else if (src.Opened) { try { src.Doc.Close(true); } catch { } }   // GR panels: saved, not shown
             }
-            catch
-            {
-                // The app's own (hidden) copy is closed unsaved. A master open in a window is the
-                // user's: it now holds the changed values (and maybe new part files), so say so.
-                if (src.Opened) { try { src.Doc.Close(true); } catch { } }
-                else Log.Write($"  warning: the master open in Inventor ({Path.GetFileName(master)}) was changed by this Apply. Close it WITHOUT saving before the next Apply.");
-                throw;
-            }
-            if (show) Show(src);
-            else if (src.Opened) { try { src.Doc.Close(true); } catch { } }   // GR panels: saved, not shown
             Log.Write($"New panel: {target} (the master is unchanged)");
             return newName;
         }
