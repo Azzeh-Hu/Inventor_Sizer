@@ -33,21 +33,28 @@ namespace InventorSizer
         }
 
         // The entity (a face of the part) as seen in the GR: ComponentOccurrence.CreateGeometryProxy.
-        // Its result is an out argument, which late-bound (dynamic) COM calls cannot pass; called
-        // through IDispatch with the second argument marked by-reference.
+        // Its result is an out argument of type IDispatch**, which a late-bound (dynamic) call cannot
+        // pass: it is called through IDispatch with the second argument as a by-reference object
+        // (DispatchWrapper = VT_BYREF | VT_DISPATCH), and as a by-reference VARIANT if Inventor wants that.
         static dynamic Proxy(dynamic occ, dynamic entity)
         {
             object o = occ;
-            var args = new object[] { (object)entity, null };
-            var byRef = new System.Reflection.ParameterModifier(2);
-            byRef[1] = true;
-            try
+            Exception last = null;
+            foreach (var slot in new Func<object>[] { () => new System.Runtime.InteropServices.DispatchWrapper(null), () => null })
             {
-                o.GetType().InvokeMember("CreateGeometryProxy", System.Reflection.BindingFlags.InvokeMethod, null, o, args, new[] { byRef }, null, null);
+                var args = new object[] { (object)entity, slot() };
+                var byRef = new System.Reflection.ParameterModifier(2);
+                byRef[1] = true;
+                try
+                {
+                    o.GetType().InvokeMember("CreateGeometryProxy", System.Reflection.BindingFlags.InvokeMethod, null, o, args, new[] { byRef }, null, null);
+                    object r = args[1] is System.Runtime.InteropServices.DispatchWrapper w ? w.WrappedObject : args[1];
+                    if (r != null) return r;
+                }
+                catch (System.Reflection.TargetInvocationException e) { last = e.InnerException ?? e; }
+                catch (Exception e) { last = e; }
             }
-            catch (System.Reflection.TargetInvocationException e) when (e.InnerException != null) { throw e.InnerException; }
-            if (args[1] == null) throw new SizerException("Inventor returned no face in the GR for a named face.");
-            return args[1];
+            throw new SizerException("Inventor gave no face in the GR for a named face" + (last != null ? $" ({last.Message})" : "") + ".");
         }
 
         // A planar face's outward normal and a point on it (assembly cm).
@@ -154,6 +161,7 @@ namespace InventorSizer
             int placed = 0, mated = 0; var problems = new List<string>();
             foreach (var o in planned)
             {
+                string step = "";   // the step that failed goes into the problem line
                 string name = (job.Prefix != "" ? job.Prefix + " " : "") + o.Panel.Name;
                 if (!files.ContainsKey(name)) { problems.Add($"{o.Label} ({name}): not placed, the panel could not be made ({(failed.TryGetValue(name, out var why) ? why : "?")})"); continue; }
                 try
@@ -171,11 +179,13 @@ namespace InventorSizer
                         int longAx = o.ClearU >= o.ClearV ? o.U : o.V, shortAx = longAx == o.U ? o.V : o.U;
                         var lT = AxisVec(m, longAx); var wT = Cross(lT, hOut);
                         // panel axes from its named faces (the file is opened in the background)
+                        step = "panel axes from its named faces (Top, Edge_W1, Edge_L1)";
                         var pd = Open(files[name]);
                         (double[] W, double[] L, double[] H, double[] C) pf;
                         try { pf = PanelFrame(pd.Doc); } finally { if (pd.Opened) try { pd.Doc.Close(true); } catch { } }
                         double[] R(double[] x) => Add(Add(Scale(wT, Dot(pf.W, x)), Scale(lT, Dot(pf.L, x))), Scale(hOut, Dot(pf.H, x)));
                         // centre of the opening on the face, the panel's height inside
+                        step = "placing the panel";
                         var mid = new double[3]; mid[o.Axis] = o.Plane; mid[o.U] = (o.U0 + o.U1) / 2; mid[o.V] = (o.V0 + o.V1) / 2;
                         var target = Add(ToAssembly(m, f, mid), Scale(hOut, -o.Panel.H / 20));
                         var t = Add(target, Scale(R(pf.C), -1));
@@ -186,16 +196,19 @@ namespace InventorSizer
                         Log.Write($"  placed {occ.Name}");
 
                         // constraints through the named faces
+                        step = "finding the -Au part in the placed panel";
                         dynamic au = AuOccurrence(occ);
                         var gr = Gr.PanelRules[o.Panel.Type];
                         string gap = $"{U.F(gr.Clearance)} mm";
                         int Idx(int axis, int end) => (axis == o.U ? 0 : 2) + end;   // Support index of a side
                         // flush the outside with the Out face of the support at the short side's min end
+                        step = $"flush Top with the Out face of {o.Support[Idx(shortAx, 0)]}";
                         dynamic sup0 = occs.ItemByName(o.Support[Idx(shortAx, 0)]);
                         dynamic outFace = SupportFace(sup0, new[] { "Out", "Out_1", "Out_2" }, hOut, "outside");
                         cons.AddFlushConstraint(PanelFace(au, "Top"), outFace, 0); mated++;
                         foreach (var (axis, edges) in new[] { (shortAx, new[] { "Edge_W0", "Edge_W1" }), (longAx, new[] { "Edge_L0", "Edge_L1" }) })
                         {
+                            step = $"mate {edges[0]} / {edges[1]} to the seat of {o.Support[Idx(axis, 0)]}";
                             var toMin = AxisVec(m, axis, -1);
                             dynamic edge = edges.Select(e => PanelFace(au, e)).FirstOrDefault(p => Dot(PlaneOf(p).N, toMin) > 0.9)
                                 ?? throw new SizerException($"neither {edges[0]} nor {edges[1]} of the panel faces the {(axis == shortAx ? "short" : "long")} side - check the panel's named faces");
@@ -206,7 +219,7 @@ namespace InventorSizer
                         }
                     });
                 }
-                catch (Exception e) { problems.Add($"{o.Label} ({name}): {e.Message}"); Log.Write($"  problem: {e.Message}"); }
+                catch (Exception e) { problems.Add($"{o.Label} ({name}), {step}: {e.Message}"); Log.Write($"  problem at {step}: {e.Message}"); }
             }
             foreach (var p in problems) Log.Write("  not finished: " + p);
             foreach (var o in planned) m.PanelChoice.Remove(o.Key);
