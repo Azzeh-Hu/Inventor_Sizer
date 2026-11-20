@@ -128,10 +128,14 @@ namespace InventorSizer
             if (bad.Count > 0) throw new SizerException("Not written - fix these openings first (or set them to -):\n" + string.Join("\n", bad.Select(o => $"{o.Label}: {o.Panel.Problem}")));
             if (planned.Count > 0 && m.Frames.Any(f => f.RealOrigin == null)) throw new SizerException("Placing panels needs the GR read from Inventor (real part positions): read it again, then write.");
             string parts = Path.Combine(Path.GetDirectoryName(newPath), "Einzelteile");
+            CheckRemovable(m, (object)asm);
             Log.Measure($"Save the GR as {newName}", () => { asm.SaveAs(newPath, false); });
             Log.Write($"  saved {newPath} (the new GR; {name} stays as it was)");
             dynamic occs = asm.ComponentDefinition.Occurrences;
             var renamed = new Dictionary<string, string>();
+            // boxes first: a new box is a copy at the old size, its profiles get their own size below
+            RemoveBoxes(m, (object)asm);
+            if (m.Frames.Any(f => f.CloneOf != 0)) { AddBoxes(m, (object)asm); todo = Gr.Pending(m); }
             foreach (var g in todo.Profiles)
             {
                 Log.Measure($"Profile {g.From} -> {g.To} ({g.Names.Count} x)", () =>
@@ -163,6 +167,9 @@ namespace InventorSizer
                     Log.Write($"  {g.Names.Count} x {g.From} -> {partName}");
                 });
             }
+            // P350 rings: removed, then new ones copied from rings that already have their final length
+            if (m.RingRemoves.Count > 0) RemoveRings(m, (object)asm);
+            if (m.RingAdds.Count > 0) { AddRings(m, (object)asm); todo = Gr.Pending(m); }
             if (todo.Dividers.Count > 0)
             {
                 dynamic cons = asm.ComponentDefinition.Constraints;

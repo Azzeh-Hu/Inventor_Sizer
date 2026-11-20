@@ -30,6 +30,7 @@ namespace InventorSizer.Core
         public double? Position, OrigPosition;
         public string PosConstraint = "", PosPartner = "";
         public string Leader = "";        // a divider without its own position follows this divider (flush to it)
+        public string CloneOf = "";       // not in Inventor yet: copied from this part (a new P350 ring), or "box" (a new box)
         public int MoveAxis = -1;         // GR axis a positioned divider moves along; MoveSign: + = away from its partner
         public double MoveSign = 1;
         public double[] Box;   // range box from Inventor, assembly axes, mm: min xyz, max xyz
@@ -54,6 +55,7 @@ namespace InventorSizer.Core
         public List<string> Panels = new List<string>(), Dividers = new List<string>(), Other = new List<string>();
         public List<int> Neighbours = new List<int>();
         public double[] RealOrigin, Size0;   // with real positions: the box's min corner in GR axes (assembly mm) and its sizes then
+        public int CloneOf;                  // a new box, not in Inventor yet: copied from this box (Id)
         public double[] Pos => new[] { X, Y, Z };
         public double[] Size => new[] { Lx, Wy, Hz };
         public double Get(string dim) => dim == "L" ? Lx : dim == "W" ? Wy : Hz;
@@ -74,14 +76,25 @@ namespace InventorSizer.Core
         public int ServiceSide = 1;   // the service side (TP) is the width side at +1 = max / -1 = min; the other is the back (RP)
         public Dictionary<string, string> PanelChoice = new Dictionary<string, string>();   // opening key -> FP / TP / RP / keep
         public string SelectedOpening;   // opening key highlighted in the drawing (not saved)
+        public List<GrRingAdd> RingAdds = new List<GrRingAdd>();        // P350 rings to copy in Inventor
+        public List<List<string>> RingRemoves = new List<List<string>>(); // P350 rings (with their joints) to delete in Inventor
         public int[] RealMap;   // assembly axis (0 X, 1 Y, 2 Z) of GR length, width, height
         public int Up = 2;       // assembly axis that is up (Z unless the user changes it)
         public GrFrame Frame(int no) => Frames.FirstOrDefault(f => f.No == no) ?? throw new SizerException($"There is no Box {no - 1}.");
         public GrFrame ById(int id) => Frames.FirstOrDefault(f => f.Id == id);
     }
 
+    // A new P350 ring: a copy of the ring led by Template, at Position (offset from the same partner).
+    public class GrRingAdd
+    {
+        public string Template;
+        public double Position;
+        public Dictionary<string, string> Names = new Dictionary<string, string>();   // template member -> new member in the model
+    }
+
     public class GrPending
     {
+        public List<string> Boxes = new List<string>(), Rings = new List<string>();
         public List<(string Kind, string From, string To, double Length, List<string> Names)> Profiles = new List<(string, string, string, double, List<string>)>();
         public List<(string Name, string From, string To)> Panels = new List<(string, string, string)>();
         public List<(string Name, string Constraint, double From, double To)> Dividers = new List<(string, string, double, double)>();
@@ -686,7 +699,13 @@ namespace InventorSizer.Core
             if (old == now || string.IsNullOrEmpty(now) || !m.Components.TryGetValue(old, out var c) || m.Components.ContainsKey(now)) return;
             m.Components.Remove(old); c.Name = now; m.Components[now] = c;
             foreach (var f in m.Frames) foreach (var l in new[] { f.Panels, f.Dividers, f.Other }) { int i = l.IndexOf(old); if (i >= 0) l[i] = now; }
-            foreach (var o in m.Components.Values) { if (o.PosPartner == old) o.PosPartner = now; if (o.Leader == old) o.Leader = now; }
+            foreach (var o in m.Components.Values) { if (o.PosPartner == old) o.PosPartner = now; if (o.Leader == old) o.Leader = now; if (o.CloneOf == old) o.CloneOf = now; }
+            foreach (var r in m.RingAdds)
+            {
+                if (r.Template == old) r.Template = now;
+                if (r.Names.TryGetValue(old, out var nn)) { r.Names.Remove(old); r.Names[now] = nn; }
+                foreach (var k in r.Names.Keys.ToList()) if (r.Names[k] == old) r.Names[k] = now;
+            }
             int u = m.Unplaced.IndexOf(old); if (u >= 0) m.Unplaced[u] = now;
         }
 
@@ -795,14 +814,14 @@ namespace InventorSizer.Core
             }
             int id = m.Frames.Select(f => f.Id).DefaultIfEmpty(0).Max() + 1;
             int no = m.Frames.Select(f => f.No).DefaultIfEmpty(0).Max() + 1;
-            var nf = new GrFrame { Id = id, No = no, Sizes = like.Size, Lx = like.Lx, Wy = like.Wy, Hz = like.Hz, Parent = last.Id, Place = place, Dir = dir };
+            var nf = new GrFrame { Id = id, No = no, Sizes = like.Size, Lx = like.Lx, Wy = like.Wy, Hz = like.Hz, Parent = last.Id, Place = place, Dir = dir, CloneOf = like.Id };
             nf.Neighbours.Add(last.Id); last.Neighbours.Add(id);
             string cornerBase = m.Components.Values.FirstOrDefault(c => c.Kind == "corner")?.Base ?? "APS Ecke";
             var prof = m.Components.Values.FirstOrDefault(c => c.Kind == "frameProfile");
             string series = prof != null ? Regex.Replace(prof.Base, @"\d+(?:[.,]\d+)?\s*mm.*$", "") : "P150 ";
             for (int k = 1; k <= 8; k++)
             {
-                var c = NewComponent($"{cornerBase}:F{no}-{k}", ""); c.Kind = "corner"; c.Base = cornerBase; c.OrigBase = ""; c.Frame = id;   // "" = not in Inventor yet
+                var c = NewComponent($"{cornerBase}:F{no}-{k}", ""); c.Kind = "corner"; c.Base = cornerBase; c.OrigBase = ""; c.Frame = id; c.CloneOf = "box";   // "" = not in Inventor yet
                 m.Components[c.Name] = c;
             }
             int n = 0;
@@ -811,7 +830,7 @@ namespace InventorSizer.Core
                 {
                     n++;
                     string b = $"{series}{U.F(d.Item2)}mm";
-                    var c = NewComponent($"{b}:F{no}-{n}", ""); c.Kind = "frameProfile"; c.Base = b; c.Length = d.Item2; c.OrigBase = ""; c.Frame = id;
+                    var c = NewComponent($"{b}:F{no}-{n}", ""); c.Kind = "frameProfile"; c.Base = b; c.Length = d.Item2; c.OrigBase = ""; c.Frame = id; c.CloneOf = "box";
                     c.Follow = new List<Follow> { new Follow { Dim = d.Item1 } };
                     m.Components[c.Name] = c;
                 }
@@ -825,6 +844,7 @@ namespace InventorSizer.Core
         {
             if (m.Frames.Count <= 1) throw new SizerException("A GR needs at least one box.");
             var f = m.Frame(no);
+            if (f.Neighbours.Count > 1) throw new SizerException($"{f.Label} sits between other boxes: only a box at the end can be removed.");
             foreach (var n in m.Components.Keys.ToList())
             {
                 var c = m.Components[n];
@@ -863,6 +883,88 @@ namespace InventorSizer.Core
             if (!m.Components.TryGetValue(name, out var c) || c.Kind != "divider") throw new SizerException($"'{name}' is not a divider.");
             if (c.PosConstraint == "") throw new SizerException($"'{name}' has no position of its own: it hangs on joints and follows the dividers it joins.");
             c.Position = value; m.Edited = true;
+            foreach (var r in m.RingAdds.Where(r => r.Names.TryGetValue(r.Template, out var nl) && nl == name)) { r.Position = value; c.OrigPosition = value; }
+        }
+
+        // ------------------------------------------------------------------ P350 rings
+
+        // The divider that places a ring: follow the "moves with" links to the one with its own position.
+        public static string RingOf(GrModel m, string divider)
+        {
+            var seen = new HashSet<string>();
+            string n = divider;
+            while (m.Components.TryGetValue(n, out var c) && c.PosConstraint == "" && c.Leader != "" && seen.Add(n)) n = c.Leader;
+            return n;
+        }
+
+        // A ring: its leader and every divider that moves with it.
+        public static List<string> RingMembers(GrModel m, string leader) =>
+            m.Components.Values.Where(c => c.Kind == "divider" && RingOf(m, c.Name) == leader).Select(c => c.Name).OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToList();
+
+        // A new ring: a copy of the ring of `divider` at `position` mm from the same partner. In the
+        // model at once (drawing, openings); in Inventor on Write new GR.
+        public static GrRingAdd AddRing(GrModel m, string divider, double position)
+        {
+            string leader = RingOf(m, divider);
+            if (!m.Components.TryGetValue(leader, out var lc) || lc.PosConstraint == "")
+                throw new SizerException($"{divider} has no position of its own and does not move with a divider that has one: it cannot be copied.");
+            if (lc.CloneOf != "") throw new SizerException("Copy a ring that is in Inventor already (write the GR first).");
+            var add = new GrRingAdd { Template = leader, Position = position };
+            int k = m.Components.Count(c => c.Value.CloneOf != "") + 1;
+            foreach (var name in RingMembers(m, leader))
+            {
+                var c = m.Components[name];
+                string nn;
+                do nn = $"{Regex.Replace(c.Name, @":\d+$", "")}:new{k++}"; while (m.Components.ContainsKey(nn));
+                add.Names[name] = nn;
+            }
+            foreach (var kv in add.Names)
+            {
+                var c = m.Components[kv.Key];
+                var n = new GrComponent
+                {
+                    Name = kv.Value, File = c.File, Base = c.Base, OrigBase = "", Kind = c.Kind, Length = c.Length, Frame = c.Frame, CloneOf = kv.Key,
+                    Follow = c.Follow.Select(r => new Follow { Dim = r.Dim, Offset = r.Offset, Part = r.Part }).ToList(),
+                    Box = c.Box, MoveAxis = c.MoveAxis, MoveSign = c.MoveSign, PosPartner = c.PosPartner,
+                    Leader = c.Leader != "" && add.Names.TryGetValue(c.Leader, out var ln) ? ln : c.Leader,
+                    Geo = c.Geo == null ? null : new Geo { Min = (double[])c.Geo.Min.Clone(), Max = (double[])c.Geo.Max.Clone(), Size0 = c.Geo.Size0, Pos0 = c.Geo.Pos0 }
+                };
+                if (kv.Key == leader) { n.Position = position; n.OrigPosition = position; n.PosConstraint = "(new)"; if (n.Geo != null) n.Geo.Pos0 = c.Geo.Pos0; }
+                m.Components[n.Name] = n;
+                m.ById(n.Frame)?.Dividers.Add(n.Name);
+            }
+            m.RingAdds.Add(add); m.Edited = true;
+            return add;
+        }
+
+        // Removes the ring of `divider` (with its joints). Refused while another ring is placed from it.
+        public static List<string> RemoveRing(GrModel m, string divider)
+        {
+            string leader = RingOf(m, divider);
+            var members = RingMembers(m, leader);
+            var dependent = m.Components.Values.FirstOrDefault(c => c.Kind == "divider" && !members.Contains(c.Name) && members.Contains(c.PosPartner));
+            if (dependent != null) throw new SizerException($"{dependent.Name} is placed from this ring: remove or move that ring first.");
+            var add = m.RingAdds.FirstOrDefault(r => r.Names.ContainsValue(leader));
+            var gone = new List<string>(members);
+            if (add == null)
+            {
+                // the joints the ring hangs on: joints touching one of its dividers
+                var boxes = members.Select(n => GrOpenings.LayoutBox(m, m.Components[n])).Where(b => b != null).Select(b => b.Value).ToList();
+                foreach (var j in m.Components.Values.Where(c => c.Kind == "joint"))
+                {
+                    var jb = GrOpenings.LayoutBox(m, j);
+                    if (jb != null && boxes.Any(b => Enumerable.Range(0, 3).All(i => jb.Value.Min[i] < b.Max[i] + 5 && jb.Value.Max[i] > b.Min[i] - 5))) gone.Add(j.Name);
+                }
+                m.RingRemoves.Add(gone.Where(n => !string.IsNullOrEmpty(m.Components[n].OrigBase)).ToList());
+            }
+            else m.RingAdds.Remove(add);
+            foreach (var n in gone)
+            {
+                m.Components.Remove(n);
+                foreach (var f in m.Frames) { f.Dividers.Remove(n); f.Other.Remove(n); }
+            }
+            m.Edited = true;
+            return gone;
         }
 
         // What an edited GR changes in Inventor.
@@ -877,11 +979,15 @@ namespace InventorSizer.Core
             }
             foreach (var c in m.Components.Values.Where(c => c.Kind == "panel" && !string.IsNullOrEmpty(c.OrigBase) && c.Base != c.OrigBase).OrderBy(c => c.Name))
                 p.Panels.Add((c.Name, c.OrigBase, c.Base));
-            foreach (var c in m.Components.Values.Where(c => c.Kind == "divider" && c.PosConstraint != "" && c.Position != c.OrigPosition).OrderBy(c => c.Name))
+            foreach (var c in m.Components.Values.Where(c => c.Kind == "divider" && c.PosConstraint != "" && c.CloneOf == "" && c.Position != c.OrigPosition).OrderBy(c => c.Name))
                 p.Dividers.Add((c.Name, c.PosConstraint, c.OrigPosition ?? 0, c.Position ?? 0));
-            int added = m.Components.Values.Count(c => string.IsNullOrEmpty(c.OrigBase));
-            if (added > 0) p.Blocked.Add($"{added} part(s) of added boxes are not in Inventor; adding boxes in Inventor is not automated yet.");
-            if (m.Removed.Count > 0) p.Blocked.Add($"{m.Removed.Count} part(s) of removed boxes are still in Inventor; removing boxes in Inventor is not automated yet.");
+            foreach (var f in m.Frames.Where(f => f.CloneOf != 0)) p.Boxes.Add($"new {f.Label}, a copy of {m.ById(f.CloneOf)?.Label ?? "a removed box"}");
+            if (m.Removed.Count > 0) p.Boxes.Add($"{m.Removed.Count} part(s) of removed boxes deleted");
+            foreach (var r in m.RingAdds) p.Rings.Add($"new P350 ring like {r.Template} at {U.F(r.Position)} mm ({r.Names.Count} P350)");
+            foreach (var r in m.RingRemoves) p.Rings.Add($"P350 ring removed: {string.Join(", ", r)}");
+            int lost = m.Components.Values.Count(c => string.IsNullOrEmpty(c.OrigBase) && c.CloneOf == "");
+            if (lost > 0) p.Blocked.Add($"{lost} part(s) are not in Inventor and not a copy of anything there.");
+            if (m.Frames.Any(f => f.CloneOf != 0 && m.ById(f.CloneOf) == null)) p.Blocked.Add("A new box is a copy of a box that was removed: load the GR again.");
             return p;
         }
 
@@ -899,7 +1005,7 @@ namespace InventorSizer.Core
                 ["frames"] = m.Frames.Select(f => (object)new JsonObject
                 {
                     ["id"] = (double)f.Id, ["no"] = (double)f.No, ["length"] = f.Lx, ["width"] = f.Wy, ["height"] = f.Hz, ["parent"] = (double)f.Parent, ["place"] = f.Place, ["dir"] = (double)f.Dir,
-                    ["neighbours"] = f.Neighbours.Select(x => (object)(double)x).ToList(), ["panels"] = f.Panels.Cast<object>().ToList(), ["dividers"] = f.Dividers.Cast<object>().ToList(), ["other"] = f.Other.Cast<object>().ToList()
+                    ["neighbours"] = f.Neighbours.Select(x => (object)(double)x).ToList(), ["cloneOf"] = (double)f.CloneOf, ["panels"] = f.Panels.Cast<object>().ToList(), ["dividers"] = f.Dividers.Cast<object>().ToList(), ["other"] = f.Other.Cast<object>().ToList()
                 }).ToList(),
                 ["components"] = m.Components.Values.OrderBy(c => c.Name, StringComparer.Ordinal).Select(c =>
                 {
@@ -908,13 +1014,15 @@ namespace InventorSizer.Core
                         ["name"] = c.Name, ["file"] = c.File, ["base"] = c.Base, ["origBase"] = c.OrigBase, ["kind"] = c.Kind, ["length"] = c.Length, ["frame"] = (double)c.Frame,
                         ["follow"] = c.Follow.Select(r => (object)new JsonObject { ["dim"] = r.Dim, ["offset"] = r.Offset, ["part"] = (double)r.Part }).ToList(),
                         ["position"] = c.Position, ["origPosition"] = c.OrigPosition, ["posConstraint"] = c.PosConstraint, ["posPartner"] = c.PosPartner,
-                        ["leader"] = c.Leader, ["moveAxis"] = (double)c.MoveAxis, ["moveSign"] = c.MoveSign
+                        ["leader"] = c.Leader, ["moveAxis"] = (double)c.MoveAxis, ["moveSign"] = c.MoveSign, ["cloneOf"] = c.CloneOf
                     };
                     if (c.Geo != null) o["geo"] = new JsonObject { ["Min"] = Nums(c.Geo.Min), ["Max"] = Nums(c.Geo.Max), ["Size0"] = Nums(c.Geo.Size0), ["Pos0"] = c.Geo.Pos0 };
                     return (object)o;
                 }).ToList(),
                 ["warnings"] = m.Warnings.Cast<object>().ToList(), ["unplaced"] = m.Unplaced.Cast<object>().ToList(), ["removed"] = m.Removed.Cast<object>().ToList(),
                 ["realMap"] = m.RealMap == null ? null : m.RealMap.Select(x => (object)(double)x).ToList(), ["up"] = (double)m.Up, ["serviceSide"] = (double)m.ServiceSide,
+                ["ringAdds"] = m.RingAdds.Select(r => (object)new JsonObject { ["template"] = r.Template, ["position"] = r.Position, ["names"] = r.Names.Select(kv => (object)new List<object> { kv.Key, kv.Value }).ToList() }).ToList(),
+                ["ringRemoves"] = m.RingRemoves.Select(r => (object)r.Cast<object>().ToList()).ToList(),
                 ["panelChoice"] = m.PanelChoice.OrderBy(kv => kv.Key, StringComparer.Ordinal).Select(kv => (object)new JsonObject { ["key"] = kv.Key, ["type"] = kv.Value }).ToList()
             };
             File.WriteAllText(path, Json.Write(j), new UTF8Encoding(false));
@@ -935,7 +1043,7 @@ namespace InventorSizer.Core
                     Name = co.Str("name"), File = co.Str("file"), Base = co.Str("base"), OrigBase = co.ContainsKey("origBase") ? co.Str("origBase") : co.Str("base"),
                     Kind = co.Str("kind"), Length = co.Num("length"), Frame = (int)co.Num("frame"), Position = NumOrNull(co, "position"), OrigPosition = NumOrNull(co, "origPosition"),
                     PosConstraint = co.Str("posConstraint"), PosPartner = co.Str("posPartner"),
-                    Leader = co.Str("leader"), MoveAxis = co.ContainsKey("moveAxis") ? (int)co.Num("moveAxis") : -1, MoveSign = co.Num("moveSign", 1),
+                    Leader = co.Str("leader"), CloneOf = co.Str("cloneOf"), MoveAxis = co.ContainsKey("moveAxis") ? (int)co.Num("moveAxis") : -1, MoveSign = co.Num("moveSign", 1),
                     Follow = co.Arr("follow").OfType<JsonObject>().Select(r => new Follow { Dim = r.Str("dim"), Offset = r.Num("offset"), Part = (int)r.Num("part") }).ToList()
                 };
                 var g = co.Obj("geo");
@@ -948,7 +1056,7 @@ namespace InventorSizer.Core
                 {
                     Id = (int)fo.Num("id"), No = (int)fo.Num("no"), Lx = fo.Num("length"), Wy = fo.Num("width"), Hz = fo.Num("height"),
                     Parent = (int)fo.Num("parent"), Place = fo.Str("place", "loose"), Dir = (int)fo.Num("dir"),
-                    Neighbours = Ints(fo["neighbours"]), Panels = Strs(fo["panels"]), Dividers = Strs(fo["dividers"]), Other = Strs(fo["other"])
+                    Neighbours = Ints(fo["neighbours"]), CloneOf = (int)fo.Num("cloneOf"), Panels = Strs(fo["panels"]), Dividers = Strs(fo["dividers"]), Other = Strs(fo["other"])
                 };
                 f.Sizes = f.Size;
                 m.Frames.Add(f);
@@ -959,6 +1067,13 @@ namespace InventorSizer.Core
             m.Up = j["up"] == null ? 2 : (int)j.Num("up");
             m.ServiceSide = j["serviceSide"] == null ? 1 : (int)j.Num("serviceSide");
             foreach (var pc in j.Arr("panelChoice").OfType<JsonObject>()) m.PanelChoice[pc.Str("key")] = pc.Str("type");
+            foreach (var ro in j.Arr("ringAdds").OfType<JsonObject>())
+            {
+                var r = new GrRingAdd { Template = ro.Str("template"), Position = ro.Num("position") };
+                foreach (var pair in ro.Arr("names").OfType<List<object>>()) if (pair.Count == 2) r.Names[Convert.ToString(pair[0], U.Inv)] = Convert.ToString(pair[1], U.Inv);
+                m.RingAdds.Add(r);
+            }
+            foreach (var rr in j.Arr("ringRemoves").OfType<List<object>>()) m.RingRemoves.Add(rr.Select(x => Convert.ToString(x, U.Inv)).ToList());
             var rm = Ints(j["realMap"]);
             if (rm.Count == 3) m.RealMap = rm.ToArray();
             UpdateLayout(m);
