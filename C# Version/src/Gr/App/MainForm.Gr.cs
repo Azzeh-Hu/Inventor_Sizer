@@ -212,6 +212,7 @@ namespace InventorSizer
             finally { syncing = false; }
             if (btnUp != null) btnUp.Text = "Up: " + Gr.AxisName(gr?.Up ?? 2);
             if (gr != null && gr.Focus != 0 && gr.ById(gr.Focus) == null) gr.Focus = 0;   // the box being edited was removed
+            if (gr?.SelectedDivider != null && !gr.Components.ContainsKey(gr.SelectedDivider)) gr.SelectedDivider = null;   // the picked P350 was removed or renamed
             UpdateOpenings();
             UpdateGrOutput();
             grInfo.Text = gr == null ? "Choose a preset, load a GR export, or read a GR from Inventor." :

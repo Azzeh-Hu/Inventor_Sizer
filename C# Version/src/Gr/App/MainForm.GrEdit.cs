@@ -165,7 +165,7 @@ namespace InventorSizer
                 if (e.Button == MouseButtons.Right && hit.Kind == "box") { BoxMenu(int.Parse(hit.Id), e.Location); return; }
                 if (e.Button != MouseButtons.Left) return;
                 if (hit.Kind == "open") { gr.SelectedOpening = hit.Id; popOpenings.Popup(PopAt(2)); SelectRow(grOpGrid, "Key", hit.Id, null); UpdateDrawing(); }
-                else if (hit.Kind == "div") { popDividers.Popup(PopAt(1)); SelectRow(grDivGrid, "Divider", hit.Id, "Position"); }
+                else if (hit.Kind == "div") { gr.SelectedDivider = gr.SelectedDivider == hit.Id ? null : hit.Id; UpdateDrawing(); }   // picked: its own dimensions, on any face
                 else if (hit.Kind == "box" || hit.Kind == "edge") FocusBox(int.Parse(hit.Id.Split(':')[0]));   // edit this box: the others grey, its dimensions shown
             };
             WireGrView();

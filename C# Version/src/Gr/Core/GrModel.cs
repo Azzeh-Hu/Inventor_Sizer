@@ -77,6 +77,7 @@ namespace InventorSizer.Core
         public Dictionary<string, string> PanelChoice = new Dictionary<string, string>();   // opening key -> FP / TP / RP / keep
         public string SelectedOpening;   // opening key highlighted in the drawing (not saved)
         public int Focus;                // the box being edited (Id): the others greyed out, its dimensions shown (not saved)
+        public string SelectedDivider;   // the P350 picked in the drawing: its own dimensions shown, on any face (not saved)
         public List<GrRingAdd> RingAdds = new List<GrRingAdd>();        // P350 rings to copy in Inventor
         public List<List<string>> RingRemoves = new List<List<string>>(); // P350 rings (with their joints) to delete in Inventor
         public int[] RealMap;   // assembly axis (0 X, 1 Y, 2 Z) of GR length, width, height

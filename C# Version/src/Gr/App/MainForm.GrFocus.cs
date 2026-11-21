@@ -33,7 +33,7 @@ namespace InventorSizer
             {
                 Esc = () =>
                 {
-                    if (mode != "GR" || gr == null || gr.Focus == 0 || ActiveForm != this || IsDisposed) return false;
+                    if (mode != "GR" || gr == null || (gr.Focus == 0 && gr.SelectedDivider == null) || ActiveForm != this || IsDisposed) return false;
                     EndFocus(); return true;
                 }
             });
@@ -53,8 +53,8 @@ namespace InventorSizer
 
         void EndFocus()
         {
-            if (gr == null || gr.Focus == 0) return;
-            gr.Focus = 0;
+            if (gr == null || (gr.Focus == 0 && gr.SelectedDivider == null)) return;
+            gr.Focus = 0; gr.SelectedDivider = null;   // done: no box edited, no P350 picked
             UpdateDrawing();
         }
 
@@ -62,7 +62,7 @@ namespace InventorSizer
         // `at`: where it was clicked (screen), the small value box opens there.
         void EditDimension(string tag, Point at)
         {
-            var p = tag.Split(new[] { ':' }, 6);
+            var p = tag.Split(new[] { ':' }, 7);
             if (p.Length >= 4 && p[1] == "size")
             {
                 int no = int.Parse(p[2]); string dim = p[3];
@@ -77,14 +77,17 @@ namespace InventorSizer
                     if (changed.Count > 0) Log.Write($"GR: outer {dim} = {U.F(v)} mm (P150 {U.F(v - Gr.CornerAdd)}) on {string.Join(", ", changed)}");
                 });
             }
-            else if (p.Length == 6 && p[1] == "gap")
+            else if (p.Length == 7 && p[1] == "gap")
             {
-                int axis = int.Parse(p[2]), sign = int.Parse(p[3]); double now = U.P(p[4]); string name = p[5];
+                int axis = int.Parse(p[2]), sign = int.Parse(p[3]); double now = U.P(p[4]), max = U.P(p[5]); string name = p[6];
                 string text = DimValueBox.Ask(this, at, U.F(now));
                 if (string.IsNullOrWhiteSpace(text)) return;
                 GrEdit("Move divider", () =>
                 {
                     double v = Mm(text);
+                    // the gaps between the corners keep their total: this one can take at most the room of
+                    // the gap beside it (the part does not pass the next part or the frame profile)
+                    if (v <= 0 || v >= max) throw new SizerException($"{U.F(v)} mm does not fit: this gap and the one beside it are {U.F(max)} mm together, between the parts either side. Enter more than 0 and less than {U.F(max)} mm.");
                     string moved = Gr.MoveDivider(gr, name, axis, (v - now) * sign);
                     Log.Write($"GR: gap {U.F(now)} -> {U.F(v)} mm: {moved} now at {U.F(gr.Components[moved].Position ?? 0)} mm");
                 });
