@@ -5,7 +5,8 @@
 //                         Seat_Side_A / Seat_Side_B: the one facing the new P350)
 //   P350 Out       flush with the outside of the support (P150 Out_1 / Out_2, P350 Out)
 //   P350 Seat_Side flush with the start end of the support (End_A / End_B), offset = its position
-// The copy keeps the Mate / Flush between the P350 and its joints. The joint at the far end is
+// Top and bottom take a P350 gefraest, which has no joints: its start end mates to the first
+// support's seat instead. The copy keeps the Mate / Flush between the P350 and its joints. The joint at the far end is
 // mated after the P350 has its new length (Write new GR's second pass over the lengths).
 // Kept apart from the panel code (FP / TP / RP).
 
@@ -41,8 +42,10 @@ namespace InventorSizer
             Progress.Next("gr.ring", $"Adding a P350 across the {faceName} of {f?.Label}");
             if (f?.RealOrigin == null || tf?.RealOrigin == null) throw new SizerException("its box has no real position in Inventor");
             var sup = add.Supports.Select(s => !string.IsNullOrEmpty(s) && m.Components.ContainsKey(s) ? m.Components[s] : throw new SizerException($"the part it hangs on ({s}) is no longer in the GR")).ToArray();
-            var joints = JointsOf(asmObj, add.Template);
-            if (joints.Count < 2) throw new SizerException($"{add.Template} hangs on {joints.Count} joint(s) in Inventor, not 2");
+            // a P350 gefraest (top and bottom) sits in the seats without joints; a plain one hangs on two
+            bool milled = Gr.Milled(t);
+            var joints = milled ? new List<string>() : JointsOf(asmObj, add.Template);
+            if (!milled && joints.Count < 2) throw new SizerException($"{add.Template} hangs on {joints.Count} joint(s) in Inventor, not 2");
             var tb = GrOpenings.LayoutBox(m, t) ?? throw new SizerException($"{add.Template} has no position (read the GR from Inventor)");
             var nb = GrOpenings.LayoutBox(m, nc) ?? throw new SizerException($"{nn} has no position");
             var es = EditShift(m, t);   // the template is moved in Inventor only after this
@@ -95,7 +98,8 @@ namespace InventorSizer
             // the joint at each end, by where its copy is along the new P350
             double At(dynamic occ) { dynamic rb = occ.RangeBox; return (Coord(rb.MinPoint, ax) + Coord(rb.MaxPoint, ax)) / 2; }
             var ends = joints.Where(r.Occs.ContainsKey).Select(j => r.Occs[j]).OrderBy(j => (double)At(j)).ToList();
-            dynamic lowJ = ends.First(), highJ = ends.Last();
+            if (!milled && ends.Count < 2) throw new SizerException($"the joints of {add.Template} could not be copied");
+            dynamic lowJ = milled ? null : ends.First(), highJ = milled ? null : ends.Last();
             dynamic lowS = occs.ItemByName(sup[0].Name), highS = occs.ItemByName(sup[1].Name);
             dynamic JointBase(dynamic j)
             {
@@ -103,8 +107,20 @@ namespace InventorSizer
                 if (named.Count == 0) throw new SizerException($"{j.Name}: no face named Base (Files > Check named faces)");
                 return Proxy(j, named[0]);
             }
-            // near end: joint Base to the seat of the first support
-            cons.AddMateConstraint(JointBase(lowJ), SupportFace(lowS, NamesOf(sup[0].Kind, "Seat"), La, $"new P350 {barName}", Cm(sup[0].Name, false), ax), 0, kNoInference, kNoInference);
+            dynamic lowSeat = SupportFace(lowS, NamesOf(sup[0].Kind, "Seat"), La, $"new P350 {barName}", Cm(sup[0].Name, false), ax);
+            if (!milled)
+                // near end: joint Base to the seat of the first support
+                cons.AddMateConstraint(JointBase(lowJ), lowSeat, 0, kNoInference, kNoInference);
+            else
+            {
+                // gefraest: its start end to the seat of the first support, as deep in it as placed (the
+                // far end sits in the other seat by its length: one mate, so a length change cannot fight it)
+                dynamic barEnd = SupportFace(bar, NamesOf("divider", "End"), Scale(La, -1), "first support");
+                double at0 = PlaneOf(barEnd).P[ax], gap = Math.Abs(at0 - PlaneOf(lowSeat).P[ax]);
+                dynamic endMate = cons.AddMateConstraint(barEnd, lowSeat, gap, kNoInference, kNoInference);
+                try { if (Math.Abs(PlaneOf(barEnd).P[ax] - at0) > 0.01) endMate.Offset.Value = -gap; }
+                catch (Exception e) { Log.Dev($"  {barName}: end offset not checked ({e.Message})"); }
+            }
             // the outside: flush with the support's outside
             cons.AddFlushConstraint(SupportFace(bar, NamesOf("divider", "Out"), Na, "outside of the GR"), SupportFace(lowS, NamesOf(sup[0].Kind, "Out"), Na, "outside of the GR"), 0);
             // the position: its side flush with the start end of the support, as far from it as it is now
@@ -120,7 +136,7 @@ namespace InventorSizer
                 if (Math.Abs(PlaneOf(barSide).P[runAx] - want) > 0.01) { pos.Offset.Value = -dist; sign = -1; }
             }
             catch (Exception e) { Log.Dev($"  {barName}: position offset not checked ({e.Message})"); }
-            spanFinish.Add(($"{barName}: joint {(string)highJ.Name} to {(string)highS.Name}", () =>
+            if (!milled) spanFinish.Add(($"{barName}: joint {(string)highJ.Name} to {(string)highS.Name}", () =>
                 cons.AddMateConstraint(JointBase(highJ), SupportFace(highS, NamesOf(sup[1].Kind, "Seat"), Scale(La, -1), $"new P350 {barName}", Cm(sup[1].Name, true), ax), 0, kNoInference, kNoInference)));
 
             // the model takes the names and the position constraint
@@ -131,7 +147,7 @@ namespace InventorSizer
             c.Position = c.OrigPosition = Math.Round(sign * dist * 10, 2);
             if (c.Geo != null) c.Geo.Pos0 = c.Position;
             m.RingAdds.Remove(add);
-            Log.Write($"  new P350 {barName} across the {faceName} of {f.Label}, between {sup[0].Name} and {sup[1].Name} (joints {string.Join(", ", ends.Select(j => (string)j.Name))}); position {pos.Name} = {U.F(c.Position.Value)} mm");
+            Log.Write($"  new P350 {barName} across the {faceName} of {f.Label}, between {sup[0].Name} and {sup[1].Name} ({(milled ? "gefräst, no joints" : "joints " + string.Join(", ", ends.Select(j => (string)j.Name)))}); position {pos.Name} = {U.F(c.Position.Value)} mm");
         }
 
         // After the lengths: the far joint of each new P350 to its support.

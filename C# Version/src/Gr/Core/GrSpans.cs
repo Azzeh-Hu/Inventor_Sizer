@@ -71,22 +71,30 @@ namespace InventorSizer.Core
             return (list[i], list[i + 1]);
         }
 
-        // A P350 to copy for a span: one in Inventor that hangs on (at least) two joints. Plain P350
-        // before milled ones (gefraest: they sit on top of the frame), then the most common one.
-        public static string SpanTemplate(GrModel m)
+        public static bool Milled(GrComponent c) => (c?.Base ?? "").Contains("gefr");
+
+        // A P350 to copy for a span. On the top or bottom (gefraest = true) a milled P350 (P350 ...
+        // gefraest), which sits on the frame without joints; on the sides and ends a plain P350 that
+        // hangs on (at least) two joints. The most common one of those first.
+        public static string SpanTemplate(GrModel m, bool gefraest = false)
         {
             var joints = m.Components.Values.Where(c => c.Kind == "joint").Select(c => GrOpenings.LayoutBox(m, c)).Where(b => b != null).Select(b => b.Value).ToList();
             var list = new List<GrComponent>();
-            foreach (var c in m.Components.Values.Where(c => c.Kind == "divider" && c.CloneOf == "" && !string.IsNullOrEmpty(c.OrigBase) && c.Geo != null))
+            foreach (var c in m.Components.Values.Where(c => c.Kind == "divider" && c.CloneOf == "" && !string.IsNullOrEmpty(c.OrigBase) && c.Geo != null && Milled(c) == gefraest))
             {
                 var b = GrOpenings.LayoutBox(m, c);
                 if (b == null) continue;
                 int n = joints.Count(j => Enumerable.Range(0, 3).All(i => j.Min[i] < b.Value.Max[i] + 5 && j.Max[i] > b.Value.Min[i] - 5));
-                if (n >= 2) list.Add(c);
+                if (gefraest || n >= 2) list.Add(c);
             }
-            return list.OrderBy(c => c.Base.Contains("gefr") ? 1 : 0).ThenByDescending(c => list.Count(x => x.Base == c.Base)).ThenBy(c => c.Name, StringComparer.OrdinalIgnoreCase)
+            return list.OrderByDescending(c => list.Count(x => x.Base == c.Base)).ThenBy(c => c.Name, StringComparer.OrdinalIgnoreCase)
                        .Select(c => c.Name).FirstOrDefault();
         }
+
+        // How much longer than the clear space between its supports a copy of `template` is: what the
+        // template has over the box size it follows (P350 1210 in a 1200 box: 10; a gefraest one sits
+        // deeper in the seats), else GR.json spanAdd.
+        public static double SpanAddOf(GrComponent template) => template?.Follow.Count > 0 ? template.Follow[0].Offset : SpanAdd;
 
         // The axis a P350 on a face of its box is thin across (the face normal), and the side of the box
         // it lies on (0 = min, 1 = max).
@@ -122,8 +130,10 @@ namespace InventorSizer.Core
             var (lo, hi) = SupportsAround(Supports(m, f, faceAxis, side, along, at), near);
             if (lo == null) throw new SizerException($"Nothing to hang a P350 on there: the frame profiles of {f.Label} need real positions (read the GR from Inventor).");
             if (hi.Lo - lo.Hi < 100) throw new SizerException($"{Short(lo.Name)} and {Short(hi.Name)} are only {U.F(Math.Round(hi.Lo - lo.Hi))} mm apart.");
-            string template = SpanTemplate(m) ?? throw new SizerException("There is no P350 hanging on two joints in this GR to copy.");
+            bool milled = faceAxis == 2;   // top and bottom: P350 gefraest
+            string template = SpanTemplate(m, milled) ?? throw new SizerException(milled ? "There is no P350 gefräst in this GR to copy (top and bottom take a gefräst one)." : "There is no P350 hanging on two joints in this GR to copy.");
             var t = m.Components[template];
+            double add0 = SpanAddOf(t);
             var tb = GrOpenings.LayoutBox(m, t).Value; var tf = m.ById(t.Frame);
             int tk = LongAxis(tb);
             var tface = FaceOf(m, t);
@@ -135,7 +145,7 @@ namespace InventorSizer.Core
             if (tface.Axis < 0) inset = 0;
             double plane = f.Pos[faceAxis] + (side == 0 ? 0 : f.Size[faceAxis] + CornerAdd);
             var mn = new double[3]; var mx = new double[3];
-            mn[along] = lo.Hi - SpanAdd / 2; mx[along] = hi.Lo + SpanAdd / 2;
+            mn[along] = lo.Hi - add0 / 2; mx[along] = hi.Lo + add0 / 2;
             if (side == 0) { mn[faceAxis] = plane + inset; mx[faceAxis] = mn[faceAxis] + depth; } else { mx[faceAxis] = plane - inset; mn[faceAxis] = mx[faceAxis] - depth; }
             mn[run] = at - width / 2; mx[run] = at + width / 2;
             var geo = new Geo
@@ -150,7 +160,7 @@ namespace InventorSizer.Core
                 Name = nn, File = t.File, Base = t.Base, OrigBase = "", Kind = "divider", Length = t.Length, Frame = f.Id, CloneOf = template, Geo = geo,
                 Position = position, OrigPosition = position, PosConstraint = "(new)", MoveAxis = run, MoveSign = 1
             };
-            SetComponentLength(n, 0, Math.Round(hi.Lo - lo.Hi + SpanAdd, 1));
+            SetComponentLength(n, 0, Math.Round(hi.Lo - lo.Hi + add0, 1));
             // between the two frame profiles of the face: it follows the box size along its length
             if (lo.Kind == "frameProfile" && hi.Kind == "frameProfile") n.Follow = new List<Follow> { new Follow { Dim = Axes[along].ToString(), Offset = n.Length - f.Size[along] } };
             m.Components[nn] = n;

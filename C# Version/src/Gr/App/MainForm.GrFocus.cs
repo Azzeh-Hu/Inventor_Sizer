@@ -134,13 +134,18 @@ namespace InventorSizer
             if (GrOpenings.TouchesOtherBox(gr, f, faceAxis, side)) { item.Enabled = false; item.Text += " (inside the unit)"; return item; }
             var (lo, hi) = Gr.SupportsAround(Gr.Supports(gr, f, faceAxis, side, along, f.Pos[run] + position), near);
             if (lo == null) { item.Enabled = false; item.Text += " (needs the GR read from Inventor)"; return item; }
-            string template = Gr.SpanTemplate(gr);
-            if (template == null) { item.Enabled = false; item.Text += " (no P350 on joints in this GR to copy)"; return item; }
+            bool milled = faceAxis == 2;   // top and bottom: P350 gefräst
+            string template = Gr.SpanTemplate(gr, milled);
+            if (template == null) { item.Enabled = false; item.Text += milled ? " (no P350 gefräst in this GR to copy)" : " (no P350 on joints in this GR to copy)"; return item; }
             item.Click += (s, e) =>
             {
+                double len = Math.Round(hi.Lo - lo.Hi + Gr.SpanAddOf(gr.Components[template]));
                 string answer = SetupTextDialog.Prompt(this, "Add a P350 across a face",
-                    $"A copy of {Short(template)} with its two joints, on the {faceName} of {f.Label}, running along {"LWH"[along]} between {Short(lo.Name)} and {Short(hi.Name)} (about {U.F(Math.Round(hi.Lo - lo.Hi + Gr.SpanAdd))} mm).\n" +
-                    $"In Inventor its joints mate to their seats (joint Base to Seat_1 / Seat_2 of a P150, Seat_Side_A / Seat_Side_B of a P350).\n" +
+                    (milled
+                        ? $"A copy of {Short(template)} (top and bottom take a P350 gefräst, no joints), on the {faceName} of {f.Label}, running along {"LWH"[along]} between {Short(lo.Name)} and {Short(hi.Name)} (about {U.F(len)} mm).\n" +
+                          "In Inventor its end mates to the seat of the first support, its Out is flush with the outside.\n"
+                        : $"A copy of {Short(template)} with its two joints, on the {faceName} of {f.Label}, running along {"LWH"[along]} between {Short(lo.Name)} and {Short(hi.Name)} (about {U.F(len)} mm).\n" +
+                          "In Inventor its joints mate to their seats (joint Base to Seat_1 / Seat_2 of a P150, Seat_Side_A / Seat_Side_B of a P350).\n") +
                     $"Position in mm from the start of {f.Label} along {"LWH"[run]} (outer edge):", U.F(Math.Round(position)));
                 if (string.IsNullOrWhiteSpace(answer)) return;
                 GrEdit("Add P350", () =>
