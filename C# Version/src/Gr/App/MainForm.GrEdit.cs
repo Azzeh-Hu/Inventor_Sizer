@@ -157,7 +157,7 @@ namespace InventorSizer
                 if (grDragged) { grDragged = false; return; }   // the end of a turn or pan, not a click
                 var hit = GrHit(e.Location);
                 if (hit.Kind == null) { if (e.Button == MouseButtons.Left) EndFocus(); return; }   // empty space: done editing the box
-                if (e.Button == MouseButtons.Left && hit.Kind == "dim") { EditDimension(hit.Id); return; }
+                if (e.Button == MouseButtons.Left && hit.Kind == "dim") { EditDimension(hit.Id, twin.PointToScreen(e.Location)); return; }
                 if (hit.Kind == "cut") { CutMenu(hit.Id, e.Location); return; }
                 if (e.Button == MouseButtons.Right && hit.Kind == "open") { OpeningMenu(hit.Id, e.Location); return; }
                 if (e.Button == MouseButtons.Right && hit.Kind == "div") { DividerMenu(hit.Id, e.Location); return; }

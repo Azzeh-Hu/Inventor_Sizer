@@ -59,7 +59,8 @@ namespace InventorSizer
         }
 
         // A clicked dimension: a box size (outer, incl. corners) or the gap to a P350.
-        void EditDimension(string tag)
+        // `at`: where it was clicked (screen), the small value box opens there.
+        void EditDimension(string tag, Point at)
         {
             var p = tag.Split(new[] { ':' }, 6);
             if (p.Length >= 4 && p[1] == "size")
@@ -67,8 +68,7 @@ namespace InventorSizer
                 int no = int.Parse(p[2]); string dim = p[3];
                 var f = gr.Frame(no);
                 double outer = f.Get(dim) + Gr.CornerAdd;
-                string text = SetupTextDialog.Prompt(this, $"{f.Label}: outer {dim}",
-                    $"Outer {dim} of {f.Label} in mm, corners included (the P150 are {U.F(Gr.CornerAdd)} mm shorter)." + (dim != "L" && chkShared.Checked ? $"\nBoxes with the same {dim} change with it (Boxes window: Same width / height change together)." : ""), U.F(outer));
+                string text = DimValueBox.Ask(this, at, U.F(outer));
                 if (string.IsNullOrWhiteSpace(text)) return;
                 GrEdit("Edit box", () =>
                 {
@@ -80,8 +80,7 @@ namespace InventorSizer
             else if (p.Length == 6 && p[1] == "gap")
             {
                 int axis = int.Parse(p[2]), sign = int.Parse(p[3]); double now = U.P(p[4]); string name = p[5];
-                string text = SetupTextDialog.Prompt(this, "Gap to " + Short(name),
-                    $"The gap in mm along {"LWH"[axis]}. Changing it moves {Short(Gr.RingOf(gr, name))}" + (Gr.RingOf(gr, name) != name ? " (the P350 it moves with) and every P350 that moves with it." : " and every P350 that moves with it."), U.F(now));
+                string text = DimValueBox.Ask(this, at, U.F(now));
                 if (string.IsNullOrWhiteSpace(text)) return;
                 GrEdit("Move divider", () =>
                 {
