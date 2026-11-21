@@ -314,16 +314,23 @@ namespace InventorSizer.Core
         // dividers of two faces in one chain), from the inner face of the frame profile (70 mm) to each
         // divider and on to the far profile, just past the dividers' ends:
         //   blue   the parts in Inventor, on the faces turned to the viewer (the standard view)
-        //   green  each new part (ring, single P350, P350 across a face): its own chain to the parts
-        //          either side, further out, on any face
-        //   orange the P350 picked with a click: its gaps on its face, whichever face that is
+        //   orange the P350 picked with a click (green when it is a new part: a ring, single P350 or
+        //          P350 across a face): its gaps to the parts either side, on its face, whichever face
+        //          that is. Only while it is picked.
+        // A number is shown once: a gap that is on several faces (a ring runs around the box) or in the
+        // picked chain already is not repeated (the face most turned to the viewer shows it).
         // A gap can be clicked: it moves the divider at its far end (the last gap: the one at its near
-        // end); in a green or orange chain the part the chain is for.
+        // end); in the picked chain the picked part.
         static void Chains(Draw d, ViewT t, List<DividerLine> lines, GrModel m)
         {
             const double prof = 70;
+            var shown = new HashSet<string>();   // box | axis | from | to: drawn already
             var placed = lines.Where(l => !Dimmed(m, l.Frame)).Select(l => (L: l, W: Where(l))).Where(x => x.W.S >= 0).ToList();
-            foreach (var g in placed.GroupBy(x => (x.L.Frame.Id, x.W.Face, x.W.Side, x.W.S)))
+            var groups = placed.GroupBy(x => (x.L.Frame.Id, x.W.Face, x.W.Side, x.W.S))
+                               .OrderByDescending(g => g.Any(x => x.L.Name == m.SelectedDivider))                       // the picked chain first
+                               .ThenByDescending(g => t.R[6 + DrawAxis(g.Key.Face)] * (g.Key.Side == 0 ? -1 : 1))    // then the faces most turned to the viewer
+                               .ToList();
+            foreach (var g in groups)
             {
                 var f = g.First().L.Frame; int s = g.Key.S, fa = g.Key.Face, side = g.Key.Side, k = 3 - s - fa;
                 var o = f.Pos; var size = f.Size;
@@ -361,6 +368,7 @@ namespace InventorSizer.Core
                         var sa = Draw.Screen(t, ToDraw(p)); var sb = Draw.Screen(t, ToDraw(q));
                         if (Math.Sqrt(Math.Pow(sb[0] - sa[0], 2) + Math.Pow(sb[1] - sa[1], 2)) < 18) continue;   // seen end-on
                         double gap = Math.Round(vals[i].V - vals[i - 1].V, 1);
+                        if (!shown.Add($"{f.Id}|{s}|{Math.Round(vals[i - 1].V)}|{Math.Round(vals[i].V)}")) continue;   // shown already
                         string tag = null;
                         if (mover != null) tag = GapTag(s, vals[i].Name == mover ? 1 : -1, gap, Math.Round(vals[vals.Count - 1].V - vals[0].V, 1), mover);
                         else if (vals[i].Name != null) tag = GapTag(s, 1, gap, Math.Round((i + 1 < vals.Count ? vals[i + 1].V : vals[i].V) - vals[i - 1].V, 1), vals[i].Name);
@@ -368,12 +376,10 @@ namespace InventorSizer.Core
                         EditDim(d, sa, sb, U.F(gap), tag, palette);
                     }
                 }
+                var sel = all.FirstOrDefault(l => l.Name == m.SelectedDivider);
+                if (sel != null) Chain(Around(sel), 2, IsNew(m, sel.Name) ? "New" : "Sel", sel.Name);
                 var existing = all.Where(l => !IsNew(m, l.Name)).ToList();
                 if (existing.Count > 0 && Facing(t.R, fa, side)) Chain(Values(existing), 1, "Edit", null);
-                int level = 2;
-                foreach (var l in all.Where(l => IsNew(m, l.Name)).OrderBy(l => l.A[s])) Chain(Around(l), level++, "New", l.Name);
-                var sel = all.FirstOrDefault(l => l.Name == m.SelectedDivider);
-                if (sel != null) Chain(Around(sel), level, "Sel", sel.Name);
             }
         }
 
@@ -537,7 +543,7 @@ namespace InventorSizer.Core
             }
             // dimensions: in Inventor, new parts, the P350 picked
             x += 14;
-            foreach (var it in new[] { ("dimEdit", "dimension"), ("dimNew", "new part"), ("dimSel", "picked P350") })
+            foreach (var it in new[] { ("dimEdit", "dimension"), ("dimSel", "picked P350"), ("dimNew", "picked new P350") })
             {
                 d.Line(it.Item1, x, y, x + 22, y);
                 d.Text("sub", x + 27, y, it.Item2, 0, 0, "left");
