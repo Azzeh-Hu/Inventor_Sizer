@@ -119,6 +119,10 @@ namespace InventorSizer
                 it.Click += (s, e) => AddBoxAt(no, sd);
                 add.DropDownItems.Add(it);
             }
+            bool editing = gr.Focus == gr.Frame(no).Id;
+            var focus = new ToolStripMenuItem(editing ? "Done editing this box" : "Edit this box (dimensions)");
+            focus.Click += (s, e) => { if (editing) EndFocus(); else FocusBox(no); };
+            menu.Items.Add(focus);
             var sizes = new ToolStripMenuItem("Edit sizes...");
             sizes.Click += (s, e) => { popBoxes.Popup(PopAt(0)); SelectRow(grGrid, "Box", gr.Frame(no).Label, null); };
             var remove = new ToolStripMenuItem("Remove this box");
@@ -189,6 +193,7 @@ namespace InventorSizer
                 }
                 menu.Items.Add(it);
             }
+            EdgeSpanItems(menu, f, e, axis, rel);
             menu.Items.Add(new ToolStripSeparator());
             BoxItems(menu, no);
             menu.Show(twin, at);

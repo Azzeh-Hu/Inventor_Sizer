@@ -76,6 +76,7 @@ namespace InventorSizer.Core
         public int ServiceSide = 1;   // the service side (TP) is the width side at +1 = max / -1 = min; the other is the back (RP)
         public Dictionary<string, string> PanelChoice = new Dictionary<string, string>();   // opening key -> FP / TP / RP / keep
         public string SelectedOpening;   // opening key highlighted in the drawing (not saved)
+        public int Focus;                // the box being edited (Id): the others greyed out, its dimensions shown (not saved)
         public List<GrRingAdd> RingAdds = new List<GrRingAdd>();        // P350 rings to copy in Inventor
         public List<List<string>> RingRemoves = new List<List<string>>(); // P350 rings (with their joints) to delete in Inventor
         public int[] RealMap;   // assembly axis (0 X, 1 Y, 2 Z) of GR length, width, height
@@ -87,8 +88,14 @@ namespace InventorSizer.Core
     // A new P350 ring: a copy of the ring led by Template, at Position (offset from the same partner,
     // or from the matching profile of box Frame when it goes into another box). Single: one P350 on
     // one face (a copy of Template), at Position mm from the box's outer start along Axis (GR), grounded.
+    // Span: one P350 (a copy of Template with its two joints) across a face (normal FaceAxis, side
+    // FaceSide), running along Along between two supports (P150 or P350), at Position mm from the
+    // box's outer start along Axis; its joints mate to the supports' seats through the named faces.
     public class GrRingAdd
     {
+        public bool Span;
+        public int Along = -1, FaceAxis = -1, FaceSide;
+        public string[] Supports = new string[2];   // the support at the low and at the high end along Along
         public string Template;
         public double Position;
         public Dictionary<string, string> Names = new Dictionary<string, string>();   // template member -> new member in the model
@@ -106,7 +113,7 @@ namespace InventorSizer.Core
         public List<string> Blocked = new List<string>();
     }
 
-    public static class Gr
+    public static partial class Gr
     {
         // Outer size = profile + CornerAdd (2 corners). Each corner type adds its own amount per side
         // (APS Ecke Guss 70, Kunststoff 75; its 130 mm leg sits inside the profile). Set from the
@@ -144,7 +151,7 @@ namespace InventorSizer.Core
                 if (rules.Count > 0) PartRules = rules;
                 var lp = j.Obj("lengthParameters");
                 if (lp != null) foreach (var k in lp.OrderedKeys) LengthParams[k] = lp.Str(k);
-                CornerAdd = j.Num("cornerAdd", CornerAdd); PanelAdd = j.Num("panelAdd", PanelAdd);
+                CornerAdd = j.Num("cornerAdd", CornerAdd); PanelAdd = j.Num("panelAdd", PanelAdd); SpanAdd = j.Num("spanAdd", SpanAdd);
                 DefaultServiceSide = j.Num("serviceSide", DefaultServiceSide) < 0 ? -1 : 1;
                 GrOpenings.ProfileWidth = j.Num("profileWidth", GrOpenings.ProfileWidth); GrOpenings.MinOpening = j.Num("minOpening", GrOpenings.MinOpening);
                 var corners = j.Arr("corners").OfType<JsonObject>().Select(r => (new Regex(r.Str("pattern")), r.Num("perSide", 70))).ToList();
@@ -712,6 +719,7 @@ namespace InventorSizer.Core
                 if (r.Template == old) r.Template = now;
                 if (r.Names.TryGetValue(old, out var nn)) { r.Names.Remove(old); r.Names[now] = nn; }
                 foreach (var k in r.Names.Keys.ToList()) if (r.Names[k] == old) r.Names[k] = now;
+                for (int i = 0; i < r.Supports.Length; i++) if (r.Supports[i] == old) r.Supports[i] = now;
             }
             int u = m.Unplaced.IndexOf(old); if (u >= 0) m.Unplaced[u] = now;
         }
@@ -1007,8 +1015,11 @@ namespace InventorSizer.Core
             var n = new GrComponent
             {
                 Name = nn, File = c.File, Base = c.Base, OrigBase = "", Kind = c.Kind, Length = c.Length, Frame = to.Id, CloneOf = template,
-                Follow = c.Follow.Select(r => new Follow { Dim = r.Dim, Offset = r.Offset, Part = r.Part }).ToList(), Box = c.Box, Geo = geo
+                Follow = c.Follow.Select(r => new Follow { Dim = r.Dim, Offset = r.Offset, Part = r.Part }).ToList(), Box = c.Box, Geo = geo,
+                // movable (dimensions, the Dividers window) until it is written; grounded in Inventor then
+                Position = position, OrigPosition = position, PosConstraint = "(new)", MoveAxis = axis, MoveSign = 1
             };
+            geo.Pos0 = position;
             foreach (var r in n.Follow) SetComponentLength(n, r.Part, to.Get(r.Dim) + r.Offset);
             m.Components[nn] = n;
             to.Dividers.Add(nn);
@@ -1025,6 +1036,8 @@ namespace InventorSizer.Core
             var members = RingMembers(m, leader);
             var dependent = m.Components.Values.FirstOrDefault(c => c.Kind == "divider" && !members.Contains(c.Name) && members.Contains(c.PosPartner));
             if (dependent != null) throw new SizerException($"{dependent.Name} is placed from this ring: remove or move that ring first.");
+            var hanging = m.RingAdds.FirstOrDefault(r => r.Span && r.Supports.Any(members.Contains));
+            if (hanging != null) throw new SizerException($"The new P350 {hanging.Names.Values.FirstOrDefault()} hangs on this ring: remove it first.");
             var add = m.RingAdds.FirstOrDefault(r => r.Names.ContainsValue(leader));
             var gone = new List<string>(members);
             if (add == null)
@@ -1065,7 +1078,7 @@ namespace InventorSizer.Core
             foreach (var f in m.Frames.Where(f => f.CloneOf != 0)) p.Boxes.Add($"new {f.Label}, a copy of {m.ById(f.CloneOf)?.Label ?? "a removed box"}");
             if (m.Removed.Count > 0) p.Boxes.Add($"{m.Removed.Count} part(s) of removed boxes deleted");
             foreach (var r in m.RingAdds)
-                p.Rings.Add(r.Single ? $"new P350 like {r.Template} on {m.ById(r.Frame)?.Label}, {U.F(r.Position)} mm along {"LWH"[Math.Max(0, r.Axis)]}"
+                p.Rings.Add(r.Span ? SpanText(m, r) : r.Single ? $"new P350 like {r.Template} on {m.ById(r.Frame)?.Label}, {U.F(r.Position)} mm along {"LWH"[Math.Max(0, r.Axis)]}"
                     : $"new P350 ring like {r.Template} at {U.F(r.Position)} mm ({r.Names.Count} P350){(r.Frame != 0 ? " in " + m.ById(r.Frame)?.Label : "")}");
             foreach (var r in m.RingRemoves) p.Rings.Add($"P350 ring removed: {string.Join(", ", r)}");
             int lost = m.Components.Values.Count(c => string.IsNullOrEmpty(c.OrigBase) && c.CloneOf == "");
@@ -1104,7 +1117,12 @@ namespace InventorSizer.Core
                 }).ToList(),
                 ["warnings"] = m.Warnings.Cast<object>().ToList(), ["unplaced"] = m.Unplaced.Cast<object>().ToList(), ["removed"] = m.Removed.Cast<object>().ToList(),
                 ["realMap"] = m.RealMap == null ? null : m.RealMap.Select(x => (object)(double)x).ToList(), ["up"] = (double)m.Up, ["serviceSide"] = (double)m.ServiceSide,
-                ["ringAdds"] = m.RingAdds.Select(r => (object)new JsonObject { ["template"] = r.Template, ["position"] = r.Position, ["names"] = r.Names.Select(kv => (object)new List<object> { kv.Key, kv.Value }).ToList() }).ToList(),
+                ["ringAdds"] = m.RingAdds.Select(r => (object)new JsonObject
+                {
+                    ["template"] = r.Template, ["position"] = r.Position, ["names"] = r.Names.Select(kv => (object)new List<object> { kv.Key, kv.Value }).ToList(),
+                    ["frame"] = (double)r.Frame, ["single"] = r.Single, ["axis"] = (double)r.Axis,
+                    ["span"] = r.Span, ["along"] = (double)r.Along, ["faceAxis"] = (double)r.FaceAxis, ["faceSide"] = (double)r.FaceSide, ["supports"] = r.Supports.Select(x => (object)(x ?? "")).ToList()
+                }).ToList(),
                 ["ringRemoves"] = m.RingRemoves.Select(r => (object)r.Cast<object>().ToList()).ToList(),
                 ["panelChoice"] = m.PanelChoice.OrderBy(kv => kv.Key, StringComparer.Ordinal).Select(kv => (object)new JsonObject { ["key"] = kv.Key, ["type"] = kv.Value }).ToList()
             };
@@ -1152,7 +1170,13 @@ namespace InventorSizer.Core
             foreach (var pc in j.Arr("panelChoice").OfType<JsonObject>()) m.PanelChoice[pc.Str("key")] = pc.Str("type");
             foreach (var ro in j.Arr("ringAdds").OfType<JsonObject>())
             {
-                var r = new GrRingAdd { Template = ro.Str("template"), Position = ro.Num("position") };
+                var r = new GrRingAdd
+                {
+                    Template = ro.Str("template"), Position = ro.Num("position"), Frame = (int)ro.Num("frame"), Single = ro.Bool("single"), Axis = (int)ro.Num("axis", -1),
+                    Span = ro.Bool("span"), Along = (int)ro.Num("along", -1), FaceAxis = (int)ro.Num("faceAxis", -1), FaceSide = (int)ro.Num("faceSide")
+                };
+                var sups = ro.Arr("supports").Select(x => Convert.ToString(x, U.Inv)).ToList();
+                for (int i = 0; i < Math.Min(2, sups.Count); i++) r.Supports[i] = sups[i];
                 foreach (var pair in ro.Arr("names").OfType<List<object>>()) if (pair.Count == 2) r.Names[Convert.ToString(pair[0], U.Inv)] = Convert.ToString(pair[1], U.Inv);
                 m.RingAdds.Add(r);
             }

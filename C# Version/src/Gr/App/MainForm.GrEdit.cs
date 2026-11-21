@@ -156,7 +156,9 @@ namespace InventorSizer
                 if (mode != "GR" || gr == null) return;
                 if (grDragged) { grDragged = false; return; }   // the end of a turn or pan, not a click
                 var hit = GrHit(e.Location);
-                if (hit.Kind == null) return;
+                if (hit.Kind == null) { if (e.Button == MouseButtons.Left) EndFocus(); return; }   // empty space: done editing the box
+                if (e.Button == MouseButtons.Left && hit.Kind == "dim") { EditDimension(hit.Id); return; }
+                if (hit.Kind == "cut") { CutMenu(hit.Id, e.Location); return; }
                 if (e.Button == MouseButtons.Right && hit.Kind == "open") { OpeningMenu(hit.Id, e.Location); return; }
                 if (e.Button == MouseButtons.Right && hit.Kind == "div") { DividerMenu(hit.Id, e.Location); return; }
                 if (e.Button == MouseButtons.Right && hit.Kind == "edge") { var p = hit.Id.Split(':'); EdgeMenu(int.Parse(p[0]), int.Parse(p[1]), e.Location); return; }
@@ -164,9 +166,10 @@ namespace InventorSizer
                 if (e.Button != MouseButtons.Left) return;
                 if (hit.Kind == "open") { gr.SelectedOpening = hit.Id; popOpenings.Popup(PopAt(2)); SelectRow(grOpGrid, "Key", hit.Id, null); UpdateDrawing(); }
                 else if (hit.Kind == "div") { popDividers.Popup(PopAt(1)); SelectRow(grDivGrid, "Divider", hit.Id, "Position"); }
-                else if (hit.Kind == "box" || hit.Kind == "edge") { popBoxes.Popup(PopAt(0)); SelectRow(grGrid, "Box", gr.Frame(int.Parse(hit.Id.Split(':')[0])).Label, null); }
+                else if (hit.Kind == "box" || hit.Kind == "edge") FocusBox(int.Parse(hit.Id.Split(':')[0]));   // edit this box: the others grey, its dimensions shown
             };
             WireGrView();
+            WireGrFocus();
         }
 
         // Where a window first appears: at the top left of the twin, one step further per window.
@@ -177,6 +180,7 @@ namespace InventorSizer
         {
             split.Panel1Collapsed = gr;
             if (!gr) foreach (var p in new[] { popBoxes, popDividers, popOpenings }) p?.Dismiss();
+            if (grOutCard != null) { grOutCard.Visible = gr; if (gr) UpdateGrOutput(); }
         }
 
         static void SelectRow(DataGridView g, string column, string value, string editColumn)
@@ -197,6 +201,11 @@ namespace InventorSizer
         (string Kind, string Id) GrHit(Point p)
         {
             if (shapes == null) return (null, null);
+            // dimensions that can be changed (line or label) and the cut list's P150 / P350 rows
+            foreach (var s in shapes.Where(s => s.Tag != null && s.Tag.StartsWith("dim:")))
+                if (s.IsText ? OnText(s, p) : s.Points != null && NearLine(s.Points, p, 4)) return ("dim", s.Tag);
+            foreach (var s in shapes.Where(s => s.Tag != null && s.Tag.StartsWith("cut:") && s.IsText))
+                if (OnText(s, p)) return ("cut", s.Tag.Substring(4));
             foreach (var s in shapes.Where(s => s.Tag != null && s.Tag.StartsWith("div:") && s.Points != null))
                 if (NearLine(s.Points, p, 6)) return ("div", s.Tag.Substring(4));
             for (int i = shapes.Count - 1; i >= 0; i--)
@@ -213,6 +222,17 @@ namespace InventorSizer
             foreach (var s in shapes.Where(s => s.Tag != null && s.Tag.StartsWith("box:") && s.IsText))
                 if (Math.Abs(p.X - s.X) < 40 && Math.Abs(p.Y - s.Y) < 12) return ("box", s.Tag.Substring(4));
             return (null, null);
+        }
+
+        // Is a point on a text shape (drawn turned by its angle around X, Y, Dy below; about 0.6 em a letter)?
+        static bool OnText(Shape s, Point p)
+        {
+            double fs = Styles.All.TryGetValue(s.Kind ?? "", out var st) && st.FontSize > 0 ? st.FontSize : 12;
+            double w = 0.6 * fs * (s.Text ?? "").Length + 8, a = -s.Angle * Math.PI / 180;
+            double dx = p.X - s.X, dy = p.Y - s.Y;
+            double lx = dx * Math.Cos(a) - dy * Math.Sin(a), ly = dx * Math.Sin(a) + dy * Math.Cos(a) - s.Dy;
+            bool inX = s.Align == "left" ? lx > -4 && lx < w : Math.Abs(lx) < w / 2;
+            return inX && Math.Abs(ly) < fs * 0.75;
         }
 
         static bool NearLine(double[] pts, Point p, double tol)
@@ -253,6 +273,8 @@ namespace InventorSizer
             var remove = new ToolStripMenuItem("Remove this ring");
             remove.Click += (s, e) => GrEdit("Remove ring", () => RemoveRingNow(name));
             menu.Items.AddRange(new ToolStripItem[] { pos, add, CopyRingItem(name), remove });
+            menu.Items.Add(new ToolStripSeparator());
+            DividerSpanItems(menu, name);
             menu.Show(twin, at);
         }
 

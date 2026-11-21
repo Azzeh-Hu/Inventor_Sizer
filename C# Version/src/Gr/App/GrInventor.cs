@@ -201,6 +201,7 @@ namespace InventorSizer
             if (newName.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0) throw new SizerException($"'{newName}' is not a valid file name.");
             if (newName == m.Name && !overwrite) throw new SizerException("The new GR needs a new name; the original stays as it is (or write over it on purpose).");
             var todo = Gr.Pending(m);
+            spanFinish.Clear();
             if (todo.Blocked.Count > 0) throw new SizerException("Not written:\n" + string.Join("\n", todo.Blocked) + "\nUndo those (load the GR again) or make them in Inventor.");
             Progress.Next("gr.start", $"Saving the GR as {newName}");
             var src = OpenGrSource(m);
@@ -293,6 +294,8 @@ namespace InventorSizer
             });
             // a ring copied into a box of another size: its P350 get that box's lengths
             if (todo.Profiles.Count > 0) { Progress.Expect("gr.profile", todo.Profiles.Count); ResizeProfiles(todo.Profiles); todo = Gr.Pending(m); }
+            // new P350 across a face: the far joint mated now that the P350 has its length
+            if (spanFinish.Count > 0) Quietly((object)inv, FinishSpans);
             Quietly((object)inv, () =>
             {
                 Progress.Next("gr.update", "Moving dividers and updating the GR");

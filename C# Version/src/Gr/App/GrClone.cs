@@ -38,7 +38,7 @@ namespace InventorSizer
         // name) may give a new offset (cm). Returns old name -> new occurrence, and old constraint name ->
         // new constraint name.
         static CloneResult CloneOccurrences(object asmObj, IEnumerable<string> names, double[] shift, Func<string, string, bool> keep, Func<string, double?> offset,
-            Func<string, double[]> shiftOf = null, Func<string, string> partnerFor = null)
+            Func<string, double[]> shiftOf = null, Func<string, string> partnerFor = null, Func<string, object, object> placeOf = null)
         {
             dynamic asm = asmObj;
             dynamic occs = asm.ComponentDefinition.Occurrences;
@@ -47,11 +47,15 @@ namespace InventorSizer
             var map = result.Occs;
             foreach (var n in names.Distinct())
             {
-                var sh = shiftOf?.Invoke(n) ?? shift;
                 dynamic o = occs.ItemByName(n);
                 dynamic mtx = o.Transformation;
-                dynamic tr = mtx.Translation;
-                mtx.SetTranslation(tg.CreateVector((double)tr.X + sh[0], (double)tr.Y + sh[1], (double)tr.Z + sh[2]));
+                if (placeOf != null) mtx = placeOf(n, (object)mtx);   // turned and moved (a P350 across a face)
+                else
+                {
+                    var sh = shiftOf?.Invoke(n) ?? shift;
+                    dynamic tr = mtx.Translation;
+                    mtx.SetTranslation(tg.CreateVector((double)tr.X + sh[0], (double)tr.Y + sh[1], (double)tr.Z + sh[2]));
+                }
                 map[n] = occs.Add((string)o.ReferencedDocumentDescriptor.FullDocumentName, mtx);
                 result.Constrained[n] = 0;
             }
@@ -201,6 +205,7 @@ namespace InventorSizer
             try
             {
                 if (!m.Components.TryGetValue(add.Template, out var lead)) { Log.Write($"  new P350 skipped: {add.Template} is no longer in the GR"); continue; }
+                if (add.Span) { AddSpan(m, (object)asm, add); continue; }
                 Progress.Next("gr.ring", add.Single ? $"Copying {add.Template} as a single P350" : $"Copying a P350 ring to {U.F(add.Position)} mm");
                 var from = m.ById(lead.Frame); var to = add.Frame != 0 ? m.ById(add.Frame) : from;
                 if (from == null || to == null) throw new SizerException("its box is no longer in the GR");
@@ -257,6 +262,7 @@ namespace InventorSizer
                         c.OrigPosition = c.Position;
                         if (c.PosConstraint == "") Log.Write($"  note: the position offset of {now} could not be copied - it is held where it was placed");
                     }
+                    if (add.Single) { c.PosConstraint = ""; c.Position = c.OrigPosition = null; c.MoveAxis = -1; }   // grounded: no offset to move it by any more
                     if (add.Single || r.Constrained[kv.Key] == 0) { try { occ.Grounded = true; grounded.Add(now); } catch { } }
                 }
                 m.RingAdds.Remove(add);

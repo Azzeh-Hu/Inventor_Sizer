@@ -212,7 +212,7 @@ namespace InventorSizer.Core
         static bool OnPlane((double[] Min, double[] Max) b, int a, double plane, double depth) =>
             b.Max[a] - b.Min[a] < depth && b.Max[a] > plane - depth && b.Min[a] < plane + depth;
 
-        static bool TouchesOtherBox(GrModel m, GrFrame f, int a, int side)
+        public static bool TouchesOtherBox(GrModel m, GrFrame f, int a, int side)
         {
             double plane = f.Pos[a] + (side == 0 ? 0 : f.Size[a] + Gr.CornerAdd);
             foreach (var g in m.Frames.Where(g => g != f))
