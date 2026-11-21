@@ -93,7 +93,8 @@ namespace InventorSizer
             double? Cm(string name, bool high)
             {
                 var s = list.FirstOrDefault(x => x.Name == name);
-                return s == null ? (double?)null : ((high ? s.Lo : s.Hi) - f.Pos[add.Along] + f.RealOrigin[add.Along]) / 10;
+                // the seat is SeatDepth into the support from its face (the P350 sits in it)
+                return s == null ? (double?)null : ((high ? s.Lo + Gr.SeatDepth : s.Hi - Gr.SeatDepth) - f.Pos[add.Along] + f.RealOrigin[add.Along]) / 10;
             }
             // the joint at each end, by where its copy is along the new P350
             double At(dynamic occ) { dynamic rb = occ.RangeBox; return (Coord(rb.MinPoint, ax) + Coord(rb.MaxPoint, ax)) / 2; }
