@@ -123,6 +123,29 @@ namespace InventorSizer.Core
             }
         }
 
+        // While the twin is turned, panned or zoomed (Reuse), the model does not change: its openings,
+        // P350 lines, joints and tables are worked out once and the frames reuse them (about 2 ms less a
+        // frame). Any other drawing works them out again.
+        public static bool Reuse;
+        static GrModel cModel;
+        static List<DividerLine> cLines;
+        static List<(double[] P, GrFrame F)> cJoints;
+        static List<GrOpening> cOpenings;
+        static (List<string[]> Frames, List<string[]> Parts)? cTables;
+
+        static T Cached<T>(GrModel m, ref T slot, Func<T> make)
+        {
+            if (!Reuse || cModel != m) { if (cModel != m) { cLines = null; cJoints = null; cOpenings = null; cTables = null; cModel = m; } slot = make(); return slot; }
+            if (slot == null) slot = make();
+            return slot;
+        }
+
+        static (List<string[]> Frames, List<string[]> Parts) Cached(GrModel m, ref (List<string[]> Frames, List<string[]> Parts)? slot, Func<(List<string[]> Frames, List<string[]> Parts)> make)
+        {
+            if (!Reuse || cModel != m || slot == null) { if (cModel != m) { cLines = null; cJoints = null; cOpenings = null; cModel = m; } slot = make(); }
+            return slot.Value;
+        }
+
         static bool Dimmed(GrModel m, GrFrame f) => m.Focus != 0 && f != null && f.Id != m.Focus;
 
         public class BoxXYZ { public GrFrame F; public double X0, X1, Y0, Y1, Z0, Z1; public double Min(int k) => k == 0 ? X0 : k == 1 ? Y0 : Z0; public double Max(int k) => k == 0 ? X1 : k == 1 ? Y1 : Z1; }
@@ -356,12 +379,12 @@ namespace InventorSizer.Core
 
         static void Dividers(Draw d, ViewT t, GrModel m)
         {
-            var lines = DividerLines(m);
+            var lines = Cached(m, ref cLines, () => DividerLines(m));
             foreach (var l in lines.Where(l => Dimmed(m, l.Frame))) d.Poly3("dividerDim", t, new[] { ToDraw(l.A), ToDraw(l.B) }, false);
             foreach (var l in lines.Where(l => !Dimmed(m, l.Frame) && (l.Name == m.SelectedDivider || IsNew(m, l.Name))))
                 d.Poly3(l.Name == m.SelectedDivider ? "dividerSel" : "dividerNew", t, new[] { ToDraw(l.A), ToDraw(l.B) }, false);   // under the line: a halo
             foreach (var l in lines.Where(l => !Dimmed(m, l.Frame))) { d.Poly3(l.Kind, t, new[] { ToDraw(l.A), ToDraw(l.B) }, false); d.Shapes[d.Shapes.Count - 1].Tag = "div:" + l.Name; }
-            foreach (var j in JointPointsOf(m)) { var s = Draw.Screen(t, ToDraw(j.P)); d.Rect(Dimmed(m, j.F) ? "jointDim" : "joint", s[0] - 2.5, s[1] - 2.5, s[0] + 2.5, s[1] + 2.5); }
+            foreach (var j in Cached(m, ref cJoints, () => JointPointsOf(m))) { var s = Draw.Screen(t, ToDraw(j.P)); d.Rect(Dimmed(m, j.F) ? "jointDim" : "joint", s[0] - 2.5, s[1] - 2.5, s[0] + 2.5, s[1] + 2.5); }
             if (lines.Count > 0) Chains(d, t, lines, m);
         }
 
@@ -376,7 +399,7 @@ namespace InventorSizer.Core
         // The faces turned to the viewer carry their number and a tag, so a click finds them.
         static void Openings(Draw d, ViewT t, GrModel m)
         {
-            var list = GrOpenings.Find(m);
+            var list = Cached(m, ref cOpenings, () => GrOpenings.Find(m));
             var centre = new Dictionary<string, double[]>();
             foreach (var o in list) { var c = new double[3]; c[o.Axis] = o.Plane; c[o.U] = (o.U0 + o.U1) / 2; c[o.V] = (o.V0 + o.V1) / 2; centre[o.Key] = ToDraw(c); }
             int first = d.Shapes.Count;   // a sheet draws several views into one page: only this view's shapes
@@ -638,7 +661,7 @@ namespace InventorSizer.Core
             var d = new Draw();
             if (m == null) { d.Text("empty", w / 2, h / 2, "GR view: choose a preset, load a GR export, or read a GR from Inventor"); return d.Shapes; }
             const double head = 86, rowH = 17;
-            var tables = Gr.Tables(m);
+            var tables = Cached(m, ref cTables, () => Gr.Tables(m));
             double tabMax = Math.Max(90, h * 0.34);
             var frames = Cap(tables.Frames, tabMax, rowH, "");
             var parts = Cap(tables.Parts, tabMax, rowH, "all of them: Files > Save cut list");

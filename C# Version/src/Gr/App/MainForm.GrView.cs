@@ -35,6 +35,39 @@ namespace InventorSizer
             }
         }
 
+        // Turning, panning and zooming redraw the twin up to 144 times a second: a frame is drawn at
+        // once when the last one is at least 1/144 s old, else the latest view is drawn when that time
+        // is up. These frames skip the step log (two lines into the Activity panel per frame).
+        const double FrameMs = 1000.0 / 144;
+        readonly System.Diagnostics.Stopwatch grClock = System.Diagnostics.Stopwatch.StartNew();
+        double grLastFrame = -1000;
+        bool grFramePending;
+        Timer grFrameTimer;
+
+        void RequestTwinFrame()
+        {
+            if (grClock.Elapsed.TotalMilliseconds - grLastFrame >= FrameMs) { DrawTwinFrame(); return; }
+            if (grFramePending) return;
+            grFramePending = true;
+            if (grFrameTimer == null)
+            {
+                grFrameTimer = new Timer { Interval = 1 };
+                grFrameTimer.Tick += (s, e) => { if (grClock.Elapsed.TotalMilliseconds - grLastFrame >= FrameMs) { grFrameTimer.Stop(); if (grFramePending) DrawTwinFrame(); } };
+            }
+            grFrameTimer.Start();
+        }
+
+        void DrawTwinFrame()
+        {
+            grFramePending = false;
+            grLastFrame = grClock.Elapsed.TotalMilliseconds;
+            if (mode != "GR" || gr == null || IsDisposed) return;
+            GrDrawing.Reuse = true;   // the model is as it was: only the view changed
+            try { shapes = GrDrawing.Window(gr, grCam, twin.ClientSize.Width, twin.ClientSize.Height); }
+            finally { GrDrawing.Reuse = false; }
+            twin.Refresh();   // painted now, not when the message queue is empty
+        }
+
         void WireGrView()
         {
             twin.MouseDown += (s, e) =>
@@ -55,7 +88,7 @@ namespace InventorSizer
                 if (pan) { grCam.PanX += dx; grCam.PanY += dy; twin.Cursor = Cursors.SizeAll; }
                 else { grCam.Orbit(dx, dy); twin.Cursor = Cursors.NoMove2D; }
                 grDown = e.Location;
-                UpdateDrawing();
+                RequestTwinFrame();
             };
             twin.MouseUp += (s, e) => { if (grDragging) { grDragging = false; twin.Cursor = Cursors.Default; } };
             twin.MouseDoubleClick += (s, e) =>
@@ -77,7 +110,7 @@ namespace InventorSizer
                     if (mode != "GR" || gr == null || !twin.Visible || IsDisposed || WindowFromPoint(p) != twin.Handle) return false;
                     var at = twin.PointToClient(p);
                     grCam.Zoom(Math.Pow(1.18, delta / 120.0), at.X, at.Y);
-                    UpdateDrawing();
+                    RequestTwinFrame();
                     return true;
                 }
             });

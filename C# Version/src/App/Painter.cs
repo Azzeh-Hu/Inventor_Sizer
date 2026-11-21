@@ -78,9 +78,10 @@ namespace InventorSizer
         public static void Paint(Graphics g, List<Shape> shapes, Size size, TwinOverlay overlay)
         {
             Theme.Smooth(g);
-            if (size.Width > 0) Dots(g, size);
+            var tables = shapes == null ? new List<TableBox>() : Tables(shapes);
+            if (size.Width > 0 && size.Height > 0) Background(g, size, tables);   // dots and glass cards: one image, made again only when they change
+            else foreach (var t in tables) GlassTable(g, t);
             if (shapes == null) return;
-            foreach (var t in Tables(shapes)) GlassTable(g, t);
             g.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
             foreach (var s in shapes)
             {
@@ -129,6 +130,35 @@ namespace InventorSizer
                 dots = new TextureBrush(bmp);
             }
             g.FillRectangle(dots, 0, 0, size.Width, size.Height);
+        }
+
+        // The dot grid and the glass table cards drawn once into an image and then copied: filling the
+        // window with the dot texture took about 60 ms a frame, copying the image about 1 ms (the GR
+        // twin is redrawn up to 144 times a second while it is turned). Looks the same.
+        static Bitmap background;
+        static string backgroundKey;
+
+        static void Background(Graphics g, Size size, List<TableBox> tables)
+        {
+            string key = $"{size.Width}x{size.Height}|" + string.Join(";", tables.Select(t => $"{t.Card}{t.Head}"));
+            if (background == null || key != backgroundKey)
+            {
+                background?.Dispose();
+                background = new Bitmap(size.Width, size.Height, System.Drawing.Imaging.PixelFormat.Format32bppPArgb);
+                using (var bg = Graphics.FromImage(background))
+                {
+                    Theme.Smooth(bg);
+                    Dots(bg, size);
+                    foreach (var t in tables) GlassTable(bg, t);
+                }
+                backgroundKey = key;
+            }
+            var mode = g.CompositingMode; var clip = g.Clip;
+            g.ResetClip();
+            g.CompositingMode = CompositingMode.SourceCopy;
+            var interp = g.InterpolationMode; g.InterpolationMode = InterpolationMode.NearestNeighbor;
+            g.DrawImageUnscaled(background, 0, 0);
+            g.CompositingMode = mode; g.InterpolationMode = interp; g.Clip = clip;
         }
 
         // ------------------------------------------------------------ BOM tables on glass
