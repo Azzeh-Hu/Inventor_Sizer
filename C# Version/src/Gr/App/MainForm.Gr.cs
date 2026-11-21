@@ -211,7 +211,9 @@ namespace InventorSizer
             }
             finally { syncing = false; }
             if (btnUp != null) btnUp.Text = "Up: " + Gr.AxisName(gr?.Up ?? 2);
+            if (gr != null && gr.Focus != 0 && gr.ById(gr.Focus) == null) gr.Focus = 0;   // the box being edited was removed
             UpdateOpenings();
+            UpdateGrOutput();
             grInfo.Text = gr == null ? "Choose a preset, load a GR export, or read a GR from Inventor." :
                 $"{gr.Name}{(gr.Edited ? " (edited)" : "")}: outer {U.F(gr.Length)} x {U.F(gr.OuterWidth)} x {U.F(gr.OuterHeight)} mm. Edit the outer sizes (incl. corners); the P150 profiles are outer - {U.F(Gr.CornerAdd)}. Select a box to add a box next to it.";
         }
