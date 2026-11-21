@@ -98,19 +98,28 @@ namespace InventorSizer.Core
             S("labelEdit", new Style { TextColor = "#0574a8", FontSize = 13, Bold = true });
             S("subEdit", new Style { TextColor = "#0574a8", FontSize = 11 });
             S("cutEdit", new Style { TextColor = "#0574a8", FontSize = 12 });
+            // new parts (green) and the P350 picked with a click (orange): their own dimensions
+            S("dimNew", new Style { Stroke = "#2b8a3e", Width = 1.2 }); S("arrowNew", new Style { Fill = "#2b8a3e" });
+            S("labelNew", new Style { TextColor = "#237032", FontSize = 13, Bold = true }); S("subNew", new Style { TextColor = "#237032", FontSize = 11 });
+            S("dimSel", new Style { Stroke = "#e8590c", Width = 1.3 }); S("arrowSel", new Style { Fill = "#e8590c" });
+            S("labelSel", new Style { TextColor = "#c4460a", FontSize = 13, Bold = true }); S("subSel", new Style { TextColor = "#c4460a", FontSize = 11 });
+            S("dividerNew", new Style { Stroke = "#8ce99a", Width = 6 });
+            S("dividerSel", new Style { Stroke = "#ffc078", Width = 7 });
         }
 
-        // A dimension that can be clicked to change it: its line, arrows and label carry the tag (blue).
-        static void EditDim(Draw d, double[] a, double[] b, string label, string tag)
+        // A dimension that can be clicked to change it: its line, arrows and label carry the tag, in
+        // the palette's colour (Edit blue, New green, Sel orange). Without a tag: plain grey, or the
+        // palette's colour for a new or picked part (so its chain reads as one).
+        static void EditDim(Draw d, double[] a, double[] b, string label, string tag, string palette = "Edit")
         {
             int first = d.Shapes.Count;
             d.DimLine(a, b, label);
-            if (tag == null) return;
+            if (tag == null && palette == "Edit") return;
             for (int i = first; i < d.Shapes.Count; i++)
             {
                 var s = d.Shapes[i];
                 s.Tag = tag;
-                s.Kind = s.Kind == "dim" ? "dimEdit" : s.Kind == "arrow" ? "arrowEdit" : s.Kind == "label" ? "labelEdit" : s.Kind == "sub" ? "subEdit" : s.Kind;
+                if (s.Kind == "dim" || s.Kind == "arrow" || s.Kind == "label" || s.Kind == "sub") s.Kind += palette;
             }
         }
 
@@ -260,58 +269,88 @@ namespace InventorSizer.Core
         }
 
         // The tag of a gap between dividers that can be changed: moving `name` by +x along GR axis
-        // `axis` changes the gap by sign * x. Read back by GapTag.
-        public static string GapTag(int axis, int sign, double value, string name) => $"dim:gap:{axis}:{sign}:{U.F(value)}:{name}";
+        // `axis` changes the gap by sign * x; `max` = the room it has (the gap and the one it takes
+        // from, so the gaps never add up to more than the space between the corners).
+        public static string GapTag(int axis, int sign, double value, double max, string name) => $"dim:gap:{axis}:{sign}:{U.F(value)}:{U.F(max)}:{name}";
 
-        // Spacing between subsequent dividers: from the inner face of the frame profile (70 mm) to
-        // each divider and on to the far profile, as a chain just past the dividers' ends. Each gap can
-        // be clicked: it moves the divider at its far end (the last gap: the one at its near end).
-        // While a box is edited: a chain on every face of that box turned to the viewer.
+        // The spacing axis and the face a divider lies on (S = -1: inside the box, on no face).
+        static (int S, int Face, int Side) Where(DividerLine l)
+        {
+            var f = l.Frame; var o = f.Pos; var size = f.Size;
+            var others = Enumerable.Range(0, 3).Where(i => i != l.Axis).ToArray();
+            int AtFace(int i) => l.A[i] - o[i] < 120 ? 0 : o[i] + size[i] + Gr.CornerAdd - l.A[i] < 120 ? 1 : -1;
+            int a0 = AtFace(others[0]), a1 = AtFace(others[1]);
+            if (a0 >= 0 && a1 < 0) return (others[1], others[0], a0);
+            if (a1 >= 0 && a0 < 0) return (others[0], others[1], a1);
+            return (-1, -1, 0);
+        }
+
+        static bool IsNew(GrModel m, string name) => m.Components.TryGetValue(name ?? "", out var c) && c.CloneOf != "";
+
+        // Spacing between the dividers on one face of a box, one chain per face and direction (never the
+        // dividers of two faces in one chain), from the inner face of the frame profile (70 mm) to each
+        // divider and on to the far profile, just past the dividers' ends:
+        //   blue   the parts in Inventor, on the faces turned to the viewer (the standard view)
+        //   green  each new part (ring, single P350, P350 across a face): its own chain to the parts
+        //          either side, further out, on any face
+        //   orange the P350 picked with a click: its gaps on its face, whichever face that is
+        // A gap can be clicked: it moves the divider at its far end (the last gap: the one at its near
+        // end); in a green or orange chain the part the chain is for.
         static void Chains(Draw d, ViewT t, List<DividerLine> lines, GrModel m)
         {
             const double prof = 70;
-            bool focus = m.Focus != 0;
-            // the spacing axis and the face a divider lies on (-1 inside the box)
-            (int S, int Face, int Side) Where(DividerLine l)
+            var placed = lines.Where(l => !Dimmed(m, l.Frame)).Select(l => (L: l, W: Where(l))).Where(x => x.W.S >= 0).ToList();
+            foreach (var g in placed.GroupBy(x => (x.L.Frame.Id, x.W.Face, x.W.Side, x.W.S)))
             {
-                var f = l.Frame; var o = f.Pos; var size = f.Size;
-                var others = Enumerable.Range(0, 3).Where(i => i != l.Axis).ToArray();
-                int AtFace(int i) => l.A[i] - o[i] < 120 ? 0 : o[i] + size[i] + Gr.CornerAdd - l.A[i] < 120 ? 1 : -1;
-                int a0 = AtFace(others[0]), a1 = AtFace(others[1]);
-                if (a0 >= 0 && a1 < 0) return (others[1], others[0], a0);
-                if (a1 >= 0 && a0 < 0) return (others[0], others[1], a1);
-                return (-1, -1, 0);
-            }
-            var placed = lines.Where(l => !focus || l.Frame.Id == m.Focus).Select(l => (L: l, W: Where(l))).Where(x => x.W.S >= 0);
-            if (focus) placed = placed.Where(x => Facing(t.R, x.W.Face, x.W.Side));
-            foreach (var g in placed.GroupBy(x => x.L.Frame.Id + "|" + x.W.S + (focus ? $"|{x.W.Face}{x.W.Side}" : "")))
-            {
-                int s = g.First().W.S;
-                var all = g.Select(x => x.L).ToList();
-                int k = all.Select(l => l.Axis).OrderByDescending(x => x).First();
-                var ls = all.Where(l => l.Axis == k).ToList(); var f = ls[0].Frame;
+                var f = g.First().L.Frame; int s = g.Key.S, fa = g.Key.Face, side = g.Key.Side, k = 3 - s - fa;
                 var o = f.Pos; var size = f.Size;
-                int third = Enumerable.Range(0, 3).First(i => i != k && i != s);
-                var vals = new List<(double V, string Name)> { (o[s] + prof, null) };
-                foreach (var l in all.OrderBy(l => l.A[s]))
+                var all = g.Select(x => x.L).ToList();
+                double minK = all.Min(l => Math.Min(l.A[k], l.B[k])), atF = all[0].A[fa];
+                List<(double V, string Name)> Values(IEnumerable<DividerLine> ls)
+                {
+                    var vals = new List<(double V, string Name)> { (o[s] + prof, null) };
+                    foreach (var l in ls.OrderBy(l => l.A[s]))
+                    {
+                        double v = Math.Round(l.A[s], 1);
+                        if (vals.All(x => Math.Abs(x.V - v) > 1)) vals.Add((v, l.Name));
+                    }
+                    vals = vals.OrderBy(x => x.V).ToList();
+                    vals.Add((o[s] + size[s] + Gr.CornerAdd - prof, null));
+                    return vals;
+                }
+                // one part with the parts either side of it (on the whole face: in Inventor and new)
+                var full = Values(all);
+                List<(double V, string Name)> Around(DividerLine l)
                 {
                     double v = Math.Round(l.A[s], 1);
-                    if (vals.All(x => Math.Abs(x.V - v) > 1)) vals.Add((v, l.Name));
+                    int i = full.FindIndex(x => Math.Abs(x.V - v) <= 1);
+                    if (i <= 0 || i >= full.Count - 1) return null;
+                    return new List<(double, string)> { full[i - 1], (v, l.Name), full[i + 1] };
                 }
-                vals = vals.OrderBy(x => x.V).ToList();
-                vals.Add((o[s] + size[s] + Gr.CornerAdd - prof, null));
-                var firstFace = ls.OrderBy(l => l.A[third]).First();
-                double atK = ls.Min(l => Math.Min(l.A[k], l.B[k])) - 80, atT = firstFace.A[third];
-                for (int i = 1; i < vals.Count; i++)
+                void Chain(List<(double V, string Name)> vals, int level, string palette, string mover)
                 {
-                    var p = new double[3]; var q = new double[3];
-                    p[k] = q[k] = atK; p[third] = q[third] = atT; p[s] = vals[i - 1].V; q[s] = vals[i].V;
-                    var sa = Draw.Screen(t, ToDraw(p)); var sb = Draw.Screen(t, ToDraw(q));
-                    if (Math.Sqrt(Math.Pow(sb[0] - sa[0], 2) + Math.Pow(sb[1] - sa[1], 2)) < 18) continue;   // seen end-on
-                    double gap = Math.Round(vals[i].V - vals[i - 1].V, 1);
-                    string tag = vals[i].Name != null ? GapTag(s, 1, gap, vals[i].Name) : vals[i - 1].Name != null ? GapTag(s, -1, gap, vals[i - 1].Name) : null;
-                    EditDim(d, sa, sb, U.F(gap), tag);
+                    if (vals == null) return;
+                    double atK = minK - 110 * level + 30;   // level 1 as before (80 mm out), the others further out
+                    for (int i = 1; i < vals.Count; i++)
+                    {
+                        var p = new double[3]; var q = new double[3];
+                        p[k] = q[k] = atK; p[fa] = q[fa] = atF; p[s] = vals[i - 1].V; q[s] = vals[i].V;
+                        var sa = Draw.Screen(t, ToDraw(p)); var sb = Draw.Screen(t, ToDraw(q));
+                        if (Math.Sqrt(Math.Pow(sb[0] - sa[0], 2) + Math.Pow(sb[1] - sa[1], 2)) < 18) continue;   // seen end-on
+                        double gap = Math.Round(vals[i].V - vals[i - 1].V, 1);
+                        string tag = null;
+                        if (mover != null) tag = GapTag(s, vals[i].Name == mover ? 1 : -1, gap, Math.Round(vals[vals.Count - 1].V - vals[0].V, 1), mover);
+                        else if (vals[i].Name != null) tag = GapTag(s, 1, gap, Math.Round((i + 1 < vals.Count ? vals[i + 1].V : vals[i].V) - vals[i - 1].V, 1), vals[i].Name);
+                        else if (vals[i - 1].Name != null) tag = GapTag(s, -1, gap, Math.Round(vals[i].V - (i >= 2 ? vals[i - 2].V : vals[i - 1].V), 1), vals[i - 1].Name);
+                        EditDim(d, sa, sb, U.F(gap), tag, palette);
+                    }
                 }
+                var existing = all.Where(l => !IsNew(m, l.Name)).ToList();
+                if (existing.Count > 0 && Facing(t.R, fa, side)) Chain(Values(existing), 1, "Edit", null);
+                int level = 2;
+                foreach (var l in all.Where(l => IsNew(m, l.Name)).OrderBy(l => l.A[s])) Chain(Around(l), level++, "New", l.Name);
+                var sel = all.FirstOrDefault(l => l.Name == m.SelectedDivider);
+                if (sel != null) Chain(Around(sel), level, "Sel", sel.Name);
             }
         }
 
@@ -319,6 +358,8 @@ namespace InventorSizer.Core
         {
             var lines = DividerLines(m);
             foreach (var l in lines.Where(l => Dimmed(m, l.Frame))) d.Poly3("dividerDim", t, new[] { ToDraw(l.A), ToDraw(l.B) }, false);
+            foreach (var l in lines.Where(l => !Dimmed(m, l.Frame) && (l.Name == m.SelectedDivider || IsNew(m, l.Name))))
+                d.Poly3(l.Name == m.SelectedDivider ? "dividerSel" : "dividerNew", t, new[] { ToDraw(l.A), ToDraw(l.B) }, false);   // under the line: a halo
             foreach (var l in lines.Where(l => !Dimmed(m, l.Frame))) { d.Poly3(l.Kind, t, new[] { ToDraw(l.A), ToDraw(l.B) }, false); d.Shapes[d.Shapes.Count - 1].Tag = "div:" + l.Name; }
             foreach (var j in JointPointsOf(m)) { var s = Draw.Screen(t, ToDraw(j.P)); d.Rect(Dimmed(m, j.F) ? "jointDim" : "joint", s[0] - 2.5, s[1] - 2.5, s[0] + 2.5, s[1] + 2.5); }
             if (lines.Count > 0) Chains(d, t, lines, m);
@@ -471,6 +512,14 @@ namespace InventorSizer.Core
                 d.Rect(it.Item1, x, y - 5, x + 14, y + 5); d.Text("sub", x + 18, y, it.Item2, 0, 0, "left");
                 x += 26 + 7 * it.Item2.Length;
             }
+            // dimensions: in Inventor, new parts, the P350 picked
+            x += 14;
+            foreach (var it in new[] { ("dimEdit", "dimension"), ("dimNew", "new part"), ("dimSel", "picked P350") })
+            {
+                d.Line(it.Item1, x, y, x + 22, y);
+                d.Text("sub", x + 27, y, it.Item2, 0, 0, "left");
+                x += 40 + 7 * it.Item2.Length;
+            }
         }
 
         // The axis cross for a camera (X = W red, Y = L green, Z = H blue, as in Inventor).
@@ -600,8 +649,8 @@ namespace InventorSizer.Core
             var focus = m.Focus != 0 ? m.ById(m.Focus) : null;
             d.Text("caption", 10, 14, focus != null ? $"EDITING {focus.Label.ToUpperInvariant()} - {m.Name}" : $"GR {seen.ToUpperInvariant()} - {m.Name}", 0, 0, "left");
             d.Text("sub", 10, 32, focus != null
-                ? "Click a blue dimension to change it  ·  right-click a profile or P350 to add a P350 across a face  ·  click empty space or Esc: done"
-                : (m.RealMap != null ? $"Real part positions ({m.Source})" : $"Layout inferred from the constraints ({m.Source}) - dividers schematic") + "  ·  click a box to edit it, a blue dimension to change it  ·  drag: turn, Shift-drag: pan, wheel: zoom, double-click: fit", 0, 0, "left");
+                ? "Click a dimension to change it, a P350 to show its own (any face)  ·  right-click a profile or P350 to add a P350 across a face  ·  click empty space or Esc: done"
+                : (m.RealMap != null ? $"Real part positions ({m.Source})" : $"Layout inferred from the constraints ({m.Source}) - dividers schematic") + "  ·  click a box to edit it, a P350 to show its dimensions, a dimension to change it  ·  drag: turn, Shift-drag: pan, wheel: zoom, double-click: fit", 0, 0, "left");
             Legend(d, 14, 50);
             double y = h - tabH - 6, leftW = Math.Floor((w - 30) * 0.4);
             d.Table("Boxes", FrameCols, frames, 10, y, leftW, rowH, 11);
@@ -660,7 +709,12 @@ namespace InventorSizer.Core
             foreach (var line in Notes(m)) { d.Text("note", 30, ny, line, 0, 0, "left"); ny += 20; }
             Legend(d, 30, ny + 6);
             // on paper the dimensions are plain ones (blue = can be clicked, in the window only)
-            var plain = new Dictionary<string, string> { ["dimEdit"] = "dim", ["arrowEdit"] = "arrow", ["labelEdit"] = "label", ["subEdit"] = "sub" };
+            var plain = new Dictionary<string, string>
+            {
+                ["dimEdit"] = "dim", ["arrowEdit"] = "arrow", ["labelEdit"] = "label", ["subEdit"] = "sub",
+                ["dimNew"] = "dim", ["arrowNew"] = "arrow", ["labelNew"] = "label", ["subNew"] = "sub",
+                ["dimSel"] = "dim", ["arrowSel"] = "arrow", ["labelSel"] = "label", ["subSel"] = "sub",
+            };
             foreach (var s in d.Shapes) if (plain.TryGetValue(s.Kind ?? "", out var k)) { s.Kind = k; s.Tag = null; }
         }
     }
