@@ -250,14 +250,19 @@ namespace InventorSizer
                 if (m.Frames.Any(f => f.CloneOf != 0)) { AddBoxes(m, (object)asm); todo = Gr.Pending(m); }
             });
             Progress.Expect("gr.profile", todo.Profiles.Count);   // new boxes bring their own lengths
+            var failedProfiles = new HashSet<string>();
             void ResizeProfiles(List<(string Kind, string From, string To, double Length, List<string> Names)> groups)
             {
             foreach (var g in groups)
+            try
             {
                 Progress.Next("gr.profile", $"Profile {g.From} -> {g.To} ({g.Names.Count} x)");
                 Log.Measure($"Profile {g.From} -> {g.To} ({g.Names.Count} x)", () =>
                 {
-                    dynamic srcPart = occs.ItemByName(g.Names[0]).Definition.Document;
+                    dynamic srcOcc;
+                    try { srcOcc = occs.ItemByName(g.Names[0]); }
+                    catch (Exception e) { throw new SizerException($"{g.Names[0]} is not in the GR in Inventor ({e.Message})"); }
+                    dynamic srcPart = srcOcc.Definition.Document;
                     string ext = Path.GetExtension((string)srcPart.FullFileName);
                     string partName = prefix != "" ? $"{prefix} {g.To}" : g.To;
                     Directory.CreateDirectory(parts);
@@ -266,11 +271,23 @@ namespace InventorSizer
                     else
                     {
                         dynamic p = FindLengthParameter(srcPart, g.Kind, Gr.LengthOf(g.From));
-                        string old = p.Expression;
+                        string old = p.Expression, pname = p.Name, step = "";
                         inv.SilentOperation = true;
-                        try { p.Value = g.Length / 10; srcPart.Update(); srcPart.SaveAs(partPath, true); }
-                        finally { p.Expression = old; srcPart.Update(); inv.SilentOperation = false; }
-                        Log.Write($"  created {partPath} ({p.Name} = {U.F(g.Length)} mm)");
+                        try
+                        {
+                            step = $"set {pname} to {U.F(g.Length)} mm"; p.Value = g.Length / 10;
+                            step = $"update {Path.GetFileName((string)srcPart.FullFileName)}"; srcPart.Update();
+                            step = $"save the copy {partName}{ext}"; srcPart.SaveAs(partPath, true);
+                        }
+                        catch (Exception e) { throw new SizerException($"could not {step} ({e.Message})"); }   // the step that failed, not the clean-up after it
+                        finally
+                        {
+                            // the library part as it was: its length back (a failure here is noted, it does not hide the one above)
+                            try { p.Expression = old; srcPart.Update(); }
+                            catch (Exception e) { Log.Write($"  note: {Path.GetFileName((string)srcPart.FullFileName)}: {pname} could not be set back to {old} ({e.Message}) - check it in Inventor"); }
+                            inv.SilentOperation = false;
+                        }
+                        Log.Write($"  created {partPath} ({pname} = {U.F(g.Length)} mm)");
                     }
                     foreach (var n in g.Names)
                     {
@@ -284,16 +301,28 @@ namespace InventorSizer
                     Log.Write($"  {g.Names.Count} x {g.From} -> {partName}");
                 });
             }
+            // one length that fails does not stop the others (nor the rest of the write)
+            catch (Exception e) { Log.Write($"  not finished: {g.Names.Count} x {g.From} -> {g.To}: {e.Message}"); failedProfiles.Add(g.From + "|" + g.To); }
             }
+            // a profile change that failed once is not tried again in the second pass
+            List<(string Kind, string From, string To, double Length, List<string> Names)> Left(List<(string Kind, string From, string To, double Length, List<string> Names)> l) =>
+                l.Where(g => !failedProfiles.Contains(g.From + "|" + g.To)).ToList();
             ResizeProfiles(todo.Profiles);
             // P350 rings: removed, then new ones copied from rings that already have their final length
             Quietly((object)inv, () =>
             {
                 if (m.RingRemoves.Count > 0) { Progress.Next("gr.ringremove", "Removing P350 rings"); RemoveRings(m, (object)asm); }
-                if (m.RingAdds.Count > 0) { AddRings(m, (object)asm); todo = Gr.Pending(m); }
+                if (m.RingAdds.Count > 0)
+                {
+                    // new P350 across a face are placed and measured against the frame as it is now: the
+                    // profiles that got new lengths above must have moved there first
+                    if (m.RingAdds.Any(r => r.Span)) Log.Measure("Update the GR before placing new P350", () => { asm.Update(); });
+                    AddRings(m, (object)asm); todo = Gr.Pending(m);
+                }
             });
             // a ring copied into a box of another size: its P350 get that box's lengths
-            if (todo.Profiles.Count > 0) { Progress.Expect("gr.profile", todo.Profiles.Count); ResizeProfiles(todo.Profiles); todo = Gr.Pending(m); }
+            var second = Left(todo.Profiles);
+            if (second.Count > 0) { Progress.Expect("gr.profile", second.Count); ResizeProfiles(second); todo = Gr.Pending(m); }
             // new P350 across a face: the far joint mated now that the P350 has its length
             if (spanFinish.Count > 0) Quietly((object)inv, FinishSpans);
             Quietly((object)inv, () =>
