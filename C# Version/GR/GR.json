@@ -53,7 +53,7 @@
     }
   ],
   "panelAdd": 36,
-  "spanAddNotes": "A P350 added across a face (between two P150, or a P150 and a P350) is this much longer than the clear space between them: it sits in their seats (P350 1210 between the P150 of a 1200 box).",
+  "spanAddNotes": "A P350 added across a face is as much longer than the clear space between its supports as the P350 it copies is over its box size (top and bottom copy a P350 gefraest, the sides and ends a plain one on joints). spanAdd is used when the copied P350 follows no box size.",
   "spanAdd": 10,
   "panels": {
     "notes": "Panel = seat-to-seat - 2 x clearance; seat-to-seat = clear space between the profiles + 2 x seatDepth. W = the shorter side. height = panel height (depth in the seat). A side over maxSize needs a divider. An opening (seat to seat) below oneInnerPanelBelow gets the 1T master, otherwise 2T.",
